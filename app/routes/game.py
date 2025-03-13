@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 bp = Blueprint('game', __name__)
 
 @bp.route('/game')
-@jwt_required()
 def game_page():
     """Show the game page with API documentation"""
     sample_guess_json = {
@@ -41,7 +40,7 @@ def game_page():
                          sample_guess_json=sample_guess_json,
                          sample_hint_json=sample_hint_json)
 
-@bp.route('/start', methods=['GET', 'POST'])
+@bp.route('/start', methods=['GET'])
 @jwt_required()
 def start():
     username = get_jwt_identity()
