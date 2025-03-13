@@ -92,14 +92,66 @@ let selectedEncryptedLetter = null;
 let lastGuessResponse = null;
 let lastHintResponse = null;
 
-// Authentication check on page load
+// Check authentication and load game state on page load
 document.addEventListener('DOMContentLoaded', async function() {
     const token = localStorage.getItem('access_token');
     if (!token) {
         window.location.href = '/';
         return;
     }
+
+    // Check URL parameters for continue flag
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('continue') === 'true') {
+        try {
+            const response = await fetch('/continue-game', {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                loadGameState(data);
+            }
+        } catch (error) {
+            console.error('Error loading saved game:', error);
+        }
+    }
 });
+
+function loadGameState(data) {
+    document.getElementById('gameArea').classList.remove('d-none');
+    document.getElementById('rawEncrypted').textContent = data.encrypted_paragraph;
+    document.getElementById('encryptedQuote').textContent = data.display;
+    document.getElementById('mistakesCount').textContent = data.mistakes;
+    document.getElementById('maxMistakes').textContent = data.max_mistakes;
+
+    // Set difficulty
+    const difficultySelect = document.getElementById('difficulty');
+    difficultySelect.value = data.difficulty;
+
+    // Set up letter grids
+    const encryptedGrid = document.getElementById('encryptedGrid');
+    const letterGrid = document.getElementById('letterGrid');
+    encryptedGrid.innerHTML = '';
+    letterGrid.innerHTML = '';
+
+    Object.entries(data.letter_frequency).forEach(([letter, freq]) => {
+        if (freq > 0) {
+            const btn = createLetterButton(letter, 'encrypted');
+            encryptedGrid.appendChild(btn);
+        }
+    });
+
+    data.original_letters.forEach(letter => {
+        const btn = createLetterButton(letter, 'guess');
+        letterGrid.appendChild(btn);
+    });
+
+    document.getElementById('getHint').disabled = false;
+}
 
 function createLetterButton(letter, type) {
     const btn = document.createElement('button');
@@ -177,38 +229,13 @@ document.getElementById('startGame').addEventListener('click', async () => {
 
         if (response.ok) {
             const data = await response.json();
-            document.getElementById('gameArea').classList.remove('d-none');
-            document.getElementById('rawEncrypted').textContent = data.encrypted_paragraph;
-            document.getElementById('encryptedQuote').textContent = data.display;
-            document.getElementById('mistakesCount').textContent = data.mistakes;
-            document.getElementById('maxMistakes').textContent = data.max_mistakes;
-
-            // Set up letter grids
-            const encryptedGrid = document.getElementById('encryptedGrid');
-            const letterGrid = document.getElementById('letterGrid');
-            encryptedGrid.innerHTML = '';
-            letterGrid.innerHTML = '';
-
-            Object.entries(data.letter_frequency).forEach(([letter, freq]) => {
-                if (freq > 0) {
-                    const btn = createLetterButton(letter, 'encrypted');
-                    encryptedGrid.appendChild(btn);
-                }
-            });
-
-            data.original_letters.forEach(letter => {
-                const btn = createLetterButton(letter, 'guess');
-                letterGrid.appendChild(btn);
-            });
-
-            document.getElementById('getHint').disabled = false;
+            loadGameState(data);
         }
     } catch (error) {
         console.error('Error starting game:', error);
     }
 });
 
-// Make guess handler
 async function makeGuess(guessedLetter) {
     if (!selectedEncryptedLetter) {
         alert('Please select an encrypted letter first');
@@ -264,7 +291,6 @@ async function makeGuess(guessedLetter) {
     }
 }
 
-// Get hint handler
 document.getElementById('getHint').addEventListener('click', async () => {
     const token = localStorage.getItem('access_token');
     if (!token) {
