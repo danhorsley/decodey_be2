@@ -1,0 +1,187 @@
+@stats_bp.route('/streak_leaderboard', methods=['GET'])
+def get_streak_leaderboard():
+    # Add debugging
+    logging.info(
+        f"Streak leaderboard request received with params: {request.args}")
+
+    # Extract parameters with defaults
+    streak_type = request.args.get('type', 'win')  # 'win' or 'noloss'
+    period = request.args.get('period', 'current')  # 'current' or 'best'
+
+    # Better handling of pagination parameters
+    try:
+        page = int(request.args.get('page', 1))
+    except (ValueError, TypeError):
+        logging.warning(
+            f"Invalid page parameter: {request.args.get('page')}, defaulting to 1"
+        )
+        page = 1
+
+    try:
+        per_page = min(int(request.args.get('per_page', 10)),
+                       50)  # Limit to 50 max
+    except (ValueError, TypeError):
+        logging.warning(
+            f"Invalid per_page parameter: {request.args.get('per_page')}, defaulting to 10"
+        )
+        per_page = 10
+
+    # Calculate pagination offset
+    offset = (page - 1) * per_page
+
+    logging.info(
+        f"Processing streak request with: type={streak_type}, period={period}, page={page}, per_page={per_page}"
+    )
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Get the requesting user's ID (if authenticated)
+            auth_header = request.headers.get('Authorization')
+            user_id = None
+
+            if auth_header and auth_header.startswith('Bearer '):
+                token = auth_header.split(' ')[1]
+                try:
+                    user_id = validate_token(token)
+                    logging.info(f"User authenticated via token: {user_id}")
+                except ValueError as e:
+                    # Continue anyway, just won't have user-specific data
+                    logging.warning(f"Token validation failed: {e}")
+                    pass
+
+            # If no token, try session
+            if not user_id:
+                user_id = session.get('user_id')
+                if user_id:
+                    logging.info(f"User authenticated via session: {user_id}")
+
+            # Determine which streak field to use based on parameters
+            streak_field = ""
+            if streak_type == 'win':
+                streak_field = "current_streak" if period == 'current' else "max_streak"
+            else:  # 'noloss'
+                streak_field = "current_noloss_streak" if period == 'current' else "max_noloss_streak"
+
+            logging.info(f"Using streak field: {streak_field}")
+
+            # Base query for top streak entries
+            streak_query = f'''
+                SELECT 
+                    u.username, 
+                    u.user_id,
+                    s.{streak_field} as streak_length,
+                    s.last_played_date,
+                    u.user_id = ? as is_current_user,
+                    RANK() OVER (ORDER BY s.{streak_field} DESC, s.last_played_date DESC) as rank
+                FROM user_stats s
+                JOIN users u ON s.user_id = u.user_id
+                WHERE s.{streak_field} > 0
+                ORDER BY s.{streak_field} DESC, s.last_played_date DESC
+                LIMIT ? OFFSET ?
+            '''
+
+            # Execute query for top streak entries
+            cursor.execute(streak_query, [user_id or "", per_page, offset])
+            top_entries = []
+            for row in cursor.fetchall():
+                entry = {
+                    "rank": row['rank'],
+                    "username": row['username'],
+                    "user_id": row['user_id'],
+                    "streak_length": row['streak_length'],
+                    "is_current_user": bool(row['is_current_user'])
+                }
+
+                # Only include last_active for current streaks
+                if period == 'current':
+                    entry["last_active"] = row['last_played_date']
+
+                top_entries.append(entry)
+
+            logging.info(f"Found {len(top_entries)} streak entries")
+
+            # Get current user entry if authenticated and not in top entries
+            current_user_entry = None
+            if user_id and not any(entry['is_current_user']
+                                   for entry in top_entries):
+                user_query = f'''
+                    WITH RankedUsers AS (
+                        SELECT 
+                            u.user_id,
+                            u.username,
+                            s.{streak_field} as streak_length,
+                            s.last_played_date,
+                            RANK() OVER (ORDER BY s.{streak_field} DESC, s.last_played_date DESC) as rank
+                        FROM user_stats s
+                        JOIN users u ON s.user_id = u.user_id
+                        WHERE s.{streak_field} > 0
+                    )
+                    SELECT * FROM RankedUsers WHERE user_id = ?
+                '''
+                cursor.execute(user_query, [user_id])
+                user_row = cursor.fetchone()
+
+                if user_row:
+                    current_user_entry = {
+                        "rank": user_row['rank'],
+                        "username": user_row['username'],
+                        "user_id": user_row['user_id'],
+                        "streak_length": user_row['streak_length'],
+                        "is_current_user": True
+                    }
+
+                    # Only include last_active for current streaks
+                    if period == 'current':
+                        current_user_entry["last_active"] = user_row[
+                            'last_played_date']
+
+                    logging.info(
+                        f"Added current user entry with rank {user_row['rank']}"
+                    )
+                else:
+                    logging.info(f"User {user_id} has no streak data")
+
+            # Get total number of users with streaks > 0
+            count_query = f'''
+                SELECT COUNT(*) as total_users
+                FROM user_stats 
+                WHERE {streak_field} > 0
+            '''
+            cursor.execute(count_query)
+            total_users = cursor.fetchone()['total_users']
+
+            logging.info(f"Total users with {streak_field} > 0: {total_users}")
+
+            # Prepare pagination info
+            pagination = {
+                "current_page":
+                page,
+                "total_pages": (total_users + per_page - 1) //
+                per_page if total_users > 0 else 1,
+                "total_entries":
+                total_users,
+                "per_page":
+                per_page
+            }
+
+            # Return results in the new format
+            result = {
+                "entries":
+                top_entries,  # Keep original name for streak endpoints
+                "currentUserEntry": current_user_entry,
+                "pagination": pagination,
+                "streak_type": streak_type,
+                "period": period
+            }
+
+            logging.info(
+                f"Returning streak data with {len(top_entries)} entries")
+            return jsonify(result)
+
+    except Exception as e:
+        logging.error(f"Error fetching streak leaderboard: {e}")
+        return jsonify(
+            {"error":
+             f"Failed to retrieve streak leaderboard data: {str(e)}"}), 500

@@ -36,6 +36,7 @@ class UserStats(db.Model):
     current_noloss_streak = db.Column(db.Integer, default=0)
     max_noloss_streak = db.Column(db.Integer, default=0)
     total_games_played = db.Column(db.Integer, default=0)
+    games_won = db.Column(db.Integer, default=0)  # Added games_won column
     cumulative_score = db.Column(db.Integer, default=0)
     highest_weekly_score = db.Column(db.Integer, default=0)
     last_played_date = db.Column(db.DateTime)
