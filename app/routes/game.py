@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, render_template
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
@@ -12,7 +12,36 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint('game', __name__)
 
-@bp.route('/start', methods=['POST'])
+@bp.route('/game')
+@jwt_required()
+def game_page():
+    """Show the game page with API documentation"""
+    sample_guess_json = {
+        "request": {
+            "encrypted_letter": "X",
+            "guessed_letter": "E"
+        },
+        "response": {
+            "display": "█E██O █O███",
+            "mistakes": 1,
+            "correctly_guessed": ["E"],
+            "game_complete": False
+        }
+    }
+
+    sample_hint_json = {
+        "response": {
+            "display": "HE██O █O███",
+            "mistakes": 2,
+            "correctly_guessed": ["E", "H"]
+        }
+    }
+
+    return render_template('game.html', 
+                         sample_guess_json=sample_guess_json,
+                         sample_hint_json=sample_hint_json)
+
+@bp.route('/start', methods=['GET', 'POST'])
 @jwt_required()
 def start():
     username = get_jwt_identity()

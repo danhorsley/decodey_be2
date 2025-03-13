@@ -6,6 +6,30 @@
         <div class="card">
             <div class="card-body">
                 <h2 class="card-title text-center">Uncrypt Game</h2>
+
+                <!-- API Documentation -->
+                <div class="mb-4">
+                    <h4>API Endpoints</h4>
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            Guess Endpoint - POST /guess
+                        </div>
+                        <div class="card-body">
+                            <pre class="bg-dark text-light p-3 rounded"><code>{{ sample_guess_json | tojson(indent=2) }}</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            Hint Endpoint - POST /hint
+                        </div>
+                        <div class="card-body">
+                            <pre class="bg-dark text-light p-3 rounded"><code>{{ sample_hint_json | tojson(indent=2) }}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Controls -->
                 <div class="text-center mb-4">
                     <button id="startGame" class="btn btn-primary">Start New Game</button>
                     <button id="getHint" class="btn btn-secondary ms-2" disabled>Get Hint</button>

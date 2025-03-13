@@ -2,24 +2,32 @@ from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-import json
+import uuid
 
 db = SQLAlchemy()
 
 class User(UserMixin, db.Model):
-    user_id = db.Column(db.String, primary_key=True)
-    email = db.Column(db.String, unique=True)
-    username = db.Column(db.String, unique=True)
-    password_hash = db.Column(db.String)
-    auth_type = db.Column(db.String)
+    user_id = db.Column(db.String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = db.Column(db.String, unique=True, nullable=False)
+    username = db.Column(db.String, unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    auth_type = db.Column(db.String, default='local')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    settings = db.Column(db.JSON)
+    settings = db.Column(db.JSON, default=dict)
+
+    def __init__(self, email, username, password):
+        self.email = email
+        self.username = username
+        self.set_password(password)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def get_id(self):
+        return str(self.user_id)
 
 class UserStats(db.Model):
     user_id = db.Column(db.String, db.ForeignKey('user.user_id'), primary_key=True)
