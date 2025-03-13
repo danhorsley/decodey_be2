@@ -38,6 +38,11 @@ def create_app(config_class=Config):
     def revoked_token_callback(jwt_header, jwt_payload):
         return jsonify({"msg": "Token has been revoked"}), 401
 
+    # Ensure all JWT errors are handled properly
+    @app.errorhandler(jwt_exceptions.JWTExtendedException)
+    def handle_jwt_exceptions(e):
+        return jsonify({"msg": str(e)}), 401
+
     # Configure SQLAlchemy
     try:
         logger.info(
