@@ -9,7 +9,7 @@ import uuid
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-bp = Blueprint('game', __name__, url_prefix='/api/game')
+bp = Blueprint('game', __name__)
 
 @bp.route('/start', methods=['POST'])
 @jwt_required()

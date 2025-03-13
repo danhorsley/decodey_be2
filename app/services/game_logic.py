@@ -12,7 +12,8 @@ def load_quotes():
         for row in reader:
             quotes.append({
                 'quote': row['quote'],
-                'author': row['author']
+                'author': row['author'],
+                'minor_attribution': row['minor_attribution']
             })
     return quotes
 
@@ -57,6 +58,7 @@ def start_game():
     quote_data = random.choice(quotes)
     paragraph = quote_data['quote']
     author = quote_data['author']
+    minor_attribution = quote_data['minor_attribution']
 
     mapping = generate_mapping()
     reverse_mapping = {v: k for k, v in mapping.items()}
@@ -75,7 +77,7 @@ def start_game():
         'author': author,
         'max_mistakes': 5,  # Allow 5 mistakes
         'major_attribution': author,
-        'minor_attribution': ''  # Could be populated if we had context data
+        'minor_attribution': minor_attribution
     }
 
     return {
@@ -86,7 +88,7 @@ def start_game():
         'original_letters': unique_original_letters,
         'mistakes': 0,
         'major_attribution': author,
-        'minor_attribution': ''
+        'minor_attribution': minor_attribution
     }
 
 def make_guess(game_state, encrypted_letter, guessed_letter):
