@@ -17,23 +17,45 @@
                         <p id="encryptedQuote" class="font-monospace"></p>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="guess" class="form-label">Enter your guess:</label>
-                        <input type="text" class="form-control" id="guess">
-                        <div class="form-text">Try to guess the original quote. Capitalization doesn't matter.</div>
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    Encrypted Letters
+                                </div>
+                                <div class="card-body">
+                                    <div id="encryptedGrid" class="d-flex flex-wrap gap-2">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    Available Letters
+                                </div>
+                                <div class="card-body">
+                                    <div id="letterGrid" class="d-flex flex-wrap gap-2">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <button id="submitGuess" class="btn btn-success">Submit Guess</button>
 
-                    <div id="feedback" class="mt-3">
-                        <h5>Previous Guesses:</h5>
-                        <ul id="guessList" class="list-group">
-                        </ul>
+                    <div class="alert alert-warning">
+                        <span>Mistakes remaining: </span>
+                        <span id="mistakesCount">5</span>
                     </div>
 
-                    <div id="hints" class="mt-3">
-                        <h5>Hints:</h5>
-                        <ul id="hintList" class="list-group">
-                        </ul>
+                    <div id="guessArea" class="mb-3 d-none">
+                        <p>Selected encrypted letter: <span id="selectedEncrypted" class="badge bg-primary"></span></p>
+                        <p>Choose a letter from the available letters grid</p>
+                    </div>
+
+                    <div id="revealedPairs" class="mt-3">
+                        <h5>Revealed Letter Pairs:</h5>
+                        <div id="pairsList" class="d-flex flex-wrap gap-2">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -42,6 +64,8 @@
 </div>
 
 <script>
+let selectedEncryptedLetter = null;
+
 // Check authentication on page load
 document.addEventListener('DOMContentLoaded', function() {
     const token = localStorage.getItem('access_token');
@@ -99,6 +123,78 @@ async function authenticatedFetch(url, options = {}) {
     }
 }
 
+function createLetterButton(letter, type) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-outline-primary';
+    btn.textContent = letter;
+
+    if (type === 'encrypted') {
+        btn.onclick = () => selectEncryptedLetter(letter);
+    } else {
+        btn.onclick = () => makeGuess(letter);
+    }
+
+    return btn;
+}
+
+function selectEncryptedLetter(letter) {
+    selectedEncryptedLetter = letter;
+    document.getElementById('selectedEncrypted').textContent = letter;
+    document.getElementById('guessArea').classList.remove('d-none');
+}
+
+async function makeGuess(guessedLetter) {
+    if (!selectedEncryptedLetter) {
+        alert('Please select an encrypted letter first');
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch('/api/game/guess', {
+            method: 'POST',
+            body: JSON.stringify({
+                encrypted_letter: selectedEncryptedLetter,
+                guessed_letter: guessedLetter
+            })
+        });
+
+        if (response && response.ok) {
+            const data = await response.json();
+            document.getElementById('mistakesCount').textContent = data.mistakes_remaining;
+            updateRevealedPairs(data.revealed_pairs);
+
+            if (data.correct) {
+                alert('Correct guess!');
+            } else {
+                alert('Incorrect guess!');
+            }
+
+            if (data.game_complete) {
+                alert(data.mistakes_remaining === 0 ? 
+                    'Game Over! Too many mistakes.' : 
+                    'Congratulations! You\'ve decrypted the quote!');
+                document.getElementById('getHint').disabled = true;
+            }
+
+            selectedEncryptedLetter = null;
+            document.getElementById('guessArea').classList.add('d-none');
+        }
+    } catch (error) {
+        console.error('Error submitting guess:', error);
+    }
+}
+
+function updateRevealedPairs(pairs) {
+    const pairsContainer = document.getElementById('pairsList');
+    pairsContainer.innerHTML = '';
+    pairs.forEach(([encrypted, original]) => {
+        const pair = document.createElement('span');
+        pair.className = 'badge bg-success';
+        pair.textContent = `${encrypted} → ${original}`;
+        pairsContainer.appendChild(pair);
+    });
+}
+
 // Game event listeners
 document.getElementById('startGame').addEventListener('click', async () => {
     try {
@@ -106,42 +202,32 @@ document.getElementById('startGame').addEventListener('click', async () => {
         if (response && response.ok) {
             const data = await response.json();
             document.getElementById('gameArea').classList.remove('d-none');
-            document.getElementById('guessList').innerHTML = '';
-            document.getElementById('hintList').innerHTML = '';
-            document.getElementById('encryptedQuote').textContent = data.encrypted_quote;
+            document.getElementById('encryptedQuote').textContent = data.encrypted_text;
+
+            // Set up letter grids
+            const encryptedGrid = document.getElementById('encryptedGrid');
+            const letterGrid = document.getElementById('letterGrid');
+            encryptedGrid.innerHTML = '';
+            letterGrid.innerHTML = '';
+
+            // Add frequency information to encrypted letters
+            Object.entries(data.letter_frequencies).forEach(([letter, freq]) => {
+                const btn = createLetterButton(letter, 'encrypted');
+                encryptedGrid.appendChild(btn);
+            });
+
+            // Add available letters for guessing
+            data.available_letters.forEach(letter => {
+                const btn = createLetterButton(letter, 'guess');
+                letterGrid.appendChild(btn);
+            });
+
             document.getElementById('getHint').disabled = false;
+            document.getElementById('mistakesCount').textContent = '5';
+            document.getElementById('pairsList').innerHTML = '';
         }
     } catch (error) {
         console.error('Error starting game:', error);
-    }
-});
-
-document.getElementById('submitGuess').addEventListener('click', async () => {
-    const guess = document.getElementById('guess').value;
-    if (!guess) return;
-
-    try {
-        const response = await authenticatedFetch('/api/game/guess', {
-            method: 'POST',
-            body: JSON.stringify({ guess })
-        });
-
-        if (response && response.ok) {
-            const data = await response.json();
-            const listItem = document.createElement('li');
-            listItem.className = 'list-group-item';
-            listItem.textContent = `${guess} - Matches at positions: ${data.matching_positions.join(', ')}`;
-            document.getElementById('guessList').prepend(listItem);
-            document.getElementById('guess').value = '';
-
-            if (data.correct) {
-                alert('Congratulations! You decrypted the quote correctly!');
-                document.getElementById('getHint').disabled = true;
-                document.getElementById('submitGuess').disabled = true;
-            }
-        }
-    } catch (error) {
-        console.error('Error submitting guess:', error);
     }
 });
 
@@ -150,10 +236,7 @@ document.getElementById('getHint').addEventListener('click', async () => {
         const response = await authenticatedFetch('/api/game/hint');
         if (response && response.ok) {
             const data = await response.json();
-            const listItem = document.createElement('li');
-            listItem.className = 'list-group-item';
-            listItem.textContent = data.hint;
-            document.getElementById('hintList').prepend(listItem);
+            updateRevealedPairs([[data.encrypted_letter, data.original_letter]]);
         }
     } catch (error) {
         console.error('Error getting hint:', error);

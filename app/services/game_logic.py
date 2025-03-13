@@ -2,6 +2,7 @@ import random
 import string
 import csv
 from pathlib import Path
+from collections import Counter
 
 def load_quotes():
     quotes_file = Path('quotes.csv')
@@ -9,70 +10,108 @@ def load_quotes():
     with open(quotes_file, 'r') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            quotes.append(row['quote'])
+            quotes.append({
+                'quote': row['quote'],
+                'author': row['author']
+            })
     return quotes
 
-def create_substitution_cipher():
-    # Create a substitution mapping for letters
-    alphabet = string.ascii_uppercase + string.punctuation + " "
+def generate_mapping():
+    # Create a substitution mapping for uppercase letters only
+    alphabet = string.ascii_uppercase
     shuffled = list(alphabet)
     random.shuffle(shuffled)
     return dict(zip(alphabet, shuffled))
 
-def encrypt_quote(quote, cipher):
+def encrypt_paragraph(text, mapping):
     encrypted = ''
-    for char in quote.upper():
-        encrypted += cipher.get(char, char)
+    for char in text.upper():
+        if char in mapping:
+            encrypted += mapping[char]
+        else:
+            encrypted += char
     return encrypted
 
-def decrypt_char(encrypted_char, cipher):
-    # Find the original character by looking up the encrypted char in the cipher
-    for original, encrypted in cipher.items():
-        if encrypted == encrypted_char:
-            return original
-    return encrypted_char
+def get_letter_frequency(text):
+    # Count only uppercase letters
+    return Counter(c for c in text if c in string.ascii_uppercase)
+
+def get_unique_letters(text):
+    # Get unique uppercase letters
+    return sorted(set(c for c in text.upper() if c in string.ascii_uppercase))
 
 def start_game():
     quotes = load_quotes()
-    quote = random.choice(quotes)
-    cipher = create_substitution_cipher()
-    encrypted_quote = encrypt_quote(quote, cipher)
+    quote_data = random.choice(quotes)
+    paragraph = quote_data['quote']
+    author = quote_data['author']
 
-    return {
-        'encrypted_quote': encrypted_quote,
-        'original_quote': quote,
-        'cipher': cipher
+    mapping = generate_mapping()
+    reverse_mapping = {v: k for k, v in mapping.items()}
+    encrypted = encrypt_paragraph(paragraph, mapping)
+    encrypted_frequency = get_letter_frequency(encrypted)
+    unique_original_letters = get_unique_letters(paragraph)
+
+    game_state = {
+        'original_paragraph': paragraph,
+        'encrypted_paragraph': encrypted,
+        'mapping': mapping,
+        'reverse_mapping': reverse_mapping,
+        'correctly_guessed': [],
+        'mistakes': 0,
+        'author': author,
+        'max_mistakes': 5  # Allow 5 mistakes
     }
 
-def make_guess(game_state, guess):
-    encrypted_quote = game_state['encrypted_quote']
-    original_quote = game_state['original_quote']
+    return {
+        'game_state': game_state,
+        'encrypted': encrypted,
+        'encrypted_frequency': dict(encrypted_frequency),
+        'unique_letters': unique_original_letters
+    }
 
-    # Convert both to uppercase for comparison
-    guess = guess.upper()
-    original_quote = original_quote.upper()
+def make_guess(game_state, encrypted_letter, guessed_letter):
+    if encrypted_letter not in game_state['reverse_mapping']:
+        return {'valid': False, 'message': 'Invalid encrypted letter'}
 
-    correct = (guess == original_quote)
+    correct_letter = game_state['reverse_mapping'][encrypted_letter]
+    is_correct = guessed_letter.upper() == correct_letter
 
-    # Calculate matching positions
-    matching_positions = []
-    for i, (g, o) in enumerate(zip(guess, original_quote)):
-        if g == o:
-            matching_positions.append(i)
+    if is_correct:
+        if encrypted_letter not in game_state['correctly_guessed']:
+            game_state['correctly_guessed'].append(encrypted_letter)
+    else:
+        game_state['mistakes'] += 1
+
+    game_complete = (
+        len(game_state['correctly_guessed']) == len(set(game_state['mapping'].values())) or 
+        game_state['mistakes'] >= game_state['max_mistakes']
+    )
 
     return {
-        'correct': correct,
-        'matching_positions': matching_positions,
-        'length': len(original_quote)
+        'valid': True,
+        'correct': is_correct,
+        'complete': game_complete,
+        'mistakes': game_state['mistakes'],
+        'max_mistakes': game_state['max_mistakes'],
+        'revealed_pairs': [(l, game_state['reverse_mapping'][l]) for l in game_state['correctly_guessed']]
     }
 
 def get_hint(game_state):
-    original_quote = game_state['original_quote']
-    encrypted_quote = game_state['encrypted_quote']
-    cipher = game_state['cipher']
+    # Get an unguessed letter pair
+    available_encrypted = [
+        k for k in game_state['reverse_mapping'].keys()
+        if k not in game_state['correctly_guessed']
+    ]
 
-    # Find an unmatched character to reveal
-    revealed_char = random.choice(list(original_quote.upper()))
-    encrypted_char = encrypt_quote(revealed_char, cipher)
+    if not available_encrypted:
+        return None
 
-    return f"The character '{encrypted_char}' represents '{revealed_char}'"
+    hint_encrypted = random.choice(available_encrypted)
+    hint_original = game_state['reverse_mapping'][hint_encrypted]
+    game_state['correctly_guessed'].append(hint_encrypted)
+
+    return {
+        'encrypted': hint_encrypted,
+        'original': hint_original
+    }
