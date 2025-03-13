@@ -203,3 +203,67 @@ def validate_guess(encrypted_letter, guessed_letter, reverse_mapping, correctly_
             correctly_guessed.append(encrypted_letter)
         return True
     return False
+
+@bp.route('/check-active-game')
+@jwt_required()
+def check_active_game():
+    """Check if user has an active game and return minimal game info"""
+    user_id = get_jwt_identity()
+    active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
+
+    if not active_game:
+        return jsonify({"has_active_game": False}), 200
+
+    # Calculate basic stats
+    completion_percentage = len(active_game.correctly_guessed) / len(set(c for c in active_game.encrypted_paragraph if c.isalpha())) * 100
+    time_spent = int((datetime.utcnow() - active_game.created_at).total_seconds())
+    difficulty = active_game.game_id.split('-')[0]
+
+    return jsonify({
+        "has_active_game": True,
+        "game_stats": {
+            "difficulty": difficulty,
+            "mistakes": active_game.mistakes,
+            "completion_percentage": round(completion_percentage, 1),
+            "time_spent": time_spent,
+            "max_mistakes": DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+        }
+    }), 200
+
+@bp.route('/continue-game')
+@jwt_required()
+def continue_game():
+    """Return full game state for continuing"""
+    user_id = get_jwt_identity()
+    active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
+
+    if not active_game:
+        return jsonify({"msg": "No active game found"}), 404
+
+    # Convert SQLAlchemy model to dict for response
+    game_state = {
+        "display": get_display(active_game.encrypted_paragraph, 
+                             active_game.correctly_guessed,
+                             active_game.reverse_mapping),
+        "encrypted_paragraph": active_game.encrypted_paragraph,
+        "game_id": active_game.game_id,
+        "letter_frequency": {letter: active_game.encrypted_paragraph.count(letter) 
+                           for letter in set(active_game.encrypted_paragraph) if letter.isalpha()},
+        "mistakes": active_game.mistakes,
+        "correctly_guessed": active_game.correctly_guessed,
+        "game_complete": False,
+        "hasWon": False,
+        "max_mistakes": DIFFICULTY_SETTINGS[active_game.game_id.split('-')[0]]['max_mistakes'],
+        "difficulty": active_game.game_id.split('-')[0]
+    }
+
+    return jsonify(game_state), 200
+
+@bp.route('/abandon-game')
+@jwt_required()
+def abandon_game():
+    """Abandon current game without recording score"""
+    user_id = get_jwt_identity()
+    ActiveGameState.query.filter_by(user_id=user_id).delete()
+    db.session.commit()
+    return jsonify({"msg": "Game abandoned successfully"}), 200

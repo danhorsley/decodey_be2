@@ -7,6 +7,25 @@
             <div class="card-body">
                 <h2 class="card-title text-center">Uncrypt Game</h2>
 
+                <!-- Active Game Modal -->
+                <div class="modal fade" id="activeGameModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Active Game Found</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="active-game-stats"></div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="abandonGame">Start New Game</button>
+                                <button type="button" class="btn btn-primary" id="continueGame">Continue Game</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- API Documentation -->
                 <div class="mb-4">
                     <h4>API Endpoints</h4>
@@ -98,6 +117,44 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (!token) {
         window.location.href = '/';
         return;
+    }
+
+    try {
+        const response = await fetch('/check-active-game', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.status === 401) {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            window.location.href = '/';
+            return;
+        }
+
+        const data = await response.json();
+        if (data.has_active_game) {
+            // Show active game stats in modal
+            const stats = data.game_stats;
+            const statsHtml = `
+                <p>You have an unfinished game:</p>
+                <ul>
+                    <li>Difficulty: ${stats.difficulty}</li>
+                    <li>Mistakes: ${stats.mistakes}/${stats.max_mistakes}</li>
+                    <li>Progress: ${stats.completion_percentage}%</li>
+                    <li>Time spent: ${Math.floor(stats.time_spent / 60)}m ${stats.time_spent % 60}s</li>
+                </ul>
+                <p>Would you like to continue this game or start a new one?</p>
+            `;
+            document.querySelector('.active-game-stats').innerHTML = statsHtml;
+
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('activeGameModal'));
+            modal.show();
+        }
+    } catch (error) {
+        console.error('Error checking for active game:', error);
     }
 });
 
@@ -300,6 +357,61 @@ document.getElementById('getHint').addEventListener('click', async () => {
         }
     } catch (error) {
         console.error('Error getting hint:', error);
+    }
+});
+
+
+// Handle continue game
+document.getElementById('continueGame').addEventListener('click', async () => {
+    try {
+        const response = await fetch('/continue-game', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            // Update game UI with continued game state
+            document.getElementById('gameArea').classList.remove('d-none');
+            document.getElementById('rawEncrypted').textContent = data.encrypted_paragraph;
+            document.getElementById('encryptedQuote').textContent = data.display;
+            document.getElementById('mistakesCount').textContent = data.mistakes;
+            document.getElementById('maxMistakes').textContent = data.max_mistakes;
+
+            // Update letter grids
+            const encryptedGrid = document.getElementById('encryptedGrid');
+            const letterGrid = document.getElementById('letterGrid');
+            encryptedGrid.innerHTML = '';
+            letterGrid.innerHTML = '';
+
+            Object.entries(data.letter_frequency).forEach(([letter, freq]) => {
+                if (freq > 0) {
+                    const btn = createLetterButton(letter, 'encrypted');
+                    encryptedGrid.appendChild(btn);
+                }
+            });
+
+            // Hide modal
+            bootstrap.Modal.getInstance(document.getElementById('activeGameModal')).hide();
+        }
+    } catch (error) {
+        console.error('Error continuing game:', error);
+    }
+});
+
+// Handle abandon game
+document.getElementById('abandonGame').addEventListener('click', async () => {
+    try {
+        await fetch('/abandon-game', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+        });
+        // Hide modal and let user start new game
+        bootstrap.Modal.getInstance(document.getElementById('activeGameModal')).hide();
+    } catch (error) {
+        console.error('Error abandoning game:', error);
     }
 });
 </script>
