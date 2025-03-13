@@ -60,7 +60,10 @@ def login():
         access_token = create_access_token(
             identity=user.get_id(),
             fresh=True,
-            additional_claims={"username": user.username}
+            additional_claims={
+                "username": user.username,
+                "email": user.email
+            }
         )
         refresh_token = create_refresh_token(identity=user.get_id()) if remember else None
 
