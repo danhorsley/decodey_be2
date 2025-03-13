@@ -63,6 +63,5 @@ class ActiveGameState(db.Model):
     mistakes = db.Column(db.Integer, default=0)
     major_attribution = db.Column(db.String)
     minor_attribution = db.Column(db.String)
-    original_letters = db.Column(db.JSON)  # Add field for original letters
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

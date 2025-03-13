@@ -119,7 +119,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
             alert(data.msg || 'Login failed');
         }
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('Error during login:', error);
         alert('Error during login');
     }
 });
