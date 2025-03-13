@@ -1,16 +1,25 @@
-from flask import Blueprint, render_template, redirect, url_for
+from flask import Blueprint, render_template, redirect, url_for, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import logging
 
 bp = Blueprint('main', __name__)
 
+
 @bp.route('/')
-def index():
+def index(request):
+    """Render the login page"""
+    # Check if request is coming from browser or API
+    if request.headers.get(
+            'Content-Type') == 'application/json' or request.headers.get(
+                'Accept') == 'application/json':
+        return jsonify({"msg": "Authentication required"}), 401
     return render_template('login.html')
+
 
 @bp.route('/register')
 def register():
     return render_template('register.html')
+
 
 @bp.route('/game')
 def game():
@@ -37,14 +46,16 @@ def game():
         }
     }
 
-    return render_template('game.html', 
-                         sample_guess_json=sample_guess_json,
-                         sample_hint_json=sample_hint_json)
+    return render_template('game.html',
+                           sample_guess_json=sample_guess_json,
+                           sample_hint_json=sample_hint_json)
+
 
 @bp.route('/stats')
 def stats():
     """Show user statistics page"""
     return render_template('stats.html')
+
 
 @bp.route('/leaderboard')
 def leaderboard():
