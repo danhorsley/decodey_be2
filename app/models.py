@@ -46,8 +46,7 @@ class GameScore(db.Model):
     game_id = db.Column(db.String, unique=True)
     score = db.Column(db.Integer)
     mistakes = db.Column(db.Integer)
-    time_taken = db.Column(db.Integer)
-    difficulty = db.Column(db.String)
+    time_taken = db.Column(db.Integer)  # Time in seconds
     game_type = db.Column(db.String, default='regular')
     challenge_date = db.Column(db.String)
     completed = db.Column(db.Boolean, default=True)

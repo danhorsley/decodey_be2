@@ -2,6 +2,8 @@ from flask import Blueprint, jsonify, request, render_template
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
+from app.utils.scoring import score_game, record_game_score
+from datetime import datetime
 import logging
 import uuid
 import random
@@ -27,13 +29,37 @@ def check_game_status(game_state):
     difficulty = game_state.get('difficulty', 'medium')
     max_mistakes = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
 
+    # Calculate time taken if game is ending
+    start_time = game_state.get('start_time')
+    time_taken = int((datetime.utcnow() - start_time).total_seconds()) if start_time else 0
+
     # Game is lost if mistakes exceed max allowed
     if game_state['mistakes'] >= max_mistakes:
+        if not game_state.get('game_complete', False):  # Only score once
+            score = score_game(difficulty, game_state['mistakes'], time_taken)
+            record_game_score(
+                get_jwt_identity(),
+                game_state['game_id'],
+                score,
+                game_state['mistakes'],
+                time_taken,
+                completed=True
+            )
         return {'game_complete': True, 'hasWon': False}
 
     # Game is won if all letters are correctly guessed
     all_letters_guessed = len(game_state['correctly_guessed']) == len(set(c for c in game_state['encrypted_paragraph'] if c.isalpha()))
     if all_letters_guessed:
+        if not game_state.get('game_complete', False):  # Only score once
+            score = score_game(difficulty, game_state['mistakes'], time_taken)
+            record_game_score(
+                get_jwt_identity(),
+                game_state['game_id'],
+                score,
+                game_state['mistakes'],
+                time_taken,
+                completed=True
+            )
         return {'game_complete': True, 'hasWon': True}
 
     # Game is still in progress
@@ -87,6 +113,8 @@ def start():
     game_state['game_id'] = generate_game_id(difficulty)
     game_state['difficulty'] = difficulty
     game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+    game_state['start_time'] = datetime.utcnow()  # Track start time
+    game_state['game_complete'] = False  # Track if game has been completed
 
     save_game_state(username, game_state)
 
