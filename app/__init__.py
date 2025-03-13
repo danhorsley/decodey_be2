@@ -1,13 +1,17 @@
-from flask import Flask
+from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from config import Config
 from app.models import db
 import logging
+from flask_jwt_extended import exceptions as jwt_exceptions
 
 jwt = JWTManager()
 # Store revoked tokens in memory
 jwt_blocklist = set()
+
+# Register JWT error handlers
+
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -18,9 +22,26 @@ def create_app(config_class=Config):
     logger = logging.getLogger(__name__)
     logger.info("Starting application initialization")
 
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return jsonify({"msg": "Token has expired"}), 401
+
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        return jsonify({"msg": "Invalid token"}), 401
+
+    @jwt.unauthorized_loader
+    def missing_token_callback(error):
+        return jsonify({"msg": "Authorization token is missing"}), 401
+
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        return jsonify({"msg": "Token has been revoked"}), 401
+
     # Configure SQLAlchemy
     try:
-        logger.info(f"Configuring database with URL: {app.config['DATABASE_URL']}")
+        logger.info(
+            f"Configuring database with URL: {app.config['DATABASE_URL']}")
         app.config['SQLALCHEMY_DATABASE_URI'] = app.config['DATABASE_URL']
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
