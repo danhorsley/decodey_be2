@@ -47,19 +47,22 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         });
 
         const data = await response.json();
+        console.log('Login response:', response.status);
 
         if (response.ok) {
+            console.log('Login successful, storing tokens');
             localStorage.setItem('access_token', data.access_token);
             if (data.refresh_token) {
                 localStorage.setItem('refresh_token', data.refresh_token);
             }
             window.location.href = '/game';
         } else {
+            console.error('Login failed:', data.msg);
             alert(data.msg || 'Login failed');
         }
     } catch (error) {
+        console.error('Login error:', error);
         alert('Error during login');
-        console.error('Error:', error);
     }
 });
 </script>
