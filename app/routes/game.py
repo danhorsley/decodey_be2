@@ -1,6 +1,5 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response, stream_with_context
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from flask_jwt_extended.exceptions import NoAuthorizationError
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 from app.utils.scoring import score_game, record_game_score, update_active_game_state
@@ -8,6 +7,9 @@ from app.models import db, ActiveGameState
 from app.utils.stats import initialize_or_update_user_stats
 from datetime import datetime
 import logging
+import json
+import time
+import sys
 import uuid
 import random
 
@@ -346,3 +348,38 @@ def abandon_game():
     ActiveGameState.query.filter_by(user_id=user_id).delete()
     db.session.commit()
     return jsonify({"msg": "Game abandoned successfully"}), 200
+
+@bp.route('/events')
+def events():
+    """SSE endpoint for real-time game updates"""
+    logger.info("SSE connection attempt received")
+
+    def generate():
+        """Generate SSE data"""
+        try:
+            while True:
+                # Simple heartbeat event
+                data = {'timestamp': datetime.utcnow().isoformat()}
+                logger.debug(f"Preparing SSE data: {data}")
+                yield f"data: {json.dumps(data)}\n\n"
+                time.sleep(2)  # Send updates every 2 seconds
+        except GeneratorExit:
+            logger.info("Client closed SSE connection")
+        except Exception as e:
+            logger.error(f"SSE generator error: {e}")
+
+    try:
+        logger.info("Setting up SSE response")
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Content-Type': 'text/event-stream',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to create SSE response: {e}")
+        return jsonify({"error": "Failed to establish event stream"}), 500

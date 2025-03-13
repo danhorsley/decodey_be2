@@ -10,6 +10,7 @@ jwt = JWTManager()
 # Store revoked tokens in memory
 jwt_blocklist = set()
 
+
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -20,16 +21,17 @@ def create_app(config_class=Config):
     logger.info("Starting application initialization")
 
     # Configure CORS
-    CORS(app, 
-         resources={
-             r"/*": {  # Apply CORS to all routes
-                 "origins": "*",  # Allow all origins during development
-                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                 "allow_headers": ["Content-Type", "Authorization", "Accept"],
-                 "expose_headers": ["Content-Type", "Authorization"],
-                 "supports_credentials": True
-             }
-         })
+    CORS(
+        app,
+        resources={
+            r"/*": {  # Apply CORS to all routes
+                "origins": "*",  # Allow all origins during development
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                "expose_headers": ["Content-Type", "Authorization"],
+                "supports_credentials": True
+            }
+        })
 
     # JWT Configuration
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
@@ -54,7 +56,8 @@ def create_app(config_class=Config):
 
     # Configure SQLAlchemy
     try:
-        logger.info(f"Configuring database with URL: {app.config['DATABASE_URL']}")
+        logger.info(
+            f"Configuring database with URL: {app.config['DATABASE_URL']}")
         app.config['SQLALCHEMY_DATABASE_URI'] = app.config['DATABASE_URL']
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
@@ -81,10 +84,12 @@ def create_app(config_class=Config):
         # Register blueprints without API prefixes
         from app.routes import auth, game, stats, leaderboard, main
         app.register_blueprint(main.bp)  # Main routes
-        app.register_blueprint(auth.bp)  # Auth routes (/login, /register, etc.)
-        app.register_blueprint(game.bp)  # Game routes (/start, /guess, etc.)
-        app.register_blueprint(stats.bp)  # Stats routes
-        app.register_blueprint(leaderboard.bp)  # Leaderboard routes
+        app.register_blueprint(
+            auth.bp)  # Auth routes (/login, /register, etc.)
+        app.register_blueprint(game.bp, url_prefix='/api')
+        app.register_blueprint(stats.bp, url_prefix='/api')  # Stats routes
+        app.register_blueprint(leaderboard.bp,
+                               url_prefix='/api')  # Leaderboard routes
         logger.info("Successfully registered all blueprints")
 
     except Exception as e:
