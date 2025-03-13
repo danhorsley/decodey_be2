@@ -22,7 +22,7 @@ def create_app(config_class=Config):
     # Configure CORS
     CORS(app, 
          resources={
-             r"/api/*": {  # Only apply CORS to /api routes
+             r"/*": {  # Apply CORS to all routes
                  "origins": "*",  # Allow all origins during development
                  "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                  "allow_headers": ["Content-Type", "Authorization", "Accept"],
@@ -78,13 +78,13 @@ def create_app(config_class=Config):
             db.create_all()
             logger.info("Database tables created successfully")
 
-        # Register blueprints with API prefix
+        # Register blueprints without API prefixes
         from app.routes import auth, game, stats, leaderboard, main
-        app.register_blueprint(main.bp)  # Keep main routes at root
-        app.register_blueprint(auth.bp, url_prefix='/api/auth')
-        app.register_blueprint(game.bp, url_prefix='/api/game')  # Game routes under /api/game
-        app.register_blueprint(stats.bp, url_prefix='/api/stats')
-        app.register_blueprint(leaderboard.bp, url_prefix='/api/leaderboard')
+        app.register_blueprint(main.bp)  # Main routes
+        app.register_blueprint(auth.bp)  # Auth routes (/login, /register, etc.)
+        app.register_blueprint(game.bp)  # Game routes (/start, /guess, etc.)
+        app.register_blueprint(stats.bp)  # Stats routes
+        app.register_blueprint(leaderboard.bp)  # Leaderboard routes
         logger.info("Successfully registered all blueprints")
 
     except Exception as e:
