@@ -5,8 +5,8 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-body">
-                <h2 class="card-title text-center">Login</h2>
-                <form id="loginForm">
+                <h2 class="card-title text-center">Register</h2>
+                <form id="registerForm">
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
                         <input type="text" class="form-control" id="username" required>
@@ -15,14 +15,10 @@
                         <label for="password" class="form-label">Password</label>
                         <input type="password" class="form-control" id="password" required>
                     </div>
-                    <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="remember">
-                        <label class="form-check-label" for="remember">Remember me</label>
-                    </div>
-                    <button type="submit" class="btn btn-primary w-100">Login</button>
+                    <button type="submit" class="btn btn-primary w-100">Register</button>
                 </form>
                 <p class="text-center mt-3">
-                    <a href="/register">Register new account</a>
+                    <a href="/">Already have an account? Login</a>
                 </p>
             </div>
         </div>
@@ -30,35 +26,31 @@
 </div>
 
 <script>
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-
+    
     const username = document.getElementById('username').value;
     const password = document.getElementById('password').value;
-    const remember = document.getElementById('remember').checked;
-
+    
     try {
-        const response = await fetch('/login', {
+        const response = await fetch('/register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ username, password, remember })
+            body: JSON.stringify({ username, password })
         });
-
+        
         const data = await response.json();
-
+        
         if (response.ok) {
-            localStorage.setItem('access_token', data.access_token);
-            if (data.refresh_token) {
-                localStorage.setItem('refresh_token', data.refresh_token);
-            }
-            window.location.href = '/game';
+            alert('Registration successful! Please login.');
+            window.location.href = '/';
         } else {
-            alert(data.msg || 'Login failed');
+            alert(data.msg || 'Registration failed');
         }
     } catch (error) {
-        alert('Error during login');
+        alert('Error during registration');
         console.error('Error:', error);
     }
 });

@@ -7,6 +7,10 @@ bp = Blueprint('main', __name__)
 def index():
     return render_template('login.html')
 
+@bp.route('/register')
+def register():
+    return render_template('register.html')
+
 @bp.route('/game')
 @jwt_required()
 def game():
