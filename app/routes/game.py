@@ -4,6 +4,7 @@ from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 import logging
 import uuid
+import random
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -49,21 +50,29 @@ def guess():
         logger.error(f"No active game found for user: {username}")
         return jsonify({"msg": "No active game"}), 400
 
-    result = make_guess(game_state, encrypted_letter, guessed_letter)
-    if not result['valid']:
-        return jsonify({"msg": result['message']}), 400
+    if not validate_guess(encrypted_letter, guessed_letter, game_state['reverse_mapping'], game_state['correctly_guessed']):
+        game_state['mistakes'] += 1
+
+    display = get_display(game_state['encrypted_paragraph'], 
+                         game_state['correctly_guessed'],
+                         game_state['reverse_mapping'])
+
+    game_complete = (
+        len(game_state['correctly_guessed']) == len(set(game_state['mapping'].values())) or 
+        game_state['mistakes'] >= game_state.get('max_mistakes', 5)
+    )
 
     save_game_state(username, game_state)
-    logger.debug(f"Guess result: {result}")
+    logger.debug(f"Updated game state saved for user {username}")
 
     return jsonify({
-        "correct": result['correct'],
-        "game_complete": result['complete'],
-        "mistakes_remaining": result['max_mistakes'] - result['mistakes'],
-        "revealed_pairs": result['revealed_pairs']
+        'display': display,
+        'mistakes': game_state['mistakes'],
+        'correctly_guessed': game_state['correctly_guessed'],
+        'game_complete': game_complete
     }), 200
 
-@bp.route('/hint', methods=['GET'])
+@bp.route('/hint', methods=['POST'])
 @jwt_required()
 def hint():
     username = get_jwt_identity()
@@ -74,14 +83,42 @@ def hint():
         logger.error(f"No active game found for user: {username}")
         return jsonify({"msg": "No active game"}), 400
 
-    hint_result = get_hint(game_state)
-    if not hint_result:
+    all_encrypted = list(game_state['mapping'].values())
+    unmapped = [letter for letter in all_encrypted 
+                if letter not in game_state['correctly_guessed']]
+
+    if not unmapped:
         return jsonify({"msg": "No more hints available"}), 400
 
+    used_unmapped = [x for x in unmapped if x in game_state['encrypted_paragraph']]
+    if not used_unmapped:
+        return jsonify({"msg": "No more hints available"}), 400
+
+    letter = random.choice(used_unmapped)
+    game_state['correctly_guessed'].append(letter)
+    game_state['mistakes'] += 1
+
+    display = get_display(game_state['encrypted_paragraph'],
+                         game_state['correctly_guessed'],
+                         game_state['reverse_mapping'])
+
     save_game_state(username, game_state)
-    logger.debug(f"Providing hint: {hint_result}")
+    logger.debug(f"Updated game state saved after hint for user {username}")
 
     return jsonify({
-        "encrypted_letter": hint_result['encrypted'],
-        "original_letter": hint_result['original']
+        'display': display,
+        'mistakes': game_state['mistakes'],
+        'correctly_guessed': game_state['correctly_guessed']
     }), 200
+
+def get_display(encrypted_paragraph, correctly_guessed, reverse_mapping):
+    return ''.join(reverse_mapping[char] if char in correctly_guessed
+                  else '█' if char.isalpha() else char
+                  for char in encrypted_paragraph)
+
+def validate_guess(encrypted_letter, guessed_letter, reverse_mapping, correctly_guessed):
+    if reverse_mapping[encrypted_letter] == guessed_letter.upper():
+        if encrypted_letter not in correctly_guessed:
+            correctly_guessed.append(encrypted_letter)
+        return True
+    return False

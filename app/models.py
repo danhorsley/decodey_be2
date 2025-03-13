@@ -58,20 +58,3 @@ class ActiveGameState(db.Model):
     minor_attribution = db.Column(db.String)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class DailyChallenge(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    challenge_date = db.Column(db.String, unique=True)
-    quote_text = db.Column(db.Text)
-    major_attribution = db.Column(db.String)
-    minor_attribution = db.Column(db.String)
-    difficulty = db.Column(db.String, default='normal')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class SpeedrunConfig(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    config_name = db.Column(db.String, unique=True)
-    description = db.Column(db.Text)
-    time_limit = db.Column(db.Integer)
-    difficulty = db.Column(db.String)
-    enabled = db.Column(db.Boolean, default=True)
