@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request, Response, stream_with_context
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 from app.utils.scoring import score_game, record_game_score, update_active_game_state
@@ -18,21 +18,6 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('game', __name__)
-
-DIFFICULTY_SETTINGS = {
-    'easy': {
-        'max_mistakes': 8,
-        'hint_penalty': 1
-    },
-    'medium': {
-        'max_mistakes': 6,
-        'hint_penalty': 1
-    },
-    'hard': {
-        'max_mistakes': 4,
-        'hint_penalty': 2
-    }
-}
 
 @bp.errorhandler(NoAuthorizationError)
 def handle_auth_error(e):
@@ -354,19 +339,75 @@ def events():
     """SSE endpoint for real-time game updates"""
     logger.info("SSE connection attempt received")
 
+    # Get token from Authorization header
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        logger.error("No valid Authorization header in SSE request")
+        return jsonify({"error": "Authentication required"}), 401
+
+    token = auth_header.split(' ')[1]
+    try:
+        # Decode token to get user identity
+        decoded_token = decode_token(token)
+        user_id = decoded_token['sub']
+        logger.info(f"SSE connection authenticated for user: {user_id}")
+    except Exception as e:
+        logger.error(f"Invalid token in SSE request: {str(e)}")
+        return jsonify({"error": "Invalid authentication token"}), 401
+
     def generate():
         """Generate SSE data"""
         try:
+            # Send initial connection event
+            yield f"event: connected\ndata: {json.dumps({'user_id': user_id})}\n\n"
+
             while True:
-                # Simple heartbeat event
-                data = {'timestamp': datetime.utcnow().isoformat()}
-                logger.debug(f"Preparing SSE data: {data}")
-                yield f"data: {json.dumps(data)}\n\n"
-                time.sleep(2)  # Send updates every 2 seconds
+                try:
+                    # Get current game state
+                    game_state = get_game_state(user_id)
+
+                    if game_state:
+                        # Game state update event
+                        state_data = {
+                            'game_id': game_state.get('game_id'),
+                            'mistakes': game_state.get('mistakes', 0),
+                            'completed': game_state.get('game_complete', False),
+                            'remaining_attempts': (
+                                game_state.get('max_mistakes', 6) - 
+                                game_state.get('mistakes', 0)
+                            )
+                        }
+                        yield f"event: gameState\ndata: {json.dumps(state_data)}\n\n"
+
+                        # Check for win condition
+                        if (game_state.get('game_complete') and 
+                            game_state.get('mistakes', 0) < game_state.get('max_mistakes', 6)):
+                            win_data = {
+                                'game_id': game_state.get('game_id'),
+                                'score': game_state.get('score', 0),
+                                'mistakes': game_state.get('mistakes', 0),
+                                'time_taken': (
+                                    datetime.utcnow() - 
+                                    game_state.get('start_time', datetime.utcnow())
+                                ).total_seconds()
+                            }
+                            yield f"event: gameWon\ndata: {json.dumps(win_data)}\n\n"
+                    else:
+                        # No active game state
+                        yield f"event: gameState\ndata: {json.dumps({'active': False})}\n\n"
+
+                    time.sleep(2)  # Update interval
+
+                except Exception as e:
+                    logger.error(f"Error in SSE data generation: {str(e)}")
+                    yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+                    time.sleep(5)  # Longer interval after error
+
         except GeneratorExit:
-            logger.info("Client closed SSE connection")
+            logger.info(f"SSE connection closed for user {user_id}")
         except Exception as e:
             logger.error(f"SSE generator error: {e}")
+            yield f"event: error\ndata: {json.dumps({'message': 'Connection error'})}\n\n"
 
     try:
         logger.info("Setting up SSE response")
@@ -377,9 +418,27 @@ def events():
                 'Cache-Control': 'no-cache',
                 'Content-Type': 'text/event-stream',
                 'Connection': 'keep-alive',
-                'Access-Control-Allow-Origin': '*'
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Authorization',
+                'Access-Control-Allow-Credentials': 'true',
+                'X-Accel-Buffering': 'no'  # Disable proxy buffering
             }
         )
     except Exception as e:
         logger.error(f"Failed to create SSE response: {e}")
         return jsonify({"error": "Failed to establish event stream"}), 500
+
+DIFFICULTY_SETTINGS = {
+    'easy': {
+        'max_mistakes': 8,
+        'hint_penalty': 1
+    },
+    'medium': {
+        'max_mistakes': 6,
+        'hint_penalty': 1
+    },
+    'hard': {
+        'max_mistakes': 4,
+        'hint_penalty': 2
+    }
+}
