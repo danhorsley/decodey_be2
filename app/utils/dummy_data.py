@@ -2,6 +2,15 @@ from datetime import datetime, timedelta
 import random
 import uuid
 import logging
+import sys
+import os
+from pathlib import Path
+
+# Add the project root to Python path
+project_root = str(Path(__file__).resolve().parents[2])
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 from app.models import db, User, UserStats, GameScore
 from werkzeug.security import generate_password_hash
 
@@ -33,16 +42,16 @@ def create_dummy_user():
     email = generate_email(username)
     password = f"dummy_password_{random.randint(1000, 9999)}"
 
-    user = User(user_id=str(uuid.uuid4()),
+    # Create new user with the correct model attributes
+    user = User(username=username,
                 email=email,
-                username=username,
-                password_hash=generate_password_hash(password))
+                password=generate_password_hash(password))
 
     db.session.add(user)
     db.session.commit()
 
-    logging.info(f"Created user: {username} (ID: {user.user_id})")
-    return user.user_id, username
+    logging.info(f"Created user: {username} (ID: {user.id})")
+    return user.id, username
 
 
 def simulate_game(user_id, game_number, total_games):
@@ -76,8 +85,8 @@ def simulate_game(user_id, game_number, total_games):
     # Time taken (faster as they progress)
     min_time = 30
     max_time = 300
-    time_taken = int(max_time - (
-        (max_time - min_time) * progress_factor * random.uniform(0.7, 1.0)))
+    time_taken = int(max_time -
+                    ((max_time - min_time) * progress_factor * random.uniform(0.7, 1.0)))
 
     # Game completion status
     completed = mistakes < max_mistakes_possible
@@ -89,8 +98,7 @@ def simulate_game(user_id, game_number, total_games):
     random_days = random.randint(0, days_between)
     game_date = start_date + timedelta(days=random_days)
 
-    game = GameScore(game_id=str(uuid.uuid4()),
-                     user_id=user_id,
+    game = GameScore(user_id=user_id,
                      score=score,
                      mistakes=mistakes,
                      time_taken=time_taken,
@@ -126,8 +134,7 @@ def generate_dummy_data(num_users=25, min_games=50, max_games=100):
             if game_num % 10 == 0:
                 db.session.commit()
                 logging.info(
-                    f"Generated {game_num}/{num_games} games for user {username}"
-                )
+                    f"Generated {game_num}/{num_games} games for user {username}")
 
         db.session.commit()
 
@@ -135,9 +142,7 @@ def generate_dummy_data(num_users=25, min_games=50, max_games=100):
         from app.utils.stats import initialize_or_update_user_stats
         initialize_or_update_user_stats(user_id)
 
-    logging.info(
-        f"Dummy data generation complete. Created {num_users} users with games."
-    )
+    logging.info(f"Dummy data generation complete. Created {num_users} users with games.")
     return user_data
 
 
