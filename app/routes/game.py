@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 from app.utils.scoring import score_game, record_game_score, update_active_game_state
+from app.models import db, ActiveGameState  # Added ActiveGameState import
 from datetime import datetime
 import logging
 import uuid
