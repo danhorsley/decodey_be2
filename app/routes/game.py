@@ -241,6 +241,9 @@ def continue_game():
     if not active_game:
         return jsonify({"msg": "No active game found"}), 404
 
+    # Get alphabet for guessing
+    alphabet = [chr(i) for i in range(65, 91)]  # A-Z
+
     # Convert SQLAlchemy model to dict for response
     game_state = {
         "display": get_display(active_game.encrypted_paragraph, 
@@ -255,7 +258,10 @@ def continue_game():
         "game_complete": False,
         "hasWon": False,
         "max_mistakes": DIFFICULTY_SETTINGS[active_game.game_id.split('-')[0]]['max_mistakes'],
-        "difficulty": active_game.game_id.split('-')[0]
+        "difficulty": active_game.game_id.split('-')[0],
+        "original_letters": alphabet,  # Add original letters for the guess grid
+        "mapping": active_game.mapping,
+        "reverse_mapping": active_game.reverse_mapping
     }
 
     return jsonify(game_state), 200
