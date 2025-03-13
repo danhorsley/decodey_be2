@@ -12,8 +12,8 @@
                         <input type="text" class="form-control" id="username" required>
                     </div>
                     <div class="mb-3">
-                        <label for="email" class="form-label">Email (optional)</label>
-                        <input type="email" class="form-control" id="email">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" required>
                     </div>
                     <div class="mb-3">
                         <label for="password" class="form-label">Password</label>
@@ -46,7 +46,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
             body: JSON.stringify({ 
                 username, 
                 password,
-                email: email || `${username}@example.com`
+                email 
             })
         });
 

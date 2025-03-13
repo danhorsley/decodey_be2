@@ -16,14 +16,16 @@ def register():
         data = request.get_json()
         username = data.get('username')
         password = data.get('password')
-        email = data.get('email', f"{username}@example.com")  # Temporary default email
+        email = data.get('email')
 
-        if not username or not password:
-            return jsonify({"msg": "Username and password are required"}), 400
+        if not username or not password or not email:
+            return jsonify({"msg": "Username, email and password are required"}), 400
 
         # Check if user already exists
         if User.query.filter_by(username=username).first():
             return jsonify({"msg": "Username already exists"}), 409
+        if User.query.filter_by(email=email).first():
+            return jsonify({"msg": "Email already exists"}), 409
 
         # Create new user with SQLAlchemy model
         user = User(username=username, email=email, password=password)
@@ -43,26 +45,30 @@ def register():
 def login():
     try:
         data = request.get_json()
-        username = data.get('username')
+        identifier = data.get('username')  # Can be username or email
         password = data.get('password')
         remember = data.get('remember', False)
 
-        user = User.query.filter_by(username=username).first()
+        # Try to find user by username or email
+        user = User.query.filter(
+            (User.username == identifier) | (User.email == identifier)
+        ).first()
+
         if not user or not user.check_password(password):
             return jsonify({"msg": "Invalid credentials"}), 401
 
         access_token = create_access_token(
             identity=user.get_id(),
             fresh=True,
-            additional_claims={"username": username}
+            additional_claims={"username": user.username}
         )
         refresh_token = create_refresh_token(identity=user.get_id()) if remember else None
 
-        logging.info(f"Successful login for user: {username}")
+        logging.info(f"Successful login for user: {user.username}")
         return jsonify({
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "username": username
+            "username": user.username
         }), 200
 
     except Exception as e:
