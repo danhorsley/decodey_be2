@@ -241,13 +241,8 @@ def continue_game():
     if not active_game:
         return jsonify({"msg": "No active game found"}), 404
 
-    # Get game state for original letters
-    game_state = get_game_state(user_id)
-    if not game_state:
-        # If game state is missing, use saved original letters from ActiveGameState
-        original_letters = active_game.original_letters or [chr(i) for i in range(65, 91)]  # fallback to A-Z
-    else:
-        original_letters = game_state.get('original_letters', active_game.original_letters or [chr(i) for i in range(65, 91)])
+    # Generate original letters by getting unique values from reverse_mapping
+    original_letters = sorted(set(active_game.reverse_mapping.values()))
 
     # Convert SQLAlchemy model to dict for response
     game_state = {
@@ -264,7 +259,7 @@ def continue_game():
         "hasWon": False,
         "max_mistakes": DIFFICULTY_SETTINGS[active_game.game_id.split('-')[0]]['max_mistakes'],
         "difficulty": active_game.game_id.split('-')[0],
-        "original_letters": original_letters,  # Use saved original letters
+        "original_letters": original_letters,  # Use derived original letters
         "mapping": active_game.mapping,
         "reverse_mapping": active_game.reverse_mapping
     }
