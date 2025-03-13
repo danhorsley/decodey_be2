@@ -33,12 +33,24 @@ def encrypt_paragraph(text, mapping):
     return encrypted
 
 def get_letter_frequency(text):
-    # Count only uppercase letters
-    return Counter(c for c in text if c in string.ascii_uppercase)
+    # Initialize frequency counter for all letters
+    frequency = {letter: 0 for letter in string.ascii_uppercase}
+    # Update counts for letters that appear
+    frequency.update(Counter(c for c in text if c in string.ascii_uppercase))
+    return frequency
 
 def get_unique_letters(text):
     # Get unique uppercase letters
     return sorted(set(c for c in text.upper() if c in string.ascii_uppercase))
+
+def generate_display_blocks(text):
+    display = ''
+    for char in text.upper():
+        if char in string.ascii_uppercase:
+            display += '█'
+        else:
+            display += char
+    return display
 
 def start_game():
     quotes = load_quotes()
@@ -51,6 +63,7 @@ def start_game():
     encrypted = encrypt_paragraph(paragraph, mapping)
     encrypted_frequency = get_letter_frequency(encrypted)
     unique_original_letters = get_unique_letters(paragraph)
+    display_blocks = generate_display_blocks(paragraph)
 
     game_state = {
         'original_paragraph': paragraph,
@@ -60,14 +73,20 @@ def start_game():
         'correctly_guessed': [],
         'mistakes': 0,
         'author': author,
-        'max_mistakes': 5  # Allow 5 mistakes
+        'max_mistakes': 5,  # Allow 5 mistakes
+        'major_attribution': author,
+        'minor_attribution': ''  # Could be populated if we had context data
     }
 
     return {
         'game_state': game_state,
-        'encrypted': encrypted,
-        'encrypted_frequency': dict(encrypted_frequency),
-        'unique_letters': unique_original_letters
+        'display': display_blocks,
+        'encrypted_paragraph': encrypted,
+        'letter_frequency': encrypted_frequency,
+        'original_letters': unique_original_letters,
+        'mistakes': 0,
+        'major_attribution': author,
+        'minor_attribution': ''
     }
 
 def make_guess(game_state, encrypted_letter, guessed_letter):

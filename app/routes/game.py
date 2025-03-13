@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 import logging
+import uuid
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
@@ -17,13 +18,20 @@ def start():
     logger.debug(f"Starting new game for user: {username}")
 
     game_data = start_game()
-    save_game_state(username, game_data['game_state'])
+    game_state = game_data['game_state']
+    game_state['game_id'] = str(uuid.uuid4())
+    save_game_state(username, game_state)
 
-    logger.debug(f"Game state saved with encrypted text: {game_data['encrypted']}")
+    logger.debug(f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}")
     return jsonify({
-        "encrypted_text": game_data['encrypted'],
-        "letter_frequencies": game_data['encrypted_frequency'],
-        "available_letters": game_data['unique_letters']
+        "display": game_data['display'],
+        "encrypted_paragraph": game_data['encrypted_paragraph'],
+        "game_id": game_state['game_id'],
+        "letter_frequency": game_data['letter_frequency'],
+        "major_attribution": game_data['major_attribution'],
+        "minor_attribution": game_data['minor_attribution'],
+        "mistakes": game_data['mistakes'],
+        "original_letters": game_data['original_letters']
     }), 200
 
 @bp.route('/guess', methods=['POST'])
