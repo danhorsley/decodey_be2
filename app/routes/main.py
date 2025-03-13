@@ -6,13 +6,7 @@ bp = Blueprint('main', __name__)
 
 
 @bp.route('/')
-def index(request):
-    """Render the login page"""
-    # Check if request is coming from browser or API
-    if request.headers.get(
-            'Content-Type') == 'application/json' or request.headers.get(
-                'Accept') == 'application/json':
-        return jsonify({"msg": "Authentication required"}), 401
+def index():
     return render_template('login.html')
 
 
