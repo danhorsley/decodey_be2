@@ -26,30 +26,36 @@ def create_app(config_class=Config):
                  "origins": "*",  # Allow all origins during development
                  "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                  "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                 "expose_headers": ["Content-Type", "Authorization"],
                  "supports_credentials": True
              }
          })
 
+    # JWT Configuration
+    app.config['JWT_TOKEN_LOCATION'] = ['headers']
+    app.config['JWT_HEADER_NAME'] = 'Authorization'
+    app.config['JWT_HEADER_TYPE'] = 'Bearer'
+
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
-        return jsonify({"msg": "Token has expired"}), 401
+        return jsonify({"error": "Token has expired"}), 401
 
     @jwt.invalid_token_loader
     def invalid_token_callback(error):
-        return jsonify({"msg": "Invalid token"}), 401
+        return jsonify({"error": "Invalid token"}), 401
 
     @jwt.unauthorized_loader
     def missing_token_callback(error):
-        return jsonify({"msg": "Authorization token is missing"}), 401
+        return jsonify({"error": "Authorization token is missing"}), 401
 
     @jwt.revoked_token_loader
     def revoked_token_callback(jwt_header, jwt_payload):
-        return jsonify({"msg": "Token has been revoked"}), 401
+        return jsonify({"error": "Token has been revoked"}), 401
 
     # Ensure all JWT errors are handled properly
     @app.errorhandler(jwt_exceptions.JWTExtendedException)
     def handle_jwt_exceptions(e):
-        return jsonify({"msg": str(e)}), 401
+        return jsonify({"error": str(e)}), 401
 
     # Configure SQLAlchemy
     try:
@@ -79,11 +85,11 @@ def create_app(config_class=Config):
 
         # Register blueprints
         from app.routes import auth, game, stats, leaderboard, main
-        app.register_blueprint(main.bp)
-        app.register_blueprint(auth.bp)
-        app.register_blueprint(game.bp)  # Remove url_prefix to match frontend expectations
-        app.register_blueprint(stats.bp)
-        app.register_blueprint(leaderboard.bp)
+        app.register_blueprint(main.bp, url_prefix='/api')
+        app.register_blueprint(auth.bp, url_prefix='/api/auth')
+        app.register_blueprint(game.bp, url_prefix='/api/game')
+        app.register_blueprint(stats.bp, url_prefix='/api/stats')
+        app.register_blueprint(leaderboard.bp, url_prefix='/api/leaderboard')
         logger.info("Successfully registered all blueprints")
 
     except Exception as e:

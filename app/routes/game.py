@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended.exceptions import NoAuthorizationError
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 from app.utils.scoring import score_game, record_game_score, update_active_game_state
@@ -31,49 +32,57 @@ DIFFICULTY_SETTINGS = {
     }
 }
 
+@bp.errorhandler(NoAuthorizationError)
+def handle_auth_error(e):
+    return jsonify({"error": "Authentication required"}), 401
+
 @bp.route('/start', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def start():
+    """Start a new game"""
     if request.method == 'OPTIONS':
         return jsonify({}), 200
 
-    username = get_jwt_identity()
-    difficulty = request.args.get('difficulty', 'medium')
-    if difficulty not in DIFFICULTY_SETTINGS:
-        difficulty = 'medium'
+    try:
+        username = get_jwt_identity()
+        difficulty = request.args.get('difficulty', 'medium')
+        if difficulty not in DIFFICULTY_SETTINGS:
+            difficulty = 'medium'
 
-    logger.debug(f"Starting new game for user: {username} with difficulty: {difficulty}")
+        logger.debug(f"Starting new game for user: {username} with difficulty: {difficulty}")
 
-    # Start a new game and get game data
-    game_data = start_game()
-    game_state = game_data['game_state']
-    game_state['game_id'] = generate_game_id(difficulty)
-    game_state['difficulty'] = difficulty
-    game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
-    game_state['start_time'] = datetime.utcnow()
-    game_state['game_complete'] = False
+        # Start a new game and get game data
+        game_data = start_game()
+        game_state = game_data['game_state']
+        game_state['game_id'] = generate_game_id(difficulty)
+        game_state['difficulty'] = difficulty
+        game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+        game_state['start_time'] = datetime.utcnow()
+        game_state['game_complete'] = False
 
-    save_game_state(username, game_state)
-    update_active_game_state(username, game_state)
+        save_game_state(username, game_state)
+        update_active_game_state(username, game_state)
 
-    status = check_game_status(game_state)
-    logger.debug(f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}")
+        status = check_game_status(game_state)
+        logger.debug(f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}")
 
-    response = jsonify({
-        "display": game_data['display'],
-        "encrypted_paragraph": game_data['encrypted_paragraph'],
-        "game_id": game_state['game_id'],
-        "letter_frequency": game_data['letter_frequency'],
-        "mistakes": game_data['mistakes'],
-        "original_letters": game_data['original_letters'],
-        "game_complete": status['game_complete'],
-        "hasWon": status['hasWon'],
-        "max_mistakes": game_state['max_mistakes'],
-        "difficulty": difficulty
-    })
+        response_data = {
+            "display": game_data['display'],
+            "encrypted_paragraph": game_data['encrypted_paragraph'],
+            "game_id": game_state['game_id'],
+            "letter_frequency": game_data['letter_frequency'],
+            "mistakes": game_data['mistakes'],
+            "original_letters": game_data['original_letters'],
+            "game_complete": status['game_complete'],
+            "hasWon": status['hasWon'],
+            "max_mistakes": game_state['max_mistakes'],
+            "difficulty": difficulty
+        }
 
-    return response, 200
-
+        return jsonify(response_data), 200
+    except Exception as e:
+        logger.error(f"Error starting game: {str(e)}")
+        return jsonify({"error": "Failed to start game"}), 500
 
 def generate_game_id(difficulty='medium'):
     """Generate a game ID that includes the difficulty"""

@@ -1,21 +1,33 @@
-from flask import Blueprint, render_template, redirect, url_for, jsonify
+from flask import Blueprint, jsonify, redirect, url_for
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import logging
 
 bp = Blueprint('main', __name__)
 
-
 @bp.route('/')
 def index():
-    return render_template('login.html')
+    """Return API status for root endpoint"""
+    return jsonify({
+        "status": "ok",
+        "message": "Uncrypt Game API"
+    })
 
+@bp.route('/api/status')
+@jwt_required()
+def api_status():
+    """Protected endpoint to verify JWT auth"""
+    current_user = get_jwt_identity()
+    return jsonify({
+        "status": "authenticated",
+        "user": current_user
+    })
 
 @bp.route('/register')
 def register():
-    return render_template('register.html')
-
+    return jsonify({"message": "Registration page"}) # Changed to JSON response
 
 @bp.route('/game')
+@jwt_required() # Added JWT authentication
 def game():
     """Show the game page - JWT check happens in frontend"""
     # Sample JSON for API documentation
@@ -40,32 +52,17 @@ def game():
         }
     }
 
-    return render_template('game.html',
-                           sample_guess_json=sample_guess_json,
-                           sample_hint_json=sample_hint_json)
+    return jsonify({"sample_guess": sample_guess_json, "sample_hint": sample_hint_json}) # Changed to JSON response
 
 
 @bp.route('/stats')
+@jwt_required() # Added JWT authentication
 def stats():
     """Show user statistics page"""
-    return render_template('stats.html')
+    return jsonify({"message": "User statistics page"}) # Changed to JSON response
 
 
 @bp.route('/leaderboard')
 def leaderboard():
     """Show leaderboard page"""
-    return render_template('leaderboard.html')
-
-
-# @bp.route('/debug-routes', methods=['GET'])
-# def debug_routes():
-#     routes = []
-#     for rule in current_app.url_map.iter_rules():
-#         routes.append({
-#             'endpoint':
-#             rule.endpoint,
-#             'methods': [method for method in rule.methods if method != 'HEAD'],
-#             'url':
-#             str(rule)
-#         })
-#     return jsonify({'routes': routes})
+    return jsonify({"message": "Leaderboard page"}) # Changed to JSON response
