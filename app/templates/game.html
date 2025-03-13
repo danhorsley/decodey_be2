@@ -150,7 +150,7 @@ async function makeGuess(guessedLetter) {
     }
 
     try {
-        const response = await authenticatedFetch('/api/game/guess', {
+        const response = await authenticatedFetch('/guess', {
             method: 'POST',
             body: JSON.stringify({
                 encrypted_letter: selectedEncryptedLetter,
@@ -198,11 +198,13 @@ function updateRevealedPairs(pairs) {
 // Game event listeners
 document.getElementById('startGame').addEventListener('click', async () => {
     try {
-        const response = await authenticatedFetch('/api/game/start', { method: 'POST' });
+        const response = await authenticatedFetch('/start', {
+            method: 'POST'  
+        });
         if (response && response.ok) {
             const data = await response.json();
             document.getElementById('gameArea').classList.remove('d-none');
-            document.getElementById('encryptedQuote').textContent = data.encrypted_text;
+            document.getElementById('encryptedQuote').textContent = data.encrypted_paragraph;
 
             // Set up letter grids
             const encryptedGrid = document.getElementById('encryptedGrid');
@@ -211,13 +213,13 @@ document.getElementById('startGame').addEventListener('click', async () => {
             letterGrid.innerHTML = '';
 
             // Add frequency information to encrypted letters
-            Object.entries(data.letter_frequencies).forEach(([letter, freq]) => {
+            Object.entries(data.letter_frequency).forEach(([letter, freq]) => {
                 const btn = createLetterButton(letter, 'encrypted');
                 encryptedGrid.appendChild(btn);
             });
 
             // Add available letters for guessing
-            data.available_letters.forEach(letter => {
+            data.original_letters.forEach(letter => {
                 const btn = createLetterButton(letter, 'guess');
                 letterGrid.appendChild(btn);
             });
@@ -233,7 +235,7 @@ document.getElementById('startGame').addEventListener('click', async () => {
 
 document.getElementById('getHint').addEventListener('click', async () => {
     try {
-        const response = await authenticatedFetch('/api/game/hint');
+        const response = await authenticatedFetch('/hint');
         if (response && response.ok) {
             const data = await response.json();
             updateRevealedPairs([[data.encrypted_letter, data.original_letter]]);
