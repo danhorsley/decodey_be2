@@ -8,7 +8,7 @@
                 <h2 class="card-title text-center">Login</h2>
                 <form id="loginForm">
                     <div class="mb-3">
-                        <label for="username" class="form-label">Username</label>
+                        <label for="username" class="form-label">Username or Email</label>
                         <input type="text" class="form-control" id="username" required>
                     </div>
                     <div class="mb-3">
@@ -47,17 +47,28 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         });
 
         const data = await response.json();
-        console.log('Login response:', response.status);
 
         if (response.ok) {
             console.log('Login successful, storing tokens');
+            // Store the tokens in localStorage
             localStorage.setItem('access_token', data.access_token);
             if (data.refresh_token) {
                 localStorage.setItem('refresh_token', data.refresh_token);
             }
-            window.location.href = '/game';
+
+            // Test the token before redirecting
+            const testResponse = await fetch('/game', {
+                headers: {
+                    'Authorization': `Bearer ${data.access_token}`
+                }
+            });
+
+            if (testResponse.ok) {
+                window.location.href = '/game';
+            } else {
+                throw new Error('Failed to authenticate with token');
+            }
         } else {
-            console.error('Login failed:', data.msg);
             alert(data.msg || 'Login failed');
         }
     } catch (error) {

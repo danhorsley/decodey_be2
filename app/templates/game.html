@@ -41,26 +41,21 @@
                         <p id="encryptedQuote" class="font-monospace"></p>
                     </div>
 
-                    <div class="row mb-4">
+                    <!-- Game interface elements -->
+                    <div id="letterGrids" class="row mb-4">
                         <div class="col-md-6">
                             <div class="card">
-                                <div class="card-header">
-                                    Encrypted Letters
-                                </div>
+                                <div class="card-header">Encrypted Letters</div>
                                 <div class="card-body">
-                                    <div id="encryptedGrid" class="d-flex flex-wrap gap-2">
-                                    </div>
+                                    <div id="encryptedGrid" class="d-flex flex-wrap gap-2"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="card">
-                                <div class="card-header">
-                                    Available Letters
-                                </div>
+                                <div class="card-header">Available Letters</div>
                                 <div class="card-body">
-                                    <div id="letterGrid" class="d-flex flex-wrap gap-2">
-                                    </div>
+                                    <div id="letterGrid" class="d-flex flex-wrap gap-2"></div>
                                 </div>
                             </div>
                         </div>
@@ -75,12 +70,6 @@
                         <p>Selected encrypted letter: <span id="selectedEncrypted" class="badge bg-primary"></span></p>
                         <p>Choose a letter from the available letters grid</p>
                     </div>
-
-                    <div id="revealedPairs" class="mt-3">
-                        <h5>Revealed Letter Pairs:</h5>
-                        <div id="pairsList" class="d-flex flex-wrap gap-2">
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -88,28 +77,22 @@
 </div>
 
 <script>
-// Check authentication on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const token = localStorage.getItem('access_token');
-    console.log('Token on page load:', token ? 'Present' : 'Missing');
+let selectedEncryptedLetter = null;
 
+// Helper function to check and get valid token
+function getValidToken() {
+    const token = localStorage.getItem('access_token');
     if (!token) {
-        console.log('No token found, redirecting to login');
         window.location.href = '/';
-        return;
+        return null;
     }
-});
+    return token;
+}
 
 // Helper function for authenticated API calls
 async function authenticatedFetch(url, options = {}) {
-    const token = localStorage.getItem('access_token');
-    console.log('Making authenticated request to:', url);
-
-    if (!token) {
-        console.log('No token available for request');
-        window.location.href = '/';
-        return;
-    }
+    const token = getValidToken();
+    if (!token) return;
 
     const defaultOptions = {
         headers: {
@@ -128,11 +111,8 @@ async function authenticatedFetch(url, options = {}) {
     };
 
     try {
-        console.log('Request headers:', finalOptions.headers);
         const response = await fetch(url, finalOptions);
-
         if (response.status === 401) {
-            console.log('Unauthorized response received');
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             window.location.href = '/';
@@ -200,6 +180,23 @@ async function makeGuess(guessedLetter) {
     }
 }
 
+// Check authentication on page load
+document.addEventListener('DOMContentLoaded', async function() {
+    const token = getValidToken();
+    if (!token) return;
+
+    // Test if token is valid
+    try {
+        const response = await authenticatedFetch('/game');
+        if (!response || !response.ok) {
+            window.location.href = '/';
+        }
+    } catch (error) {
+        console.error('Error verifying authentication:', error);
+        window.location.href = '/';
+    }
+});
+
 // Game event listeners
 document.getElementById('startGame').addEventListener('click', async () => {
     try {
@@ -220,8 +217,10 @@ document.getElementById('startGame').addEventListener('click', async () => {
 
             // Add frequency information to encrypted letters
             Object.entries(data.letter_frequency).forEach(([letter, freq]) => {
-                const btn = createLetterButton(letter, 'encrypted');
-                encryptedGrid.appendChild(btn);
+                if (freq > 0) {
+                    const btn = createLetterButton(letter, 'encrypted');
+                    encryptedGrid.appendChild(btn);
+                }
             });
 
             // Add available letters for guessing
@@ -232,7 +231,6 @@ document.getElementById('startGame').addEventListener('click', async () => {
 
             document.getElementById('getHint').disabled = false;
             document.getElementById('mistakesCount').textContent = '5';
-            document.getElementById('pairsList').innerHTML = '';
         }
     } catch (error) {
         console.error('Error starting game:', error);
