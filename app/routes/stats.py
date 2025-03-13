@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, session
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timedelta
 import logging
+from sqlalchemy import text
 from app.models import db, UserStats, GameScore, User
 from app.utils.db import get_user_stats
 from app.utils.stats import initialize_or_update_user_stats
@@ -38,18 +39,12 @@ def get_leaderboard():
         # Get requesting user's ID
         user_id = get_jwt_identity()
 
-        # Define time filter for weekly period
-        time_filter = ""
-        time_filter_params = []
-
-        if period == 'weekly':
-            today = datetime.utcnow().date()
-            start_of_week = today - timedelta(days=today.weekday())
-            time_filter = "AND g.created_at >= :start_date"
-            time_filter_params = {"start_date": start_of_week}
-
         # Query for top entries
         if period == 'weekly':
+            # Get start of current week
+            today = datetime.utcnow()
+            start_of_week = today - timedelta(days=today.weekday())
+
             # Weekly scores from game_scores
             top_entries = db.session.query(
                 User.username,
@@ -58,14 +53,11 @@ def get_leaderboard():
                 db.func.count(GameScore.id).label('games_played'),
                 db.func.avg(GameScore.score).label('avg_score')
             ).join(User).filter(
-                GameScore.completed == True
-            )
-            if time_filter:
-                top_entries = top_entries.filter(text(time_filter), **time_filter_params)
-
-            top_entries = top_entries.group_by(GameScore.user_id)\
-                .order_by(db.desc('total_score'))\
-                .offset(offset).limit(per_page).all()
+                GameScore.completed == True,
+                GameScore.created_at >= start_of_week
+            ).group_by(User.username, User.user_id)\
+             .order_by(db.desc('total_score'))\
+             .offset(offset).limit(per_page).all()
         else:
             # All-time stats from user_stats
             top_entries = db.session.query(
@@ -73,31 +65,29 @@ def get_leaderboard():
                 User.user_id,
                 UserStats.cumulative_score.label('total_score'),
                 UserStats.total_games_played.label('games_played'),
-                (UserStats.cumulative_score / db.case(
-                    [(UserStats.total_games_played > 0, UserStats.total_games_played)],
-                    else_=1
-                )).label('avg_score')
-            ).join(User).order_by(
-                db.desc(UserStats.cumulative_score)
-            ).offset(offset).limit(per_page).all()
+                (db.func.cast(UserStats.cumulative_score, db.Float) / 
+                 db.case([(UserStats.total_games_played > 0, UserStats.total_games_played)],
+                        else_=1)).label('avg_score')
+            ).join(User).join(UserStats)\
+             .order_by(db.desc(UserStats.cumulative_score))\
+             .offset(offset).limit(per_page).all()
 
-        # Format top entries
+        # Format entries
         formatted_entries = []
         for idx, entry in enumerate(top_entries, start=offset+1):
             formatted_entries.append({
                 "rank": idx,
                 "username": entry.username,
                 "user_id": entry.user_id,
-                "score": entry.total_score,
+                "score": int(entry.total_score) if entry.total_score else 0,
                 "games_played": entry.games_played,
-                "avg_score": round(entry.avg_score, 1) if entry.avg_score else 0,
+                "avg_score": round(float(entry.avg_score), 1) if entry.avg_score else 0,
                 "is_current_user": entry.user_id == user_id
             })
 
         # Get current user entry if not in top entries
         current_user_entry = None
         if not any(entry["is_current_user"] for entry in formatted_entries):
-            # Query user's stats
             user_stats = UserStats.query.filter_by(user_id=user_id).first()
             if user_stats:
                 user = User.query.get(user_id)
@@ -112,10 +102,14 @@ def get_leaderboard():
                 }
 
         # Get total number of entries for pagination
-        total_users = UserStats.query.count()
+        if period == 'weekly':
+            total_users = db.session.query(db.func.count(db.distinct(GameScore.user_id)))\
+                .filter(GameScore.created_at >= start_of_week).scalar() or 0
+        else:
+            total_users = UserStats.query.count()
 
         return jsonify({
-            "topEntries": formatted_entries,
+            "entries": formatted_entries,
             "currentUserEntry": current_user_entry,
             "pagination": {
                 "current_page": page,
