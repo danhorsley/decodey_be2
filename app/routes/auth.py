@@ -15,12 +15,18 @@ def register():
     username = data.get('username')
     password = data.get('password')
 
+    if not username or not password:
+        return jsonify({"msg": "Username and password are required"}), 400
+
     if get_user(username):
         return jsonify({"msg": "Username already exists"}), 409
 
+    # Hash the password using Werkzeug's default method (pbkdf2:sha256)
+    password_hash = generate_password_hash(password)
+
     user = {
         'username': username,
-        'password': generate_password_hash(password)
+        'password': password_hash
     }
     save_user(user)
 
