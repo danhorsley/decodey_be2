@@ -93,6 +93,7 @@ def update_active_game_state(user_id, game_state):
             mistakes=game_state['mistakes'],
             major_attribution=game_state.get('major_attribution', ''),
             minor_attribution=game_state.get('minor_attribution', ''),
+            original_letters=game_state.get('original_letters', []),  # Save original letters
             created_at=game_state.get('start_time', datetime.utcnow()),
             last_updated=datetime.utcnow()
         )
