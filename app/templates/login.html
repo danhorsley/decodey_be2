@@ -69,6 +69,15 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
         if (response.ok) {
             console.log('Login successful, storing tokens');
+
+            // Log tokens for verification
+            console.log('Access Token:', data.access_token);
+            console.log('Refresh Token:', data.refresh_token);
+
+            // Parse JWT token to show claims
+            const tokenPayload = JSON.parse(atob(data.access_token.split('.')[1]));
+            console.log('Token Claims:', tokenPayload);
+
             // Store the tokens in localStorage
             localStorage.setItem('access_token', data.access_token);
             if (data.refresh_token) {
