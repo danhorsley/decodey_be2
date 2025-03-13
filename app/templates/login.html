@@ -29,6 +29,25 @@
     </div>
 </div>
 
+<!-- Active Game Modal -->
+<div class="modal fade" id="activeGameModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Active Game Found</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="active-game-stats"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="abandonGame">Start Fresh Game</button>
+                <button type="button" class="btn btn-primary" id="continueGame">Continue Game</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -56,11 +75,38 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
                 localStorage.setItem('refresh_token', data.refresh_token);
             }
 
-            // Verify token is stored
-            const storedToken = localStorage.getItem('access_token');
-            console.log('Stored token exists:', !!storedToken);
+            // Check for active game immediately after successful login
+            const gameCheckResponse = await fetch('/check-active-game', {
+                headers: {
+                    'Authorization': `Bearer ${data.access_token}`
+                }
+            });
 
-            // Redirect to game page
+            if (gameCheckResponse.ok) {
+                const gameData = await gameCheckResponse.json();
+                if (gameData.has_active_game) {
+                    // Show active game stats in modal
+                    const stats = gameData.game_stats;
+                    const statsHtml = `
+                        <p>You have an unfinished game:</p>
+                        <ul>
+                            <li>Difficulty: ${stats.difficulty}</li>
+                            <li>Mistakes: ${stats.mistakes}/${stats.max_mistakes}</li>
+                            <li>Progress: ${stats.completion_percentage}%</li>
+                            <li>Time spent: ${Math.floor(stats.time_spent / 60)}m ${stats.time_spent % 60}s</li>
+                        </ul>
+                        <p>Would you like to continue this game or start a new one?</p>
+                    `;
+                    document.querySelector('.active-game-stats').innerHTML = statsHtml;
+
+                    // Show modal
+                    const modal = new bootstrap.Modal(document.getElementById('activeGameModal'));
+                    modal.show();
+                    return;
+                }
+            }
+
+            // If no active game or check failed, redirect to game page
             window.location.href = '/game';
         } else {
             alert(data.msg || 'Login failed');
@@ -68,6 +114,26 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     } catch (error) {
         console.error('Login error:', error);
         alert('Error during login');
+    }
+});
+
+// Handle continue game
+document.getElementById('continueGame').addEventListener('click', () => {
+    window.location.href = '/game';
+});
+
+// Handle abandon game
+document.getElementById('abandonGame').addEventListener('click', async () => {
+    try {
+        await fetch('/abandon-game', {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+        });
+        window.location.href = '/game';
+    } catch (error) {
+        console.error('Error abandoning game:', error);
+        window.location.href = '/game';  // Redirect anyway
     }
 });
 </script>
