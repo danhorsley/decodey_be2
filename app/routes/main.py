@@ -12,6 +12,5 @@ def register():
     return render_template('register.html')
 
 @bp.route('/game')
-@jwt_required()
 def game():
     return render_template('game.html')

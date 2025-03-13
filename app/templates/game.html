@@ -40,13 +40,6 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = '/';
         return;
     }
-
-    // Initial fetch to verify token
-    authenticatedFetch('/api/game/start', { method: 'GET' })
-        .catch(error => {
-            console.error('Auth check failed:', error);
-            window.location.href = '/';
-        });
 });
 
 // Helper function for authenticated API calls
