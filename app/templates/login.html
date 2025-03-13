@@ -56,18 +56,12 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
                 localStorage.setItem('refresh_token', data.refresh_token);
             }
 
-            // Test the token before redirecting
-            const testResponse = await fetch('/game', {
-                headers: {
-                    'Authorization': `Bearer ${data.access_token}`
-                }
-            });
+            // Verify token is stored
+            const storedToken = localStorage.getItem('access_token');
+            console.log('Stored token exists:', !!storedToken);
 
-            if (testResponse.ok) {
-                window.location.href = '/game';
-            } else {
-                throw new Error('Failed to authenticate with token');
-            }
+            // Redirect to game page
+            window.location.href = '/game';
         } else {
             alert(data.msg || 'Login failed');
         }
