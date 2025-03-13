@@ -96,27 +96,17 @@ def start():
         f"Starting new game for user: {username} with difficulty: {difficulty}"
     )
 
-    # Check if request is an API request or browser request
-    is_api_request = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or \
-                     request.headers.get('Accept') == 'application/json'
-
-    if not is_api_request:
-        # If it's a browser request, log this unusual situation
-        logger.warning(
-            f"Non-API request to /start endpoint from user {username}")
-
-    # Always return JSON for this endpoint
+    # Start a new game and get game data
     game_data = start_game()
     game_state = game_data['game_state']
     game_state['game_id'] = generate_game_id(difficulty)
     game_state['difficulty'] = difficulty
-    game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty][
-        'max_mistakes']
-    game_state['start_time'] = datetime.utcnow()  # Track start time
-    game_state['game_complete'] = False  # Track if game has been completed
+    game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+    game_state['start_time'] = datetime.utcnow()
+    game_state['game_complete'] = False
 
     save_game_state(username, game_state)
-    update_active_game_state(username, game_state)  # Save to ActiveGameState
+    update_active_game_state(username, game_state)
 
     status = check_game_status(game_state)
     logger.debug(

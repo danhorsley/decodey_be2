@@ -55,3 +55,17 @@ def stats():
 def leaderboard():
     """Show leaderboard page"""
     return render_template('leaderboard.html')
+
+
+# @bp.route('/debug-routes', methods=['GET'])
+# def debug_routes():
+#     routes = []
+#     for rule in current_app.url_map.iter_rules():
+#         routes.append({
+#             'endpoint':
+#             rule.endpoint,
+#             'methods': [method for method in rule.methods if method != 'HEAD'],
+#             'url':
+#             str(rule)
+#         })
+#     return jsonify({'routes': routes})

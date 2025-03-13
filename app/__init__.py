@@ -75,7 +75,7 @@ def create_app(config_class=Config):
         from app.routes import auth, game, stats, leaderboard, main
         app.register_blueprint(main.bp)
         app.register_blueprint(auth.bp)
-        app.register_blueprint(game.bp)
+        app.register_blueprint(game.bp, url_prefix='/api/game')
         app.register_blueprint(stats.bp)
         app.register_blueprint(leaderboard.bp)
         logger.info("Successfully registered all blueprints")
