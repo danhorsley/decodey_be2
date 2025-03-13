@@ -84,7 +84,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 
             if (gameCheckResponse.ok) {
                 const gameData = await gameCheckResponse.json();
+                console.log('Active game check response:', gameData);
+
                 if (gameData.has_active_game) {
+                    console.log('Active game found, showing modal');
                     // Show active game stats in modal
                     const stats = gameData.game_stats;
                     const statsHtml = `
@@ -99,15 +102,19 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
                     `;
                     document.querySelector('.active-game-stats').innerHTML = statsHtml;
 
-                    // Show modal
-                    const modal = new bootstrap.Modal(document.getElementById('activeGameModal'));
+                    // Initialize and show modal
+                    const modalEl = document.getElementById('activeGameModal');
+                    const modal = new bootstrap.Modal(modalEl);
                     modal.show();
                     return;
+                } else {
+                    console.log('No active game found, redirecting to game page');
+                    window.location.href = '/game';
                 }
+            } else {
+                console.error('Failed to check active game:', await gameCheckResponse.text());
+                window.location.href = '/game';
             }
-
-            // If no active game or check failed, redirect to game page
-            window.location.href = '/game';
         } else {
             alert(data.msg || 'Login failed');
         }
