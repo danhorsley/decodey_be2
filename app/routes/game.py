@@ -12,6 +12,33 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint('game', __name__)
 
+DIFFICULTY_SETTINGS = {
+    'easy': {'max_mistakes': 8, 'hint_penalty': 1},
+    'medium': {'max_mistakes': 6, 'hint_penalty': 1},
+    'hard': {'max_mistakes': 4, 'hint_penalty': 2}
+}
+
+def generate_game_id(difficulty='medium'):
+    """Generate a game ID that includes the difficulty"""
+    return f"{difficulty}-{str(uuid.uuid4())}"
+
+def check_game_status(game_state):
+    """Check if the game is won or lost based on difficulty settings"""
+    difficulty = game_state.get('difficulty', 'medium')
+    max_mistakes = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+
+    # Game is lost if mistakes exceed max allowed
+    if game_state['mistakes'] >= max_mistakes:
+        return {'game_complete': True, 'hasWon': False}
+
+    # Game is won if all letters are correctly guessed
+    all_letters_guessed = len(game_state['correctly_guessed']) == len(set(c for c in game_state['encrypted_paragraph'] if c.isalpha()))
+    if all_letters_guessed:
+        return {'game_complete': True, 'hasWon': True}
+
+    # Game is still in progress
+    return {'game_complete': False, 'hasWon': False}
+
 @bp.route('/game')
 def game_page():
     """Show the game page with API documentation"""
@@ -24,7 +51,9 @@ def game_page():
             "display": "█E██O █O███",
             "mistakes": 1,
             "correctly_guessed": ["E"],
-            "game_complete": False
+            "game_complete": False,
+            "hasWon": False,
+            "max_mistakes": 6
         }
     }
 
@@ -32,7 +61,10 @@ def game_page():
         "response": {
             "display": "HE██O █O███",
             "mistakes": 2,
-            "correctly_guessed": ["E", "H"]
+            "correctly_guessed": ["E", "H"],
+            "game_complete": False,
+            "hasWon": False,
+            "max_mistakes": 6
         }
     }
 
@@ -44,12 +76,21 @@ def game_page():
 @jwt_required()
 def start():
     username = get_jwt_identity()
-    logger.debug(f"Starting new game for user: {username}")
+    difficulty = request.args.get('difficulty', 'medium')
+    if difficulty not in DIFFICULTY_SETTINGS:
+        difficulty = 'medium'
+
+    logger.debug(f"Starting new game for user: {username} with difficulty: {difficulty}")
 
     game_data = start_game()
     game_state = game_data['game_state']
-    game_state['game_id'] = str(uuid.uuid4())
+    game_state['game_id'] = generate_game_id(difficulty)
+    game_state['difficulty'] = difficulty
+    game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+
     save_game_state(username, game_state)
+
+    status = check_game_status(game_state)
 
     logger.debug(f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}")
     return jsonify({
@@ -57,10 +98,12 @@ def start():
         "encrypted_paragraph": game_data['encrypted_paragraph'],
         "game_id": game_state['game_id'],
         "letter_frequency": game_data['letter_frequency'],
-        "major_attribution": game_data['major_attribution'],
-        "minor_attribution": game_data['minor_attribution'],
         "mistakes": game_data['mistakes'],
-        "original_letters": game_data['original_letters']
+        "original_letters": game_data['original_letters'],
+        "game_complete": status['game_complete'],
+        "hasWon": status['hasWon'],
+        "max_mistakes": game_state['max_mistakes'],
+        "difficulty": difficulty
     }), 200
 
 @bp.route('/guess', methods=['POST'])
@@ -85,19 +128,18 @@ def guess():
                          game_state['correctly_guessed'],
                          game_state['reverse_mapping'])
 
-    game_complete = (
-        len(game_state['correctly_guessed']) == len(set(game_state['mapping'].values())) or 
-        game_state['mistakes'] >= game_state.get('max_mistakes', 5)
-    )
-
     save_game_state(username, game_state)
+    status = check_game_status(game_state)
     logger.debug(f"Updated game state saved for user {username}")
 
     return jsonify({
         'display': display,
         'mistakes': game_state['mistakes'],
         'correctly_guessed': game_state['correctly_guessed'],
-        'game_complete': game_complete
+        'game_complete': status['game_complete'],
+        'hasWon': status['hasWon'],
+        'max_mistakes': game_state['max_mistakes'],
+        'difficulty': game_state['difficulty']
     }), 200
 
 @bp.route('/hint', methods=['POST'])
@@ -124,19 +166,28 @@ def hint():
 
     letter = random.choice(used_unmapped)
     game_state['correctly_guessed'].append(letter)
-    game_state['mistakes'] += 1
+
+    # Apply difficulty-specific hint penalty
+    difficulty = game_state.get('difficulty', 'medium')
+    hint_penalty = DIFFICULTY_SETTINGS[difficulty]['hint_penalty']
+    game_state['mistakes'] += hint_penalty
 
     display = get_display(game_state['encrypted_paragraph'],
                          game_state['correctly_guessed'],
                          game_state['reverse_mapping'])
 
     save_game_state(username, game_state)
+    status = check_game_status(game_state)
     logger.debug(f"Updated game state saved after hint for user {username}")
 
     return jsonify({
         'display': display,
         'mistakes': game_state['mistakes'],
-        'correctly_guessed': game_state['correctly_guessed']
+        'correctly_guessed': game_state['correctly_guessed'],
+        'game_complete': status['game_complete'],
+        'hasWon': status['hasWon'],
+        'max_mistakes': game_state['max_mistakes'],
+        'difficulty': game_state['difficulty']
     }), 200
 
 def get_display(encrypted_paragraph, correctly_guessed, reverse_mapping):

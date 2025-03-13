@@ -31,6 +31,13 @@
 
                 <!-- Game Controls -->
                 <div class="text-center mb-4">
+                    <div class="mb-3">
+                        <select id="difficulty" class="form-select form-select-sm d-inline-block w-auto">
+                            <option value="easy">Easy (8 mistakes allowed)</option>
+                            <option value="medium" selected>Medium (6 mistakes allowed)</option>
+                            <option value="hard">Hard (4 mistakes allowed)</option>
+                        </select>
+                    </div>
                     <button id="startGame" class="btn btn-primary">Start New Game</button>
                     <button id="getHint" class="btn btn-secondary ms-2" disabled>Get Hint</button>
                 </div>
@@ -64,8 +71,10 @@
                     </div>
 
                     <div class="alert alert-warning">
-                        <span>Mistakes remaining: </span>
-                        <span id="mistakesCount">5</span>
+                        <span>Mistakes: </span>
+                        <span id="mistakesCount">0</span>
+                        <span> / </span>
+                        <span id="maxMistakes">6</span>
                     </div>
 
                     <div id="guessArea" class="mb-3 d-none">
@@ -129,6 +138,18 @@ function updateJsonDisplay() {
     }
 }
 
+function checkGameEnd(data) {
+    if (data.game_complete) {
+        document.getElementById('getHint').disabled = true;
+        const message = data.hasWon ? 
+            'Congratulations! You\'ve successfully decrypted the quote!' :
+            'Game Over! Too many mistakes.';
+        setTimeout(() => alert(message), 100);
+        return true;
+    }
+    return false;
+}
+
 async function makeGuess(guessedLetter) {
     if (!selectedEncryptedLetter) {
         alert('Please select an encrypted letter first');
@@ -163,18 +184,16 @@ async function makeGuess(guessedLetter) {
 
         if (response.ok) {
             const data = await response.json();
-            document.getElementById('mistakesCount').textContent = 5 - data.mistakes;
+            document.getElementById('mistakesCount').textContent = data.mistakes;
+            document.getElementById('maxMistakes').textContent = data.max_mistakes;
             document.getElementById('encryptedQuote').textContent = data.display;
 
             // Update JSON display
             lastGuessResponse = data;
             updateJsonDisplay();
 
-            if (data.game_complete) {
-                alert(data.mistakes >= 5 ? 
-                    'Game Over! Too many mistakes.' : 
-                    'Congratulations! You\'ve decrypted the quote!');
-                document.getElementById('getHint').disabled = true;
+            if (checkGameEnd(data)) {
+                return;
             }
 
             selectedEncryptedLetter = null;
@@ -193,8 +212,10 @@ document.getElementById('startGame').addEventListener('click', async () => {
         return;
     }
 
+    const difficulty = document.getElementById('difficulty').value;
+
     try {
-        const response = await fetch('/start', {
+        const response = await fetch(`/start?difficulty=${difficulty}`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
@@ -213,6 +234,8 @@ document.getElementById('startGame').addEventListener('click', async () => {
             document.getElementById('gameArea').classList.remove('d-none');
             document.getElementById('rawEncrypted').textContent = data.encrypted_paragraph;
             document.getElementById('encryptedQuote').textContent = data.display;
+            document.getElementById('mistakesCount').textContent = data.mistakes;
+            document.getElementById('maxMistakes').textContent = data.max_mistakes;
 
             // Set up letter grids
             const encryptedGrid = document.getElementById('encryptedGrid');
@@ -233,7 +256,6 @@ document.getElementById('startGame').addEventListener('click', async () => {
             });
 
             document.getElementById('getHint').disabled = false;
-            document.getElementById('mistakesCount').textContent = '5';
         }
     } catch (error) {
         console.error('Error starting game:', error);
@@ -267,11 +289,14 @@ document.getElementById('getHint').addEventListener('click', async () => {
         if (response.ok) {
             const data = await response.json();
             document.getElementById('encryptedQuote').textContent = data.display;
-            document.getElementById('mistakesCount').textContent = 5 - data.mistakes;
+            document.getElementById('mistakesCount').textContent = data.mistakes;
+            document.getElementById('maxMistakes').textContent = data.max_mistakes;
 
             // Update JSON display
             lastHintResponse = data;
             updateJsonDisplay();
+
+            checkGameEnd(data);
         }
     } catch (error) {
         console.error('Error getting hint:', error);
