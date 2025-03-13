@@ -10,9 +10,6 @@ jwt = JWTManager()
 # Store revoked tokens in memory
 jwt_blocklist = set()
 
-# Register JWT error handlers
-
-
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
@@ -21,6 +18,17 @@ def create_app(config_class=Config):
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
     logger.info("Starting application initialization")
+
+    # Configure CORS
+    CORS(app, 
+         resources={
+             r"/*": {
+                 "origins": "*",  # Allow all origins during development
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                 "supports_credentials": True
+             }
+         })
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
@@ -45,8 +53,7 @@ def create_app(config_class=Config):
 
     # Configure SQLAlchemy
     try:
-        logger.info(
-            f"Configuring database with URL: {app.config['DATABASE_URL']}")
+        logger.info(f"Configuring database with URL: {app.config['DATABASE_URL']}")
         app.config['SQLALCHEMY_DATABASE_URI'] = app.config['DATABASE_URL']
         app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
@@ -55,7 +62,6 @@ def create_app(config_class=Config):
         }
 
         # Initialize extensions
-        CORS(app)
         jwt.init_app(app)
         db.init_app(app)
         logger.info("Successfully initialized Flask extensions")
@@ -75,7 +81,7 @@ def create_app(config_class=Config):
         from app.routes import auth, game, stats, leaderboard, main
         app.register_blueprint(main.bp)
         app.register_blueprint(auth.bp)
-        app.register_blueprint(game.bp, url_prefix='/api/game')
+        app.register_blueprint(game.bp)  # Remove url_prefix to match frontend expectations
         app.register_blueprint(stats.bp)
         app.register_blueprint(leaderboard.bp)
         logger.info("Successfully registered all blueprints")

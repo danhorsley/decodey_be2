@@ -1,10 +1,10 @@
-from flask import Blueprint, jsonify, request, render_template
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 from app.utils.scoring import score_game, record_game_score, update_active_game_state
 from app.models import db, ActiveGameState
-from app.utils.stats import initialize_or_update_user_stats  # Added ActiveGameState import
+from app.utils.stats import initialize_or_update_user_stats
 from datetime import datetime
 import logging
 import uuid
@@ -30,6 +30,49 @@ DIFFICULTY_SETTINGS = {
         'hint_penalty': 2
     }
 }
+
+@bp.route('/start', methods=['GET', 'OPTIONS'])
+@jwt_required()
+def start():
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
+
+    username = get_jwt_identity()
+    difficulty = request.args.get('difficulty', 'medium')
+    if difficulty not in DIFFICULTY_SETTINGS:
+        difficulty = 'medium'
+
+    logger.debug(f"Starting new game for user: {username} with difficulty: {difficulty}")
+
+    # Start a new game and get game data
+    game_data = start_game()
+    game_state = game_data['game_state']
+    game_state['game_id'] = generate_game_id(difficulty)
+    game_state['difficulty'] = difficulty
+    game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+    game_state['start_time'] = datetime.utcnow()
+    game_state['game_complete'] = False
+
+    save_game_state(username, game_state)
+    update_active_game_state(username, game_state)
+
+    status = check_game_status(game_state)
+    logger.debug(f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}")
+
+    response = jsonify({
+        "display": game_data['display'],
+        "encrypted_paragraph": game_data['encrypted_paragraph'],
+        "game_id": game_state['game_id'],
+        "letter_frequency": game_data['letter_frequency'],
+        "mistakes": game_data['mistakes'],
+        "original_letters": game_data['original_letters'],
+        "game_complete": status['game_complete'],
+        "hasWon": status['hasWon'],
+        "max_mistakes": game_state['max_mistakes'],
+        "difficulty": difficulty
+    })
+
+    return response, 200
 
 
 def generate_game_id(difficulty='medium'):
@@ -83,53 +126,11 @@ def check_game_status(game_state):
     return {'game_complete': False, 'hasWon': False}
 
 
-@bp.route('/start', methods=['GET'])
-@jwt_required()
-def start():
-    print("start game triggered")
-    username = get_jwt_identity()
-    difficulty = request.args.get('difficulty', 'medium')
-    if difficulty not in DIFFICULTY_SETTINGS:
-        difficulty = 'medium'
-
-    logger.debug(
-        f"Starting new game for user: {username} with difficulty: {difficulty}"
-    )
-
-    # Start a new game and get game data
-    game_data = start_game()
-    game_state = game_data['game_state']
-    game_state['game_id'] = generate_game_id(difficulty)
-    game_state['difficulty'] = difficulty
-    game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
-    game_state['start_time'] = datetime.utcnow()
-    game_state['game_complete'] = False
-
-    save_game_state(username, game_state)
-    update_active_game_state(username, game_state)
-
-    status = check_game_status(game_state)
-    logger.debug(
-        f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}"
-    )
-
-    return jsonify({
-        "display": game_data['display'],
-        "encrypted_paragraph": game_data['encrypted_paragraph'],
-        "game_id": game_state['game_id'],
-        "letter_frequency": game_data['letter_frequency'],
-        "mistakes": game_data['mistakes'],
-        "original_letters": game_data['original_letters'],
-        "game_complete": status['game_complete'],
-        "hasWon": status['hasWon'],
-        "max_mistakes": game_state['max_mistakes'],
-        "difficulty": difficulty
-    }), 200
-
-
-@bp.route('/guess', methods=['POST'])
+@bp.route('/guess', methods=['POST', 'OPTIONS'])
 @jwt_required()
 def guess():
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
     username = get_jwt_identity()
     data = request.get_json()
     encrypted_letter = data.get('encrypted_letter')
@@ -168,9 +169,11 @@ def guess():
     }), 200
 
 
-@bp.route('/hint', methods=['POST'])
+@bp.route('/hint', methods=['POST', 'OPTIONS'])
 @jwt_required()
 def hint():
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
     username = get_jwt_identity()
     logger.debug(f"Hint requested by user: {username}")
 
@@ -237,9 +240,11 @@ def validate_guess(encrypted_letter, guessed_letter, reverse_mapping,
     return False
 
 
-@bp.route('/check-active-game')
+@bp.route('/check-active-game', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def check_active_game():
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
     """Check if user has an active game and return minimal game info"""
     user_id = get_jwt_identity()
     active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
@@ -266,9 +271,11 @@ def check_active_game():
     }), 200
 
 
-@bp.route('/continue-game')
+@bp.route('/continue-game', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def continue_game():
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
     """Return full game state for continuing"""
     user_id = get_jwt_identity()
     active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
@@ -320,9 +327,11 @@ def continue_game():
     return jsonify(game_state), 200
 
 
-@bp.route('/abandon-game')
+@bp.route('/abandon-game', methods=['DELETE', 'OPTIONS'])
 @jwt_required()
 def abandon_game():
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
     """Abandon current game without recording score"""
     user_id = get_jwt_identity()
     ActiveGameState.query.filter_by(user_id=user_id).delete()
