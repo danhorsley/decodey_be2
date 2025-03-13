@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h2>Your Stats</h2>
+            </div>
+            <div class="card-body">
+                <div id="loading" class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <div id="stats-content" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h4>Overview</h4>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Games Played
+                                    <span id="total-games" class="badge bg-primary rounded-pill">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Games Won
+                                    <span id="games-won" class="badge bg-success rounded-pill">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Win Rate
+                                    <span id="win-rate" class="badge bg-info rounded-pill">0%</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h4>Streaks</h4>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Current Streak
+                                    <span id="current-streak" class="badge bg-primary rounded-pill">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Best Streak
+                                    <span id="max-streak" class="badge bg-success rounded-pill">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    No Loss Streak
+                                    <span id="noloss-streak" class="badge bg-info rounded-pill">0</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h4>Top Scores</h4>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Score</th>
+                                        <th>Time</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="top-scores">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const response = await makeAuthenticatedRequest('/user_stats');
+        if (!response.ok) throw new Error('Failed to fetch stats');
+        
+        const stats = await response.json();
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('stats-content').style.display = 'block';
+        
+        // Update stats display
+        document.getElementById('total-games').textContent = stats.total_games_played;
+        document.getElementById('games-won').textContent = stats.games_won;
+        document.getElementById('win-rate').textContent = `${stats.win_percentage}%`;
+        document.getElementById('current-streak').textContent = stats.current_streak;
+        document.getElementById('max-streak').textContent = stats.max_streak;
+        document.getElementById('noloss-streak').textContent = stats.current_noloss_streak;
+        
+        // Populate top scores
+        const topScoresBody = document.getElementById('top-scores');
+        topScoresBody.innerHTML = stats.top_scores.map(score => `
+            <tr>
+                <td>${score.score}</td>
+                <td>${Math.floor(score.time_taken / 60)}m ${score.time_taken % 60}s</td>
+                <td>${new Date(score.date).toLocaleDateString()}</td>
+            </tr>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+        alert('Failed to load statistics');
+    }
+});
+</script>
+{% endblock %}

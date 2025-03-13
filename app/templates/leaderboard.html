@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2>Leaderboard</h2>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-primary" onclick="loadLeaderboard('all-time')">All Time</button>
+                        <button class="btn btn-outline-primary" onclick="loadLeaderboard('weekly')">Weekly</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="loading" class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                <div id="leaderboard-content" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Player</th>
+                                    <th>Score</th>
+                                    <th>Games</th>
+                                    <th>Avg Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboard-entries">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="pagination" class="d-flex justify-content-center mt-3">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+let currentPeriod = 'all-time';
+
+async function loadLeaderboard(period = 'all-time', page = 1) {
+    try {
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('leaderboard-content').style.display = 'none';
+        
+        const response = await makeAuthenticatedRequest(`/leaderboard?period=${period}&page=${page}`);
+        if (!response.ok) throw new Error('Failed to fetch leaderboard');
+        
+        const data = await response.json();
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('leaderboard-content').style.display = 'block';
+        
+        // Update leaderboard entries
+        const entriesBody = document.getElementById('leaderboard-entries');
+        entriesBody.innerHTML = data.topEntries.map(entry => `
+            <tr class="${entry.is_current_user ? 'table-primary' : ''}">
+                <td>${entry.rank}</td>
+                <td>${entry.username}</td>
+                <td>${entry.score}</td>
+                <td>${entry.games_played}</td>
+                <td>${entry.avg_score}</td>
+            </tr>
+        `).join('');
+        
+        // Add current user entry if not in top entries
+        if (data.currentUserEntry) {
+            entriesBody.innerHTML += `
+                <tr class="table-primary">
+                    <td>${data.currentUserEntry.rank}</td>
+                    <td>${data.currentUserEntry.username}</td>
+                    <td>${data.currentUserEntry.score}</td>
+                    <td>${data.currentUserEntry.games_played}</td>
+                    <td>${data.currentUserEntry.avg_score}</td>
+                </tr>
+            `;
+        }
+        
+        // Update pagination
+        updatePagination(data.pagination);
+        
+        currentPage = page;
+        currentPeriod = period;
+        
+    } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        alert('Failed to load leaderboard');
+    }
+}
+
+function updatePagination(pagination) {
+    const paginationDiv = document.getElementById('pagination');
+    const totalPages = pagination.total_pages;
+    
+    let paginationHtml = '<nav><ul class="pagination">';
+    
+    // Previous button
+    paginationHtml += `
+        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadLeaderboard('${currentPeriod}', ${currentPage - 1})">Previous</a>
+        </li>
+    `;
+    
+    // Page numbers
+    for (let i = 1; i <= totalPages; i++) {
+        paginationHtml += `
+            <li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadLeaderboard('${currentPeriod}', ${i})">${i}</a>
+            </li>
+        `;
+    }
+    
+    // Next button
+    paginationHtml += `
+        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="loadLeaderboard('${currentPeriod}', ${currentPage + 1})">Next</a>
+        </li>
+    `;
+    
+    paginationHtml += '</ul></nav>';
+    paginationDiv.innerHTML = paginationHtml;
+}
+
+// Load initial leaderboard
+document.addEventListener('DOMContentLoaded', () => loadLeaderboard());
+</script>
+{% endblock %}

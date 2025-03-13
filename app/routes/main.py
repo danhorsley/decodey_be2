@@ -40,3 +40,13 @@ def game():
     return render_template('game.html', 
                          sample_guess_json=sample_guess_json,
                          sample_hint_json=sample_hint_json)
+
+@bp.route('/stats')
+def stats():
+    """Show user statistics page"""
+    return render_template('stats.html')
+
+@bp.route('/leaderboard')
+def leaderboard():
+    """Show leaderboard page"""
+    return render_template('leaderboard.html')
