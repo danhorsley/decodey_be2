@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template
+from flask import Blueprint, render_template, redirect, url_for
 from flask_jwt_extended import jwt_required, get_jwt_identity
+import logging
 
 bp = Blueprint('main', __name__)
 
@@ -12,8 +13,8 @@ def register():
     return render_template('register.html')
 
 @bp.route('/game')
-@jwt_required()
 def game():
+    """Show the game page - JWT check happens in frontend"""
     # Sample JSON for API documentation
     sample_guess_json = {
         "request": {
