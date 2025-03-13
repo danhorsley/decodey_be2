@@ -184,17 +184,11 @@ async function makeGuess(guessedLetter) {
 
         if (response && response.ok) {
             const data = await response.json();
-            document.getElementById('mistakesCount').textContent = data.mistakes_remaining;
-            updateRevealedPairs(data.revealed_pairs);
-
-            if (data.correct) {
-                alert('Correct guess!');
-            } else {
-                alert('Incorrect guess!');
-            }
+            document.getElementById('mistakesCount').textContent = 5 - data.mistakes;
+            document.getElementById('encryptedQuote').textContent = data.display;
 
             if (data.game_complete) {
-                alert(data.mistakes_remaining === 0 ? 
+                alert(data.mistakes >= 5 ? 
                     'Game Over! Too many mistakes.' : 
                     'Congratulations! You\'ve decrypted the quote!');
                 document.getElementById('getHint').disabled = true;
@@ -208,23 +202,13 @@ async function makeGuess(guessedLetter) {
     }
 }
 
-function updateRevealedPairs(pairs) {
-    const pairsContainer = document.getElementById('pairsList');
-    pairsContainer.innerHTML = '';
-    pairs.forEach(([encrypted, original]) => {
-        const pair = document.createElement('span');
-        pair.className = 'badge bg-success';
-        pair.textContent = `${encrypted} → ${original}`;
-        pairsContainer.appendChild(pair);
-    });
-}
-
 // Game event listeners
 document.getElementById('startGame').addEventListener('click', async () => {
     try {
         const response = await authenticatedFetch('/start', {
-            method: 'POST'  
+            method: 'GET'
         });
+
         if (response && response.ok) {
             const data = await response.json();
             document.getElementById('gameArea').classList.remove('d-none');
@@ -259,10 +243,13 @@ document.getElementById('startGame').addEventListener('click', async () => {
 
 document.getElementById('getHint').addEventListener('click', async () => {
     try {
-        const response = await authenticatedFetch('/hint');
+        const response = await authenticatedFetch('/hint', {
+            method: 'POST'
+        });
         if (response && response.ok) {
             const data = await response.json();
-            updateRevealedPairs([[data.encrypted_letter, data.original_letter]]);
+            document.getElementById('encryptedQuote').textContent = data.display;
+            document.getElementById('mistakesCount').textContent = 5 - data.mistakes;
         }
     } catch (error) {
         console.error('Error getting hint:', error);

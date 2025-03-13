@@ -5,55 +5,69 @@ from flask_jwt_extended import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import jwt_blocklist
-from app.utils.db import get_user, save_user
+from app.models import db, User
+import logging
 
 bp = Blueprint('auth', __name__)
 
 @bp.route('/register', methods=['POST'])
 def register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        email = data.get('email', f"{username}@example.com")  # Temporary default email
 
-    if not username or not password:
-        return jsonify({"msg": "Username and password are required"}), 400
+        if not username or not password:
+            return jsonify({"msg": "Username and password are required"}), 400
 
-    if get_user(username):
-        return jsonify({"msg": "Username already exists"}), 409
+        # Check if user already exists
+        if User.query.filter_by(username=username).first():
+            return jsonify({"msg": "Username already exists"}), 409
 
-    # Hash the password using Werkzeug's default method (pbkdf2:sha256)
-    password_hash = generate_password_hash(password)
+        # Create new user with SQLAlchemy model
+        user = User(username=username, email=email, password=password)
 
-    user = {
-        'username': username,
-        'password': password_hash
-    }
-    save_user(user)
+        db.session.add(user)
+        db.session.commit()
 
-    return jsonify({"msg": "User created successfully"}), 201
+        logging.info(f"Created new user: {username}")
+        return jsonify({"msg": "User created successfully"}), 201
+
+    except Exception as e:
+        logging.error(f"Error in registration: {str(e)}")
+        db.session.rollback()
+        return jsonify({"msg": "Error creating user"}), 500
 
 @bp.route('/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    remember = data.get('remember', False)
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        remember = data.get('remember', False)
 
-    user = get_user(username)
-    if not user or not check_password_hash(user['password'], password):
-        return jsonify({"msg": "Invalid credentials"}), 401
+        user = User.query.filter_by(username=username).first()
+        if not user or not user.check_password(password):
+            return jsonify({"msg": "Invalid credentials"}), 401
 
-    access_token = create_access_token(
-        identity=username,
-        fresh=True,
-        additional_claims={"username": username}
-    )
-    refresh_token = create_refresh_token(identity=username) if remember else None
+        access_token = create_access_token(
+            identity=user.get_id(),
+            fresh=True,
+            additional_claims={"username": username}
+        )
+        refresh_token = create_refresh_token(identity=user.get_id()) if remember else None
 
-    return jsonify({
-        "access_token": access_token,
-        "refresh_token": refresh_token
-    }), 200
+        logging.info(f"Successful login for user: {username}")
+        return jsonify({
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "username": username
+        }), 200
+
+    except Exception as e:
+        logging.error(f"Error in login: {str(e)}")
+        return jsonify({"msg": "Error during login"}), 500
 
 @bp.route('/logout')
 @jwt_required(optional=True)
