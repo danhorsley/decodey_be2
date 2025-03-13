@@ -8,19 +8,31 @@
                 <h2 class="card-title text-center">Uncrypt Game</h2>
                 <div class="text-center mb-4">
                     <button id="startGame" class="btn btn-primary">Start New Game</button>
-                    <button id="getHint" class="btn btn-secondary ms-2">Get Hint</button>
+                    <button id="getHint" class="btn btn-secondary ms-2" disabled>Get Hint</button>
                 </div>
 
                 <div id="gameArea" class="d-none">
+                    <div class="alert alert-info">
+                        <h5>Encrypted Quote:</h5>
+                        <p id="encryptedQuote" class="font-monospace"></p>
+                    </div>
+
                     <div class="mb-3">
                         <label for="guess" class="form-label">Enter your guess:</label>
-                        <input type="text" class="form-control" id="guess" maxlength="6">
+                        <input type="text" class="form-control" id="guess">
+                        <div class="form-text">Try to guess the original quote. Capitalization doesn't matter.</div>
                     </div>
                     <button id="submitGuess" class="btn btn-success">Submit Guess</button>
 
                     <div id="feedback" class="mt-3">
                         <h5>Previous Guesses:</h5>
                         <ul id="guessList" class="list-group">
+                        </ul>
+                    </div>
+
+                    <div id="hints" class="mt-3">
+                        <h5>Hints:</h5>
+                        <ul id="hintList" class="list-group">
                         </ul>
                     </div>
                 </div>
@@ -92,8 +104,12 @@ document.getElementById('startGame').addEventListener('click', async () => {
     try {
         const response = await authenticatedFetch('/api/game/start', { method: 'POST' });
         if (response && response.ok) {
+            const data = await response.json();
             document.getElementById('gameArea').classList.remove('d-none');
             document.getElementById('guessList').innerHTML = '';
+            document.getElementById('hintList').innerHTML = '';
+            document.getElementById('encryptedQuote').textContent = data.encrypted_quote;
+            document.getElementById('getHint').disabled = false;
         }
     } catch (error) {
         console.error('Error starting game:', error);
@@ -101,7 +117,7 @@ document.getElementById('startGame').addEventListener('click', async () => {
 });
 
 document.getElementById('submitGuess').addEventListener('click', async () => {
-    const guess = document.getElementById('guess').value.toUpperCase();
+    const guess = document.getElementById('guess').value;
     if (!guess) return;
 
     try {
@@ -114,13 +130,14 @@ document.getElementById('submitGuess').addEventListener('click', async () => {
             const data = await response.json();
             const listItem = document.createElement('li');
             listItem.className = 'list-group-item';
-            listItem.textContent = `${guess} - Correct: ${data.correct}, Positions: ${data.position.join(', ')}`;
+            listItem.textContent = `${guess} - Matches at positions: ${data.matching_positions.join(', ')}`;
             document.getElementById('guessList').prepend(listItem);
             document.getElementById('guess').value = '';
 
             if (data.correct) {
-                alert('Congratulations! You won!');
-                document.getElementById('gameArea').classList.add('d-none');
+                alert('Congratulations! You decrypted the quote correctly!');
+                document.getElementById('getHint').disabled = true;
+                document.getElementById('submitGuess').disabled = true;
             }
         }
     } catch (error) {
@@ -133,7 +150,10 @@ document.getElementById('getHint').addEventListener('click', async () => {
         const response = await authenticatedFetch('/api/game/hint');
         if (response && response.ok) {
             const data = await response.json();
-            alert(data.hint);
+            const listItem = document.createElement('li');
+            listItem.className = 'list-group-item';
+            listItem.textContent = data.hint;
+            document.getElementById('hintList').prepend(listItem);
         }
     } catch (error) {
         console.error('Error getting hint:', error);
