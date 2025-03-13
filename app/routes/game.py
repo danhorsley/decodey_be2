@@ -3,7 +3,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 from app.utils.scoring import score_game, record_game_score, update_active_game_state
-from app.models import db, ActiveGameState  # Added ActiveGameState import
+from app.models import db, ActiveGameState
+from app.utils.stats import initialize_or_update_user_stats  # Added ActiveGameState import
 from datetime import datetime
 import logging
 import uuid
@@ -58,6 +59,7 @@ def check_game_status(game_state):
                               completed=True)
             game_state['game_complete'] = True
             update_active_game_state(get_jwt_identity(), game_state)
+            initialize_or_update_user_stats(get_jwt_identity())
         return {'game_complete': True, 'hasWon': False}
 
     # Game is won if all letters are correctly guessed
@@ -74,6 +76,7 @@ def check_game_status(game_state):
                               completed=True)
             game_state['game_complete'] = True
             update_active_game_state(get_jwt_identity(), game_state)
+            initialize_or_update_user_stats(get_jwt_identity())
         return {'game_complete': True, 'hasWon': True}
 
     # Game is still in progress
