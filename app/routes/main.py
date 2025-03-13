@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, redirect, url_for
+from flask import Blueprint, jsonify, redirect, url_for, render_template, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import logging
 
@@ -6,11 +6,13 @@ bp = Blueprint('main', __name__)
 
 @bp.route('/')
 def index():
-    """Return API status for root endpoint"""
-    return jsonify({
-        "status": "ok",
-        "message": "Uncrypt Game API"
-    })
+    """Return login page for browser requests, API status for API requests"""
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({
+            "status": "ok",
+            "message": "Uncrypt Game API"
+        })
+    return render_template('login.html')
 
 @bp.route('/api/status')
 @jwt_required()
@@ -24,12 +26,21 @@ def api_status():
 
 @bp.route('/register')
 def register():
-    return jsonify({"message": "Registration page"}) # Changed to JSON response
+    """Return registration page for browser requests, API message for API requests"""
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({"message": "Registration endpoint"})
+    return render_template('register.html')
 
 @bp.route('/game')
-@jwt_required() # Added JWT authentication
+@jwt_required()
 def game():
-    """Show the game page - JWT check happens in frontend"""
+    """Show the game page for browser requests, API data for API requests"""
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({
+            "status": "ok",
+            "message": "Game API endpoint"
+        })
+
     # Sample JSON for API documentation
     sample_guess_json = {
         "request": {
@@ -52,17 +63,21 @@ def game():
         }
     }
 
-    return jsonify({"sample_guess": sample_guess_json, "sample_hint": sample_hint_json}) # Changed to JSON response
-
+    return render_template('game.html',
+                         sample_guess_json=sample_guess_json,
+                         sample_hint_json=sample_hint_json)
 
 @bp.route('/stats')
-@jwt_required() # Added JWT authentication
+@jwt_required()
 def stats():
     """Show user statistics page"""
-    return jsonify({"message": "User statistics page"}) # Changed to JSON response
-
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({"message": "Stats API endpoint"})
+    return render_template('stats.html')
 
 @bp.route('/leaderboard')
 def leaderboard():
     """Show leaderboard page"""
-    return jsonify({"message": "Leaderboard page"}) # Changed to JSON response
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({"message": "Leaderboard API endpoint"})
+    return render_template('leaderboard.html')

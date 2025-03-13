@@ -52,11 +52,6 @@ def create_app(config_class=Config):
     def revoked_token_callback(jwt_header, jwt_payload):
         return jsonify({"error": "Token has been revoked"}), 401
 
-    # Ensure all JWT errors are handled properly
-    @app.errorhandler(jwt_exceptions.JWTExtendedException)
-    def handle_jwt_exceptions(e):
-        return jsonify({"error": str(e)}), 401
-
     # Configure SQLAlchemy
     try:
         logger.info(f"Configuring database with URL: {app.config['DATABASE_URL']}")
@@ -85,11 +80,11 @@ def create_app(config_class=Config):
 
         # Register blueprints
         from app.routes import auth, game, stats, leaderboard, main
-        app.register_blueprint(main.bp, url_prefix='/api')
-        app.register_blueprint(auth.bp, url_prefix='/api/auth')
-        app.register_blueprint(game.bp, url_prefix='/api/game')
-        app.register_blueprint(stats.bp, url_prefix='/api/stats')
-        app.register_blueprint(leaderboard.bp, url_prefix='/api/leaderboard')
+        app.register_blueprint(main.bp)
+        app.register_blueprint(auth.bp)
+        app.register_blueprint(game.bp)
+        app.register_blueprint(stats.bp)
+        app.register_blueprint(leaderboard.bp)
         logger.info("Successfully registered all blueprints")
 
     except Exception as e:
