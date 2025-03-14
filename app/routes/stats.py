@@ -9,12 +9,14 @@ from app.utils.stats import initialize_or_update_user_stats
 
 bp = Blueprint('stats', __name__)
 
+
 @bp.route('/stats', methods=['GET'])
 @jwt_required()
 def get_stats():
     username = get_jwt_identity()
     stats = get_user_stats(username)
     return jsonify(stats), 200
+
 
 @bp.route('/leaderboard', methods=['GET'])
 @jwt_required()
@@ -28,7 +30,8 @@ def get_leaderboard():
         page = 1
 
     try:
-        per_page = min(int(request.args.get('per_page', 10)), 50)  # Limit to 50 max
+        per_page = min(int(request.args.get('per_page', 10)),
+                       50)  # Limit to 50 max
     except (ValueError, TypeError):
         per_page = 10
 
@@ -65,24 +68,30 @@ def get_leaderboard():
                 User.user_id,
                 UserStats.cumulative_score.label('total_score'),
                 UserStats.total_games_played.label('games_played'),
-                (db.func.cast(UserStats.cumulative_score, db.Float) / 
-                 db.case([(UserStats.total_games_played > 0, UserStats.total_games_played)],
-                        else_=1)).label('avg_score')
-            ).join(User).join(UserStats)\
+                (db.func.cast(UserStats.cumulative_score, db.Float) /
+                 db.func.coalesce(UserStats.total_games_played, 1)).label('avg_score')
+            ).join(UserStats, User.user_id == UserStats.user_id)\
              .order_by(db.desc(UserStats.cumulative_score))\
              .offset(offset).limit(per_page).all()
 
         # Format entries
         formatted_entries = []
-        for idx, entry in enumerate(top_entries, start=offset+1):
+        for idx, entry in enumerate(top_entries, start=offset + 1):
             formatted_entries.append({
-                "rank": idx,
-                "username": entry.username,
-                "user_id": entry.user_id,
-                "score": int(entry.total_score) if entry.total_score else 0,
-                "games_played": entry.games_played,
-                "avg_score": round(float(entry.avg_score), 1) if entry.avg_score else 0,
-                "is_current_user": entry.user_id == user_id
+                "rank":
+                idx,
+                "username":
+                entry.username,
+                "user_id":
+                entry.user_id,
+                "score":
+                int(entry.total_score) if entry.total_score else 0,
+                "games_played":
+                entry.games_played,
+                "avg_score":
+                round(float(entry.avg_score), 1) if entry.avg_score else 0,
+                "is_current_user":
+                entry.user_id == user_id
             })
 
         # Get current user entry if not in top entries
@@ -92,13 +101,21 @@ def get_leaderboard():
             if user_stats:
                 user = User.query.get(user_id)
                 current_user_entry = {
-                    "username": user.username,
-                    "user_id": user_id,
-                    "score": user_stats.cumulative_score,
-                    "games_played": user_stats.total_games_played,
-                    "avg_score": round(user_stats.cumulative_score / user_stats.total_games_played, 1) 
-                        if user_stats.total_games_played > 0 else 0,
-                    "is_current_user": True
+                    "username":
+                    user.username,
+                    "user_id":
+                    user_id,
+                    "score":
+                    user_stats.cumulative_score,
+                    "games_played":
+                    user_stats.total_games_played,
+                    "avg_score":
+                    round(
+                        user_stats.cumulative_score /
+                        user_stats.total_games_played, 1)
+                    if user_stats.total_games_played > 0 else 0,
+                    "is_current_user":
+                    True
                 }
 
         # Get total number of entries for pagination
@@ -112,23 +129,33 @@ def get_leaderboard():
             "entries": formatted_entries,
             "currentUserEntry": current_user_entry,
             "pagination": {
-                "current_page": page,
-                "total_pages": (total_users + per_page - 1) // per_page if total_users > 0 else 1,
-                "total_entries": total_users,
-                "per_page": per_page
+                "current_page":
+                page,
+                "total_pages": (total_users + per_page - 1) //
+                per_page if total_users > 0 else 1,
+                "total_entries":
+                total_users,
+                "per_page":
+                per_page
             },
             "period": period
         })
 
     except Exception as e:
-        logging.error(f"Error fetching leaderboard: {e}")
-        return jsonify({"error": "Failed to retrieve leaderboard data"}), 500
+        logging.error(f"Error fetching leaderboard: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc()
+                      )  # Add this line to get the full stack trace
+        return jsonify(
+            {"error": f"Failed to retrieve leaderboard data: {str(e)}"}), 500
+
 
 @bp.route('/streak_leaderboard', methods=['GET'])
 @jwt_required()
 def get_streak_leaderboard():
     # Add debugging
-    logging.info(f"Streak leaderboard request received with params: {request.args}")
+    logging.info(
+        f"Streak leaderboard request received with params: {request.args}")
 
     streak_type = request.args.get('type', 'win')  # 'win' or 'noloss'
     period = request.args.get('period', 'current')  # 'current' or 'best'
@@ -156,20 +183,17 @@ def get_streak_leaderboard():
 
         # Query for top streak entries
         top_entries = db.session.query(
-            User.username,
-            User.user_id,
-            streak_field.label('streak_length'),
-            UserStats.last_played_date
-        ).join(User).filter(
-            streak_field > 0
-        ).order_by(
-            db.desc('streak_length'),
-            db.desc(UserStats.last_played_date)
-        ).offset(offset).limit(per_page).all()
+            User.username, User.user_id, streak_field.label('streak_length'),
+            UserStats.last_played_date).join(
+                User, User.user_id == UserStats.user_id).filter(
+                    streak_field > 0).order_by(
+                        db.desc('streak_length'),
+                        db.desc(UserStats.last_played_date)).offset(
+                            offset).limit(per_page).all()
 
         # Format entries
         formatted_entries = []
-        for idx, entry in enumerate(top_entries, start=offset+1):
+        for idx, entry in enumerate(top_entries, start=offset + 1):
             entry_dict = {
                 "rank": idx,
                 "username": entry.username,
@@ -188,16 +212,22 @@ def get_streak_leaderboard():
             if user_stats:
                 user = User.query.get(user_id)
                 current_user_entry = {
-                    "username": user.username,
-                    "user_id": user_id,
-                    "streak_length": getattr(user_stats, 
-                        'current_streak' if period == 'current' else 'max_streak' 
-                        if streak_type == 'win' else 
-                        'current_noloss_streak' if period == 'current' else 'max_noloss_streak'),
-                    "is_current_user": True
+                    "username":
+                    user.username,
+                    "user_id":
+                    user_id,
+                    "streak_length":
+                    getattr(
+                        user_stats, 'current_streak'
+                        if period == 'current' else 'max_streak'
+                        if streak_type == 'win' else 'current_noloss_streak'
+                        if period == 'current' else 'max_noloss_streak'),
+                    "is_current_user":
+                    True
                 }
                 if period == 'current':
-                    current_user_entry["last_active"] = user_stats.last_played_date
+                    current_user_entry[
+                        "last_active"] = user_stats.last_played_date
 
         # Get total users with streaks
         total_users = UserStats.query.filter(streak_field > 0).count()
@@ -206,10 +236,14 @@ def get_streak_leaderboard():
             "entries": formatted_entries,
             "currentUserEntry": current_user_entry,
             "pagination": {
-                "current_page": page,
-                "total_pages": (total_users + per_page - 1) // per_page if total_users > 0 else 1,
-                "total_entries": total_users,
-                "per_page": per_page
+                "current_page":
+                page,
+                "total_pages": (total_users + per_page - 1) //
+                per_page if total_users > 0 else 1,
+                "total_entries":
+                total_users,
+                "per_page":
+                per_page
             },
             "streak_type": streak_type,
             "period": period
@@ -217,7 +251,10 @@ def get_streak_leaderboard():
 
     except Exception as e:
         logging.error(f"Error fetching streak leaderboard: {e}")
-        return jsonify({"error": f"Failed to retrieve streak leaderboard data: {str(e)}"}), 500
+        return jsonify(
+            {"error":
+             f"Failed to retrieve streak leaderboard data: {str(e)}"}), 500
+
 
 @bp.route('/user_stats', methods=['GET'])
 @jwt_required()
@@ -254,9 +291,8 @@ def get_user_stats():
         start_of_week = today - timedelta(days=today.weekday())
 
         weekly_games = GameScore.query.filter(
-            GameScore.user_id == user_id,
-            GameScore.created_at >= start_of_week
-        ).all()
+            GameScore.user_id == user_id, GameScore.created_at
+            >= start_of_week).all()
 
         weekly_stats = {
             "score": sum(game.score for game in weekly_games),
@@ -266,10 +302,7 @@ def get_user_stats():
         # Get top 5 scores
         top_scores = GameScore.query.filter_by(
             user_id=user_id,
-            completed=True
-        ).order_by(
-            GameScore.score.desc()
-        ).limit(5).all()
+            completed=True).order_by(GameScore.score.desc()).limit(5).all()
 
         formatted_top_scores = [{
             "score": game.score,
@@ -278,23 +311,33 @@ def get_user_stats():
         } for game in top_scores]
 
         return jsonify({
-            "user_id": user_id,
-            "current_streak": user_stats.current_streak,
-            "max_streak": user_stats.max_streak,
-            "current_noloss_streak": user_stats.current_noloss_streak,
-            "max_noloss_streak": user_stats.max_noloss_streak,
-            "total_games_played": user_stats.total_games_played,
-            "games_won": user_stats.games_won,
-            "win_percentage": round(
-                (user_stats.games_won / user_stats.total_games_played * 100)
-                if user_stats.total_games_played > 0 else 0,
-                1
-            ),
-            "cumulative_score": user_stats.cumulative_score,
-            "highest_weekly_score": user_stats.highest_weekly_score,
-            "last_played_date": user_stats.last_played_date,
-            "weekly_stats": weekly_stats,
-            "top_scores": formatted_top_scores
+            "user_id":
+            user_id,
+            "current_streak":
+            user_stats.current_streak,
+            "max_streak":
+            user_stats.max_streak,
+            "current_noloss_streak":
+            user_stats.current_noloss_streak,
+            "max_noloss_streak":
+            user_stats.max_noloss_streak,
+            "total_games_played":
+            user_stats.total_games_played,
+            "games_won":
+            user_stats.games_won,
+            "win_percentage":
+            round((user_stats.games_won / user_stats.total_games_played *
+                   100) if user_stats.total_games_played > 0 else 0, 1),
+            "cumulative_score":
+            user_stats.cumulative_score,
+            "highest_weekly_score":
+            user_stats.highest_weekly_score,
+            "last_played_date":
+            user_stats.last_played_date,
+            "weekly_stats":
+            weekly_stats,
+            "top_scores":
+            formatted_top_scores
         })
 
     except Exception as e:

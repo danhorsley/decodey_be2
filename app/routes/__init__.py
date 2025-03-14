@@ -1,4 +1,2 @@
 # Import all blueprints
-from . import auth, game, stats, leaderboard, main
-
-
+from . import auth, game, stats, main

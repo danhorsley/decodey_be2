@@ -82,14 +82,12 @@ def create_app(config_class=Config):
             logger.info("Database tables created successfully")
 
         # Register blueprints without API prefixes
-        from app.routes import auth, game, stats, leaderboard, main
+        from app.routes import auth, game, stats, main
         app.register_blueprint(main.bp)  # Main routes
         app.register_blueprint(
             auth.bp)  # Auth routes (/login, /register, etc.)
         app.register_blueprint(game.bp, url_prefix='/api')
         app.register_blueprint(stats.bp, url_prefix='/api')  # Stats routes
-        app.register_blueprint(leaderboard.bp,
-                               url_prefix='/api')  # Leaderboard routes
         logger.info("Successfully registered all blueprints")
 
     except Exception as e:

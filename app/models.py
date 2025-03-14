@@ -6,19 +6,29 @@ import uuid
 
 db = SQLAlchemy()
 
+
 class User(UserMixin, db.Model):
-    user_id = db.Column(db.String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = db.Column(db.String,
+                        primary_key=True,
+                        default=lambda: str(uuid.uuid4()))
     email = db.Column(db.String, unique=True, nullable=False)
     username = db.Column(db.String, unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     auth_type = db.Column(db.String, default='local')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     settings = db.Column(db.JSON, default=dict)
+    # Add this new column:
+    email_consent = db.Column(db.Boolean,
+                              default=False)  # GDPR email marketing consent
+    consent_date = db.Column(db.DateTime)  # When consent was given
 
-    def __init__(self, email, username, password):
+    def __init__(self, email, username, password, email_consent=False):
         self.email = email
         self.username = username
         self.set_password(password)
+        self.email_consent = email_consent
+        if email_consent:
+            self.consent_date = datetime.utcnow()
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -29,8 +39,11 @@ class User(UserMixin, db.Model):
     def get_id(self):
         return str(self.user_id)
 
+
 class UserStats(db.Model):
-    user_id = db.Column(db.String, db.ForeignKey('user.user_id'), primary_key=True)
+    user_id = db.Column(db.String,
+                        db.ForeignKey('user.user_id'),
+                        primary_key=True)
     current_streak = db.Column(db.Integer, default=0)
     max_streak = db.Column(db.Integer, default=0)
     current_noloss_streak = db.Column(db.Integer, default=0)
@@ -40,6 +53,7 @@ class UserStats(db.Model):
     cumulative_score = db.Column(db.Integer, default=0)
     highest_weekly_score = db.Column(db.Integer, default=0)
     last_played_date = db.Column(db.DateTime)
+
 
 class GameScore(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -53,8 +67,11 @@ class GameScore(db.Model):
     completed = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+
 class ActiveGameState(db.Model):
-    user_id = db.Column(db.String, db.ForeignKey('user.user_id'), primary_key=True)
+    user_id = db.Column(db.String,
+                        db.ForeignKey('user.user_id'),
+                        primary_key=True)
     game_id = db.Column(db.String, unique=True)
     original_paragraph = db.Column(db.Text)
     encrypted_paragraph = db.Column(db.Text)
@@ -65,4 +82,6 @@ class ActiveGameState(db.Model):
     major_attribution = db.Column(db.String)
     minor_attribution = db.Column(db.String)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated = db.Column(db.DateTime,
+                             default=datetime.utcnow,
+                             onupdate=datetime.utcnow)

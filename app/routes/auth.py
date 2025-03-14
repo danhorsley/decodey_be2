@@ -16,6 +16,8 @@ def register():
         username = data.get('username')
         password = data.get('password')
         email = data.get('email')
+        email_consent = data.get('emailConsent',
+                                 False)  # Get consent value with default
 
         if not username or not password or not email:
             return jsonify(
@@ -28,13 +30,20 @@ def register():
             return jsonify({"msg": "Email already exists"}), 409
 
         # Create new user with SQLAlchemy model
-        user = User(username=username, email=email, password=password)
+        user = User(username=username,
+                    email=email,
+                    password=password,
+                    email_consent=email_consent)
 
         db.session.add(user)
         db.session.commit()
 
-        logging.info(f"Created new user: {username}")
-        return jsonify({"msg": "User created successfully"}), 201
+        logging.info(
+            f"Created new user: {username}, email consent: {email_consent}")
+        return jsonify({
+            "msg": "User created successfully",
+            "email_consent": email_consent
+        }), 201
 
     except Exception as e:
         logging.error(f"Error in registration: {str(e)}")
@@ -118,3 +127,34 @@ def verify_token():
         "user_id": current_user,
         "username": claims.get("username")
     }), 200
+
+
+@bp.route('/update_email_consent', methods=['POST'])
+@jwt_required()
+def update_email_consent():
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    consent = data.get('consent', False)
+
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"msg": "User not found"}), 404
+
+        user.email_consent = consent
+        if consent:
+            user.consent_date = datetime.utcnow()
+        else:
+            user.consent_date = None
+
+        db.session.commit()
+
+        return jsonify({
+            "msg": "Email consent updated successfully",
+            "email_consent": user.email_consent
+        }), 200
+
+    except Exception as e:
+        logging.error(f"Error updating email consent: {str(e)}")
+        db.session.rollback()
+        return jsonify({"msg": "Error updating email consent"}), 500
