@@ -85,76 +85,29 @@ def generate_game_id(difficulty='medium'):
 
 
 def check_game_status(game_state):
-    """Check if the game is won or lost based on difficulty settings"""
-    logger.debug(f"Checking game status with state: {game_state}")
+    """Simplified version to debug the 500 error"""
+    logger.debug(
+        f"Checking game status with state: mistakes={game_state.get('mistakes', 0)}"
+    )
 
     difficulty = game_state.get('difficulty', 'medium')
     max_mistakes = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
 
-    # Calculate time taken if game is ending
-    start_time = game_state.get('start_time')
-    time_taken = int(
-        (datetime.utcnow() - start_time).total_seconds()) if start_time else 0
-
     # Game is lost if mistakes exceed max allowed
-    if game_state['mistakes'] >= max_mistakes:
-        if not game_state.get('game_complete', False):  # Only score once
-            logger.debug("Game lost condition met. Recording score.")
-            score = score_game(difficulty, game_state['mistakes'], time_taken)
-            record_game_score(get_jwt_identity(),
-                              game_state['game_id'],
-                              score,
-                              game_state['mistakes'],
-                              time_taken,
-                              completed=True)
-            game_state['game_complete'] = True
-            game_state['hasWon'] = False  # Explicitly mark as not won
-            update_active_game_state(get_jwt_identity(), game_state)
-            initialize_or_update_user_stats(get_jwt_identity())
-        logger.debug("Returning game status: game_complete=True, hasWon=False")
+    if game_state.get('mistakes', 0) >= max_mistakes:
         return {'game_complete': True, 'hasWon': False}
 
     # Game is won if all letters are correctly guessed
-    all_letters = set(c for c in game_state['encrypted_paragraph']
-                      if c.isalpha())
-    logger.debug(
-        f"Win check: correctly_guessed={len(game_state['correctly_guessed'])}, unique_letters={len(all_letters)}"
-    )
+    encrypted_letters = set(c
+                            for c in game_state.get('encrypted_paragraph', '')
+                            if c.isalpha())
+    correctly_guessed = game_state.get('correctly_guessed', [])
 
-    all_letters_guessed = len(
-        game_state['correctly_guessed']) == len(all_letters)
+    all_letters_guessed = len(correctly_guessed) == len(encrypted_letters)
     if all_letters_guessed:
-        logger.debug("All letters guessed! Win condition met.")
-
-        if not game_state.get('game_complete', False):  # Only score once
-            logger.debug(
-                f"Game not yet marked as complete. Updating state. Time taken: {time_taken}s"
-            )
-            score = score_game(difficulty, game_state['mistakes'], time_taken)
-            record_game_score(get_jwt_identity(),
-                              game_state['game_id'],
-                              score,
-                              game_state['mistakes'],
-                              time_taken,
-                              completed=True)
-            game_state['game_complete'] = True
-            game_state['hasWon'] = True  # Explicitly mark as won
-            game_state[
-                'win_notified'] = False  # Ensure this is set to False to trigger notification
-            update_active_game_state(get_jwt_identity(), game_state)
-            initialize_or_update_user_stats(get_jwt_identity())
-            logger.debug(
-                "Game state updated: game_complete=True, hasWon=True, win_notified=False"
-            )
-        else:
-            logger.debug("Game already marked as complete.")
-
-        logger.debug("Returning game status: game_complete=True, hasWon=True")
         return {'game_complete': True, 'hasWon': True}
 
     # Game is still in progress
-    logger.debug(
-        "Game still in progress. Returning: game_complete=False, hasWon=False")
     return {'game_complete': False, 'hasWon': False}
 
 
@@ -651,3 +604,81 @@ DIFFICULTY_SETTINGS = {
         'hint_penalty': 2
     }
 }
+
+
+@bp.route('/game-status', methods=['GET', 'OPTIONS'])
+@jwt_required()
+def game_status():
+    """Return the current game status for polling"""
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
+
+    user_id = get_jwt_identity()
+    game_state = get_game_state(user_id)
+
+    logger.debug(f"Game status check for user {user_id}")
+
+    if not game_state:
+        logger.debug(f"No active game found for user {user_id}")
+        return jsonify({"hasActiveGame": False}), 200
+
+    # Calculate basic information about game state
+    status = check_game_status(game_state)
+    logger.debug(f"Game status: {status}")
+
+    # If game is won but not yet notified, prepare win data
+    win_data = None
+    if status['hasWon'] and not game_state.get('win_notified', False):
+        logger.info(f"Win detected for user {user_id} - preparing win data")
+
+        # Mark as notified to prevent duplicate notifications
+        game_state['win_notified'] = True
+        save_game_state(user_id, game_state)
+
+        # Get attribution data
+        attribution = get_attribution(game_state.get('game_id', ''))
+
+        # Calculate time and score
+        time_taken = (
+            datetime.utcnow() -
+            game_state.get('start_time', datetime.utcnow())).total_seconds()
+        score = score_game(game_state.get('difficulty', 'medium'),
+                           game_state.get('mistakes', 0), time_taken)
+
+        # Determine rating
+        rating = get_rating_from_score(score)
+
+        win_data = {
+            'score': score,
+            'mistakes': game_state.get('mistakes', 0),
+            'maxMistakes': game_state.get('max_mistakes', 6),
+            'gameTimeSeconds': int(time_taken),
+            'rating': rating,
+            'attribution': attribution
+        }
+
+        logger.debug(f"Win data prepared: {win_data}")
+
+        # Record score if this is the first time notifying win
+        try:
+            record_game_score(user_id,
+                              game_state.get('game_id'),
+                              score,
+                              game_state.get('mistakes'),
+                              time_taken,
+                              completed=True)
+            logger.debug("Score recorded via polling")
+        except Exception as e:
+            logger.error(f"Error recording score via polling: {str(e)}")
+
+    response_data = {
+        "hasActiveGame": True,
+        "gameComplete": status['game_complete'],
+        "hasWon": status['hasWon'],
+        "winData": win_data,
+        "mistakes": game_state.get('mistakes', 0),
+        "maxMistakes": game_state.get('max_mistakes', 6),
+    }
+
+    logger.debug(f"Returning game status: {response_data}")
+    return jsonify(response_data), 200
