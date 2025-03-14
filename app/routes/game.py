@@ -473,7 +473,11 @@ def events():
                         }
 
                         # Send game state update
-                        yield f"event: gameState\ndata: {json.dumps(state_data)}\n\n"
+                        logger.debug("Preparing to send gameState event")
+response_data = f"event: gameState\ndata: {json.dumps(state_data)}\n\n"
+logger.debug(f"Sending SSE data: {response_data}")
+yield response_data
+logger.debug("SSE data sent")
                         logger.debug(
                             f"Sent gameState event to client {client_id}")
 
