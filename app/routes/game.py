@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token
+from jwt.exceptions import PyJWTError
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 from app.utils.scoring import score_game, record_game_score, update_active_game_state
@@ -19,9 +20,10 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint('game', __name__)
 
-@bp.errorhandler(NoAuthorizationError)
-def handle_auth_error(e):
-    return jsonify({"error": "Authentication required"}), 401
+# @bp.errorhandler(NoAuthorizationError)
+# def handle_auth_error(e):
+#     return jsonify({"error": "Authentication required"}), 401
+
 
 @bp.route('/start', methods=['GET', 'OPTIONS'])
 @jwt_required()
@@ -36,14 +38,17 @@ def start():
         if difficulty not in DIFFICULTY_SETTINGS:
             difficulty = 'medium'
 
-        logger.debug(f"Starting new game for user: {username} with difficulty: {difficulty}")
+        logger.debug(
+            f"Starting new game for user: {username} with difficulty: {difficulty}"
+        )
 
         # Start a new game and get game data
         game_data = start_game()
         game_state = game_data['game_state']
         game_state['game_id'] = generate_game_id(difficulty)
         game_state['difficulty'] = difficulty
-        game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+        game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty][
+            'max_mistakes']
         game_state['start_time'] = datetime.utcnow()
         game_state['game_complete'] = False
 
@@ -51,7 +56,9 @@ def start():
         update_active_game_state(username, game_state)
 
         status = check_game_status(game_state)
-        logger.debug(f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}")
+        logger.debug(
+            f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}"
+        )
 
         response_data = {
             "display": game_data['display'],
@@ -70,6 +77,7 @@ def start():
     except Exception as e:
         logger.error(f"Error starting game: {str(e)}")
         return jsonify({"error": "Failed to start game"}), 500
+
 
 def generate_game_id(difficulty='medium'):
     """Generate a game ID that includes the difficulty"""
@@ -334,69 +342,162 @@ def abandon_game():
     db.session.commit()
     return jsonify({"msg": "Game abandoned successfully"}), 200
 
+
 @bp.route('/events')
 def events():
-    """SSE endpoint for real-time game updates"""
+    """SSE endpoint for real-time game updates with flexible authentication"""
     logger.info("SSE connection attempt received")
 
-    # Get token from Authorization header
+    # Get token from either Authorization header or query parameter
+    token = None
+
+    # Try to get token from Authorization header first
     auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        logger.error("No valid Authorization header in SSE request")
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        logger.info("Using token from Authorization header")
+
+    # If not in header, try query parameter (for standard EventSource)
+    if not token:
+        token = request.args.get('token')
+        logger.info("Using token from query parameter")
+
+    # Verify we have a token
+    if not token:
+        logger.error("No valid token found in request")
         return jsonify({"error": "Authentication required"}), 401
 
-    token = auth_header.split(' ')[1]
     try:
-        # Decode token to get user identity
-        decoded_token = decode_token(token)
-        user_id = decoded_token['sub']
-        logger.info(f"SSE connection authenticated for user: {user_id}")
+        # Verify token using JWT
+        from flask_jwt_extended import decode_token
+        from jwt.exceptions import PyJWTError
+
+        try:
+            # Decode the token
+            decoded_token = decode_token(token)
+
+            # Check if token is in blocklist (use your app's jwt_blocklist set)
+            from app import jwt_blocklist
+            jti = decoded_token['jti']
+            if jti in jwt_blocklist:
+                logger.error("Token has been revoked")
+                return jsonify({"error": "Token has been revoked"}), 401
+
+            user_id = decoded_token['sub']
+            logger.info(f"SSE connection authenticated for user: {user_id}")
+
+        except PyJWTError as e:
+            logger.error(f"JWT error: {str(e)}")
+            return jsonify({"error": "Invalid token"}), 401
+
     except Exception as e:
-        logger.error(f"Invalid token in SSE request: {str(e)}")
-        return jsonify({"error": "Invalid authentication token"}), 401
+        logger.error(f"Error validating token: {str(e)}")
+        return jsonify({"error": "Authentication error"}), 401
 
     def generate():
-        """Generate SSE data"""
+        """Generate SSE data stream for authenticated user"""
+        # Client connection tracking
+        client_id = str(uuid.uuid4())
+        logger.info(f"New SSE connection: {client_id} for user: {user_id}")
+        ping_interval = 15  # Send ping every 15 seconds to keep connection alive
+        last_ping = time.time()
+
         try:
-            # Send initial connection event
-            yield f"event: connected\ndata: {json.dumps({'user_id': user_id})}\n\n"
+            # Send initial connection success event
+            yield f"event: connected\ndata: {json.dumps({'user_id': user_id, 'client_id': client_id})}\n\n"
 
             while True:
+                current_time = time.time()
+
+                # Send periodic pings to keep connection alive
+                if current_time - last_ping > ping_interval:
+                    yield f"event: ping\ndata: {current_time}\n\n"
+                    last_ping = current_time
+                    logger.debug(f"Ping sent to client {client_id}")
+
                 try:
                     # Get current game state
                     game_state = get_game_state(user_id)
 
                     if game_state:
-                        # Game state update event
+                        # Only send updates if there's meaningful state
+                        # Prepare game state data
                         state_data = {
-                            'game_id': game_state.get('game_id'),
-                            'mistakes': game_state.get('mistakes', 0),
-                            'completed': game_state.get('game_complete', False),
-                            'remaining_attempts': (
-                                game_state.get('max_mistakes', 6) - 
-                                game_state.get('mistakes', 0)
-                            )
+                            'type':
+                            'game_state',
+                            'game_id':
+                            game_state.get('game_id'),
+                            'mistakes':
+                            game_state.get('mistakes', 0),
+                            'completed':
+                            game_state.get('game_complete', False),
+                            'remaining_attempts':
+                            (game_state.get('max_mistakes', 6) -
+                             game_state.get('mistakes', 0)),
+                            'timestamp':
+                            int(current_time * 1000)
                         }
+
+                        # Send game state update
                         yield f"event: gameState\ndata: {json.dumps(state_data)}\n\n"
 
                         # Check for win condition
-                        if (game_state.get('game_complete') and 
-                            game_state.get('mistakes', 0) < game_state.get('max_mistakes', 6)):
-                            win_data = {
-                                'game_id': game_state.get('game_id'),
-                                'score': game_state.get('score', 0),
-                                'mistakes': game_state.get('mistakes', 0),
-                                'time_taken': (
-                                    datetime.utcnow() - 
-                                    game_state.get('start_time', datetime.utcnow())
-                                ).total_seconds()
-                            }
-                            yield f"event: gameWon\ndata: {json.dumps(win_data)}\n\n"
-                    else:
-                        # No active game state
-                        yield f"event: gameState\ndata: {json.dumps({'active': False})}\n\n"
+                        if (game_state.get('game_complete')
+                                and not game_state.get('win_notified', False)
+                                and game_state.get('mistakes', 0)
+                                < game_state.get('max_mistakes', 6)):
 
-                    time.sleep(2)  # Update interval
+                            # Get attribution data
+                            attribution = get_attribution(
+                                game_state.get('game_id', ''))
+
+                            # Calculate score
+                            time_taken = (datetime.utcnow() - game_state.get(
+                                'start_time',
+                                datetime.utcnow())).total_seconds()
+
+                            score = score_game(
+                                game_state.get('difficulty', 'medium'),
+                                game_state.get('mistakes', 0), time_taken)
+
+                            # Determine rating based on score
+                            rating = get_rating_from_score(score)
+
+                            # Mark as notified to prevent duplicate events
+                            game_state['win_notified'] = True
+                            save_game_state(user_id, game_state)
+
+                            win_data = {
+                                'type': 'win',
+                                'game_id': game_state.get('game_id'),
+                                'score': score,
+                                'mistakes': game_state.get('mistakes', 0),
+                                'maxMistakes':
+                                game_state.get('max_mistakes', 6),
+                                'gameTimeSeconds': int(time_taken),
+                                'rating': rating,
+                                'timestamp': int(current_time * 1000),
+                                'attribution': attribution
+                            }
+
+                            # Send win event
+                            yield f"event: gameWon\ndata: {json.dumps(win_data)}\n\n"
+                            logger.info(f"Win event sent to user {user_id}")
+
+                            # Record score in leaderboard
+                            try:
+                                record_game_score(user_id,
+                                                  game_state.get('game_id'),
+                                                  score,
+                                                  game_state.get('mistakes'),
+                                                  time_taken,
+                                                  completed=True)
+                            except Exception as e:
+                                logger.error(
+                                    f"Error recording score: {str(e)}")
+
+                    # Sleep to prevent CPU overuse
+                    time.sleep(2)
 
                 except Exception as e:
                     logger.error(f"Error in SSE data generation: {str(e)}")
@@ -404,29 +505,62 @@ def events():
                     time.sleep(5)  # Longer interval after error
 
         except GeneratorExit:
-            logger.info(f"SSE connection closed for user {user_id}")
+            logger.info(
+                f"SSE connection closed for client {client_id}, user {user_id}"
+            )
         except Exception as e:
-            logger.error(f"SSE generator error: {e}")
+            logger.error(f"SSE generator error: {str(e)}")
             yield f"event: error\ndata: {json.dumps({'message': 'Connection error'})}\n\n"
 
+    # Set up response with appropriate headers
+    response = Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache, no-transform',
+            'Content-Type': 'text/event-stream',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'  # Disable proxy buffering for Nginx
+        })
+
+    # Set CORS headers to allow cross-origin requests
+    response.headers['Access-Control-Allow-Origin'] = '*'  # Or specific origin
+    response.headers[
+        'Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+
+    return response
+
+
+# Optional helper function for the endpoint
+def get_attribution(game_id):
+    """Get attribution data for a game"""
     try:
-        logger.info("Setting up SSE response")
-        return Response(
-            stream_with_context(generate()),
-            mimetype='text/event-stream',
-            headers={
-                'Cache-Control': 'no-cache',
-                'Content-Type': 'text/event-stream',
-                'Connection': 'keep-alive',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Authorization',
-                'Access-Control-Allow-Credentials': 'true',
-                'X-Accel-Buffering': 'no'  # Disable proxy buffering
-            }
-        )
+        # Implement logic to retrieve attribution for the given game_id
+        # This is a placeholder - replace with your actual implementation
+        return {
+            'major_attribution': 'Famous Author',
+            'minor_attribution': 'Source Book'
+        }
     except Exception as e:
-        logger.error(f"Failed to create SSE response: {e}")
-        return jsonify({"error": "Failed to establish event stream"}), 500
+        logger.error(f"Error fetching attribution: {str(e)}")
+        return {'major_attribution': '', 'minor_attribution': ''}
+
+
+def get_rating_from_score(score):
+    """Determine rating based on score"""
+    if score >= 900:
+        return "Perfect"
+    elif score >= 800:
+        return "Ace of Spies"
+    elif score >= 700:
+        return "Bletchley Park"
+    elif score >= 500:
+        return "Cabinet Noir"
+    else:
+        return "Cryptanalyst"
+
 
 DIFFICULTY_SETTINGS = {
     'easy': {
