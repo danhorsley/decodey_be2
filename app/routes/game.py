@@ -86,6 +86,8 @@ def generate_game_id(difficulty='medium'):
 
 def check_game_status(game_state):
     """Check if the game is won or lost based on difficulty settings"""
+    logger.debug(f"Checking game status with state: {game_state}")
+
     difficulty = game_state.get('difficulty', 'medium')
     max_mistakes = DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
 
@@ -97,6 +99,7 @@ def check_game_status(game_state):
     # Game is lost if mistakes exceed max allowed
     if game_state['mistakes'] >= max_mistakes:
         if not game_state.get('game_complete', False):  # Only score once
+            logger.debug("Game lost condition met. Recording score.")
             score = score_game(difficulty, game_state['mistakes'], time_taken)
             record_game_score(get_jwt_identity(),
                               game_state['game_id'],
@@ -105,15 +108,28 @@ def check_game_status(game_state):
                               time_taken,
                               completed=True)
             game_state['game_complete'] = True
+            game_state['hasWon'] = False  # Explicitly mark as not won
             update_active_game_state(get_jwt_identity(), game_state)
             initialize_or_update_user_stats(get_jwt_identity())
+        logger.debug("Returning game status: game_complete=True, hasWon=False")
         return {'game_complete': True, 'hasWon': False}
 
     # Game is won if all letters are correctly guessed
-    all_letters_guessed = len(game_state['correctly_guessed']) == len(
-        set(c for c in game_state['encrypted_paragraph'] if c.isalpha()))
+    all_letters = set(c for c in game_state['encrypted_paragraph']
+                      if c.isalpha())
+    logger.debug(
+        f"Win check: correctly_guessed={len(game_state['correctly_guessed'])}, unique_letters={len(all_letters)}"
+    )
+
+    all_letters_guessed = len(
+        game_state['correctly_guessed']) == len(all_letters)
     if all_letters_guessed:
+        logger.debug("All letters guessed! Win condition met.")
+
         if not game_state.get('game_complete', False):  # Only score once
+            logger.debug(
+                f"Game not yet marked as complete. Updating state. Time taken: {time_taken}s"
+            )
             score = score_game(difficulty, game_state['mistakes'], time_taken)
             record_game_score(get_jwt_identity(),
                               game_state['game_id'],
@@ -122,11 +138,23 @@ def check_game_status(game_state):
                               time_taken,
                               completed=True)
             game_state['game_complete'] = True
+            game_state['hasWon'] = True  # Explicitly mark as won
+            game_state[
+                'win_notified'] = False  # Ensure this is set to False to trigger notification
             update_active_game_state(get_jwt_identity(), game_state)
             initialize_or_update_user_stats(get_jwt_identity())
+            logger.debug(
+                "Game state updated: game_complete=True, hasWon=True, win_notified=False"
+            )
+        else:
+            logger.debug("Game already marked as complete.")
+
+        logger.debug("Returning game status: game_complete=True, hasWon=True")
         return {'game_complete': True, 'hasWon': True}
 
     # Game is still in progress
+    logger.debug(
+        "Game still in progress. Returning: game_complete=False, hasWon=False")
     return {'game_complete': False, 'hasWon': False}
 
 
@@ -347,7 +375,7 @@ def abandon_game():
 def events():
     """SSE endpoint for real-time game updates with flexible authentication"""
     logger.info("SSE connection attempt received")
-
+    print("events triggered")
     # Get token from either Authorization header or query parameter
     token = None
 
@@ -405,6 +433,8 @@ def events():
         try:
             # Send initial connection success event
             yield f"event: connected\ndata: {json.dumps({'user_id': user_id, 'client_id': client_id})}\n\n"
+            logger.debug(
+                f"Sent initial connection event to client {client_id}")
 
             while True:
                 current_time = time.time()
@@ -420,6 +450,10 @@ def events():
                     game_state = get_game_state(user_id)
 
                     if game_state:
+                        logger.debug(
+                            f"Game state for user {user_id}: game_complete={game_state.get('game_complete')}, win_notified={game_state.get('win_notified')}, mistakes={game_state.get('mistakes')}/{game_state.get('max_mistakes')}"
+                        )
+
                         # Only send updates if there's meaningful state
                         # Prepare game state data
                         state_data = {
@@ -440,32 +474,67 @@ def events():
 
                         # Send game state update
                         yield f"event: gameState\ndata: {json.dumps(state_data)}\n\n"
+                        logger.debug(
+                            f"Sent gameState event to client {client_id}")
 
                         # Check for win condition
-                        if (game_state.get('game_complete')
-                                and not game_state.get('win_notified', False)
-                                and game_state.get('mistakes', 0)
-                                < game_state.get('max_mistakes', 6)):
+                        win_condition_check = {
+                            'game_complete':
+                            game_state.get('game_complete', False),
+                            'win_notified':
+                            game_state.get('win_notified',
+                                           True),  # Default to True if missing
+                            'mistakes': game_state.get('mistakes', 0),
+                            'max_mistakes': game_state.get('max_mistakes', 6),
+                            'hasWon': game_state.get('hasWon', False)
+                        }
+                        logger.debug(
+                            f"Win condition values for user {user_id}: {win_condition_check}"
+                        )
+
+                        win_condition = (
+                            game_state.get('game_complete')
+                            and not game_state.get('win_notified', False)
+                            and game_state.get('mistakes', 0) < game_state.get(
+                                'max_mistakes', 6)
+                            and game_state.get(
+                                'hasWon', False)  # Explicitly check for hasWon
+                        )
+
+                        logger.debug(
+                            f"Win condition evaluation result: {win_condition}"
+                        )
+
+                        if win_condition:
+                            logger.info(
+                                f"Win condition met for user {user_id}. Preparing win notification."
+                            )
 
                             # Get attribution data
                             attribution = get_attribution(
                                 game_state.get('game_id', ''))
+                            logger.debug(f"Got attribution: {attribution}")
 
                             # Calculate score
                             time_taken = (datetime.utcnow() - game_state.get(
                                 'start_time',
                                 datetime.utcnow())).total_seconds()
+                            logger.debug(f"Time taken: {time_taken}s")
 
                             score = score_game(
                                 game_state.get('difficulty', 'medium'),
                                 game_state.get('mistakes', 0), time_taken)
+                            logger.debug(f"Calculated score: {score}")
 
                             # Determine rating based on score
                             rating = get_rating_from_score(score)
+                            logger.debug(f"Rating: {rating}")
 
                             # Mark as notified to prevent duplicate events
                             game_state['win_notified'] = True
                             save_game_state(user_id, game_state)
+                            logger.debug(
+                                "Set win_notified=True and saved game state")
 
                             win_data = {
                                 'type': 'win',
@@ -479,8 +548,10 @@ def events():
                                 'timestamp': int(current_time * 1000),
                                 'attribution': attribution
                             }
+                            logger.debug(f"Win data prepared: {win_data}")
 
-                            # Send win event
+                            # Send win event twice to ensure delivery
+                            yield f"event: gameWon\ndata: {json.dumps(win_data)}\n\n"
                             yield f"event: gameWon\ndata: {json.dumps(win_data)}\n\n"
                             logger.info(f"Win event sent to user {user_id}")
 
@@ -492,9 +563,13 @@ def events():
                                                   game_state.get('mistakes'),
                                                   time_taken,
                                                   completed=True)
+                                logger.debug("Score recorded successfully")
                             except Exception as e:
                                 logger.error(
                                     f"Error recording score: {str(e)}")
+                    else:
+                        logger.debug(
+                            f"No active game state found for user {user_id}")
 
                     # Sleep to prevent CPU overuse
                     time.sleep(2)
