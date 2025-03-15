@@ -1,10 +1,10 @@
-from flask import Blueprint, jsonify, request, Response, stream_with_context
+from flask import Blueprint, jsonify, request, Response, stream_with_context, session
 from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token
 from jwt.exceptions import PyJWTError
 from app.services.game_logic import start_game, make_guess, get_hint
 from app.utils.db import get_game_state, save_game_state
 from app.utils.scoring import score_game, record_game_score, update_active_game_state
-from app.models import db, ActiveGameState
+from app.models import db, ActiveGameState, AnonymousGameState
 from app.utils.stats import initialize_or_update_user_stats
 from datetime import datetime
 import logging
@@ -26,116 +26,145 @@ bp = Blueprint('game', __name__)
 
 
 @bp.route('/start', methods=['GET', 'OPTIONS'])
-@jwt_required()
+@jwt_required(optional=True)
 def start():
     """Start a new game"""
     if request.method == 'OPTIONS':
         return jsonify({}), 200
 
     try:
+        # Get username if authenticated, otherwise use None
         username = get_jwt_identity()
+        is_anonymous = username is None
 
-        # Get skip_active_game_check parameter from request
-        # skip_active_game_check = request.args.get('skipActiveGameCheck',
-        #                                           'false').lower() == 'true'
-
-        # Check for active game only if we're not skipping the check
-        active_game_info = {"has_active_game": False}
-        # if not skip_active_game_check:
-        # Check for active game first
-        active_game = ActiveGameState.query.filter_by(user_id=username).first()
-
-        # Create active game info if one exists
-        if active_game:
-            # Calculate completion percentage
-            encrypted_letters = set(c for c in active_game.encrypted_paragraph
-                                    if c.isalpha())
-            completion_percentage = (len(active_game.correctly_guessed) /
-                                     len(encrypted_letters) *
-                                     100) if encrypted_letters else 0
-
-            # Extract difficulty from game_id
-            difficulty = active_game.game_id.split(
-                '-')[0] if active_game.game_id else 'medium'
-
-            # Calculate time spent
-            time_spent = int(
-                (datetime.utcnow() - active_game.created_at).total_seconds())
-
-            # Build active game info
-            active_game_info = {
-                "has_active_game": True,
-                "game_id": active_game.game_id,
-                "difficulty": difficulty,
-                "mistakes": active_game.mistakes,
-                "completion_percentage": round(completion_percentage, 1),
-                "time_spent": time_spent,
-                "max_mistakes": DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
-            }
-
-        # Get difficulty from query params - map frontend values to backend values
+        # Get difficulty from query params
         frontend_difficulty = request.args.get('difficulty', 'normal')
-
-        # Map frontend difficulty names to backend difficulty settings
         difficulty_mapping = {
             'easy': 'easy',
             'normal': 'medium',
             'hard': 'hard'
         }
-
-        # Use the mapped difficulty or default to 'medium'
         backend_difficulty = difficulty_mapping.get(frontend_difficulty,
                                                     'medium')
 
         if backend_difficulty not in DIFFICULTY_SETTINGS:
             logger.warning(
-                f"Invalid difficulty value: {backend_difficulty}, defaulting to medium"
+                f"Invalid difficulty: {backend_difficulty}, defaulting to medium"
             )
             backend_difficulty = 'medium'
 
+        # Generate the game ID
+        game_id = generate_game_id(backend_difficulty)
+
+        # For authenticated users, check for active games
+        active_game_info = {"has_active_game": False}
+        if not is_anonymous:
+            active_game = ActiveGameState.query.filter_by(
+                user_id=username).first()
+            if active_game:
+                # Calculate completion percentage
+                encrypted_letters = set(
+                    c for c in active_game.encrypted_paragraph if c.isalpha())
+                completion_percentage = (len(active_game.correctly_guessed) /
+                                         len(encrypted_letters) *
+                                         100) if encrypted_letters else 0
+
+                # Extract difficulty from game_id
+                difficulty = active_game.game_id.split(
+                    '-')[0] if active_game.game_id else 'medium'
+
+                # Calculate time spent
+                time_spent = int((datetime.utcnow() -
+                                  active_game.created_at).total_seconds())
+
+                # Build active game info
+                active_game_info = {
+                    "has_active_game": True,
+                    "game_id": active_game.game_id,
+                    "difficulty": difficulty,
+                    "mistakes": active_game.mistakes,
+                    "completion_percentage": round(completion_percentage, 1),
+                    "time_spent": time_spent,
+                    "max_mistakes":
+                    DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+                }
+
         logger.debug(
-            f"Starting new game for user: {username} with difficulty: {backend_difficulty} (from frontend: {frontend_difficulty})"
+            f"Starting new game for {'anonymous' if is_anonymous else username} with difficulty: {backend_difficulty}"
         )
 
         # Start a new game and get game data
         game_data = start_game()
         game_state = game_data['game_state']
-        game_state['game_id'] = generate_game_id(backend_difficulty)
+        game_state['game_id'] = game_id
         game_state['difficulty'] = backend_difficulty
         game_state['max_mistakes'] = DIFFICULTY_SETTINGS[backend_difficulty][
             'max_mistakes']
         game_state['start_time'] = datetime.utcnow()
         game_state['game_complete'] = False
 
-        save_game_state(username, game_state)
-        update_active_game_state(username, game_state)
+        # For authenticated users, save to database
+        if not is_anonymous:
+            logger.info(
+                f"Saving game state for user {username} with game ID {game_id}"
+            )
+            try:
+                save_game_state(username, game_state)
+                update_active_game_state(username, game_state)
+                logger.info("Game state saved successfully")
+            except Exception as e:
+                logger.error(f"Failed to save game state: {str(e)}",
+                             exc_info=True)
+        else:
+            # For anonymous users, save to AnonymousGameState table
+            logger.info(f"Storing anonymous game state for game ID {game_id}")
+            try:
+                anon_id = f"{game_id}_anon"
+                anon_game = AnonymousGameState(
+                    anon_id=anon_id,
+                    game_id=game_id,
+                    original_paragraph=game_data.get('original_paragraph', ''),
+                    encrypted_paragraph=game_data['encrypted_paragraph'],
+                    mapping=game_state['mapping'],
+                    reverse_mapping=game_state['reverse_mapping'],
+                    correctly_guessed=game_state['correctly_guessed'],
+                    mistakes=game_state['mistakes'],
+                    major_attribution=game_state.get('major_attribution', ''),
+                    minor_attribution=game_state.get('minor_attribution', ''))
+                db.session.add(anon_game)
+                db.session.commit()
+                logger.info(
+                    f"Anonymous game state stored in database with anon_id {anon_id}"
+                )
+            except Exception as e:
+                logger.error(f"Failed to store anonymous game state: {str(e)}",
+                             exc_info=True)
+                db.session.rollback()
 
         status = check_game_status(game_state)
-        logger.debug(
-            f"Game state saved with encrypted text: {game_data['encrypted_paragraph'][:20]}..."
-        )
 
-        # Create the response data
+        # Create response data
         response_data = {
             "display": game_data['display'],
             "encrypted_paragraph": game_data['encrypted_paragraph'],
-            "game_id": game_state['game_id'],
+            "game_id": game_id,
             "letter_frequency": game_data['letter_frequency'],
             "mistakes": game_data['mistakes'],
             "original_letters": game_data['original_letters'],
             "game_complete": status['game_complete'],
             "hasWon": status['hasWon'],
             "max_mistakes": game_state['max_mistakes'],
-            "difficulty":
-            frontend_difficulty  # Return the frontend difficulty value
+            "difficulty": frontend_difficulty,
+            "is_anonymous": is_anonymous
         }
 
-        # Add active game info to the response
-        response_data["active_game_info"] = active_game_info
+        # Add active game info for authenticated users
+        if not is_anonymous:
+            response_data["active_game_info"] = active_game_info
 
         return jsonify(response_data), 200
     except Exception as e:
-        logger.error(f"Error starting game: {str(e)}")
+        logger.error(f"Error starting game: {str(e)}", exc_info=True)
         return jsonify({"error": "Failed to start game"}), 500
 
 
@@ -172,23 +201,90 @@ def check_game_status(game_state):
 
 
 @bp.route('/guess', methods=['POST', 'OPTIONS'])
-@jwt_required()
+@jwt_required(optional=True)
 def guess():
     if request.method == 'OPTIONS':
         return jsonify({}), 200
+
     username = get_jwt_identity()
+    is_anonymous = username is None
     data = request.get_json()
+
     encrypted_letter = data.get('encrypted_letter')
     guessed_letter = data.get('guessed_letter')
+    game_id = data.get('game_id')
+
+    logger.debug(f"Guess from {'anonymous' if is_anonymous else username}: {encrypted_letter} -> {guessed_letter}")
+
+    if is_anonymous:
+        # Get anonymous game state from database
+        anon_id = f"{game_id}_anon"
+        anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
+
+        if not anon_game:
+            logger.error(f"No anonymous game found with ID: {anon_id}")
+            return jsonify({"msg": "No active game"}), 400
+
+        # Convert database model to game state dictionary
+        game_state = {
+            'mapping': anon_game.mapping,
+            'reverse_mapping': anon_game.reverse_mapping,
+            'correctly_guessed': anon_game.correctly_guessed,
+            'mistakes': anon_game.mistakes,
+            'encrypted_paragraph': anon_game.encrypted_paragraph,
+            'game_id': anon_game.game_id
+        }
+
+        # Process the guess
+        is_correct = False
+        if game_state['reverse_mapping'].get(encrypted_letter) == guessed_letter.upper():
+            is_correct = True
+            if encrypted_letter not in game_state['correctly_guessed']:
+                game_state['correctly_guessed'].append(encrypted_letter)
+        else:
+            game_state['mistakes'] += 1
+
+        # Generate display
+        display = get_display(
+            game_state['encrypted_paragraph'],
+            game_state['correctly_guessed'],
+            game_state['reverse_mapping']
+        )
+
+        # Check game status
+        status = check_game_status(game_state)
+
+        # Update anonymous game in database
+        anon_game.correctly_guessed = game_state['correctly_guessed']
+        anon_game.mistakes = game_state['mistakes']
+        anon_game.last_updated = datetime.utcnow()
+
+        # Check if game is complete
+        if status['game_complete']:
+            anon_game.completed = True
+            anon_game.won = status['hasWon']
+
+        db.session.commit()
+
+        return jsonify({
+            'display': display,
+            'mistakes': game_state['mistakes'],
+            'correctly_guessed': game_state['correctly_guessed'],
+            'game_complete': status['game_complete'],
+            'hasWon': status['hasWon'],
+            'is_correct': is_correct
+        }), 200
 
     logger.debug(
         f"Guess from {username}: {encrypted_letter} -> {guessed_letter}")
 
+    # Get game state - works for both authenticated and anonymous users
     game_state = get_game_state(username)
     if not game_state:
         logger.error(f"No active game found for user: {username}")
         return jsonify({"msg": "No active game"}), 400
 
+    # Process guess - same logic for both user types
     if not validate_guess(encrypted_letter, guessed_letter,
                           game_state['reverse_mapping'],
                           game_state['correctly_guessed']):
@@ -198,8 +294,10 @@ def guess():
                           game_state['correctly_guessed'],
                           game_state['reverse_mapping'])
 
+    # Save updated state - works for both user types
     save_game_state(username, game_state)
-    update_active_game_state(username, game_state)  # Update ActiveGameState
+    update_active_game_state(username, game_state)
+
     status = check_game_status(game_state)
     logger.debug(f"Updated game state saved for user {username}")
 
@@ -215,13 +313,26 @@ def guess():
 
 
 @bp.route('/hint', methods=['POST', 'OPTIONS'])
-@jwt_required()
+@jwt_required(optional=True)  # Make JWT optional
 def hint():
     if request.method == 'OPTIONS':
         return jsonify({}), 200
+
+    # Get auth status
     username = get_jwt_identity()
+    is_anonymous = username is None
+
+    # Get game ID from request for anonymous users
+    game_id = request.get_json().get('game_id')
+
+    # For anonymous users, construct the username from game_id
+    if is_anonymous and game_id:
+        username = f"{game_id}_anon"
+        logger.debug(f"Anonymous hint for game: {game_id}")
+
     logger.debug(f"Hint requested by user: {username}")
 
+    # Get game state - works for both authenticated and anonymous users
     game_state = get_game_state(username)
     if not game_state:
         logger.error(f"No active game found for user: {username}")
@@ -505,3 +616,45 @@ def game_status():
 
     logger.debug(f"Returning game status: {response_data}")
     return jsonify(response_data), 200
+
+
+def convert_anonymous_game(game_id, user_id):
+    """Convert an anonymous game to an authenticated user game"""
+    try:
+        # Find the anonymous game
+        anon_id = f"{game_id}_anon"
+        anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
+
+        if not anon_game:
+            logger.warning(f"No anonymous game found with ID {anon_id} for conversion")
+            return False
+
+        # Create a new ActiveGameState entry for the authenticated user
+        active_game = ActiveGameState(
+            user_id=user_id,
+            game_id=anon_game.game_id,
+            original_paragraph=anon_game.original_paragraph,
+            encrypted_paragraph=anon_game.encrypted_paragraph,
+            mapping=anon_game.mapping,
+            reverse_mapping=anon_game.reverse_mapping,
+            correctly_guessed=anon_game.correctly_guessed,
+            mistakes=anon_game.mistakes,
+            major_attribution=anon_game.major_attribution,
+            minor_attribution=anon_game.minor_attribution,
+            created_at=anon_game.created_at,
+            last_updated=datetime.utcnow()
+        )
+
+        # Update the anonymous game to mark conversion
+        anon_game.conversion_status = "converted"
+
+        # Save changes
+        db.session.add(active_game)
+        db.session.commit()
+
+        logger.info(f"Successfully converted anonymous game {anon_id} to user {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Error converting anonymous game: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return False

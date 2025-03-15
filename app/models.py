@@ -85,3 +85,24 @@ class ActiveGameState(db.Model):
     last_updated = db.Column(db.DateTime,
                              default=datetime.utcnow,
                              onupdate=datetime.utcnow)
+
+
+class AnonymousGameState(db.Model):
+    anon_id = db.Column(db.String,
+                        primary_key=True)  # Will be game_id + suffix
+    game_id = db.Column(db.String, unique=True)
+    original_paragraph = db.Column(db.Text)
+    encrypted_paragraph = db.Column(db.Text)
+    mapping = db.Column(db.JSON)
+    reverse_mapping = db.Column(db.JSON)
+    correctly_guessed = db.Column(db.JSON)
+    mistakes = db.Column(db.Integer, default=0)
+    major_attribution = db.Column(db.String)
+    minor_attribution = db.Column(db.String)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime,
+                             default=datetime.utcnow,
+                             onupdate=datetime.utcnow)
+    completed = db.Column(db.Boolean, default=False)
+    won = db.Column(db.Boolean, default=False)
+    conversion_status = db.Column(db.String, default="anonymous")
