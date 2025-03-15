@@ -34,20 +34,37 @@ def start():
 
     try:
         username = get_jwt_identity()
-        difficulty = request.args.get('difficulty', 'medium')
-        if difficulty not in DIFFICULTY_SETTINGS:
-            difficulty = 'medium'
+
+        # Get difficulty from query params - map frontend values to backend values
+        frontend_difficulty = request.args.get('difficulty', 'normal')
+
+        # Map frontend difficulty names to backend difficulty settings
+        difficulty_mapping = {
+            'easy': 'easy',
+            'normal': 'medium',
+            'hard': 'hard'
+        }
+
+        # Use the mapped difficulty or default to 'medium'
+        backend_difficulty = difficulty_mapping.get(frontend_difficulty,
+                                                    'medium')
+
+        if backend_difficulty not in DIFFICULTY_SETTINGS:
+            logger.warning(
+                f"Invalid difficulty value: {backend_difficulty}, defaulting to medium"
+            )
+            backend_difficulty = 'medium'
 
         logger.debug(
-            f"Starting new game for user: {username} with difficulty: {difficulty}"
+            f"Starting new game for user: {username} with difficulty: {backend_difficulty} (from frontend: {frontend_difficulty})"
         )
 
         # Start a new game and get game data
         game_data = start_game()
         game_state = game_data['game_state']
-        game_state['game_id'] = generate_game_id(difficulty)
-        game_state['difficulty'] = difficulty
-        game_state['max_mistakes'] = DIFFICULTY_SETTINGS[difficulty][
+        game_state['game_id'] = generate_game_id(backend_difficulty)
+        game_state['difficulty'] = backend_difficulty
+        game_state['max_mistakes'] = DIFFICULTY_SETTINGS[backend_difficulty][
             'max_mistakes']
         game_state['start_time'] = datetime.utcnow()
         game_state['game_complete'] = False
@@ -57,7 +74,7 @@ def start():
 
         status = check_game_status(game_state)
         logger.debug(
-            f"Game state saved with encrypted text: {game_data['encrypted_paragraph']}"
+            f"Game state saved with encrypted text: {game_data['encrypted_paragraph'][:20]}..."
         )
 
         response_data = {
@@ -70,7 +87,8 @@ def start():
             "game_complete": status['game_complete'],
             "hasWon": status['hasWon'],
             "max_mistakes": game_state['max_mistakes'],
-            "difficulty": difficulty
+            "difficulty":
+            frontend_difficulty  # Return the frontend difficulty value
         }
 
         return jsonify(response_data), 200

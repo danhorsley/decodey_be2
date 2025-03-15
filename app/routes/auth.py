@@ -3,8 +3,9 @@ from flask_jwt_extended import (create_access_token, create_refresh_token,
                                 get_jwt_identity, jwt_required, get_jwt)
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import jwt_blocklist
-from app.models import db, User
+from app.models import db, User, ActiveGameState
 import logging
+
 
 bp = Blueprint('auth', __name__)
 
@@ -74,12 +75,17 @@ def login():
                                            })
         refresh_token = create_refresh_token(
             identity=user.get_id()) if remember else None
-
+        # After successful authentication, check for active game
+        has_active_game = False
+        active_game = ActiveGameState.query.filter_by(user_id=user.get_id()).first()
+        if active_game:
+            has_active_game = True
         logging.info(f"Successful login for user: {user.username}")
         return jsonify({
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "username": user.username
+            "username": user.username,
+            "has_active_game": has_active_game
         }), 200
 
     except Exception as e:
