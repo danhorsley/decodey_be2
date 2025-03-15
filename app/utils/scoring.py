@@ -1,6 +1,11 @@
 import math
 from datetime import datetime
 from app.models import db, GameScore, ActiveGameState
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 def score_game(difficulty, mistakes, time_taken):
     """
@@ -13,25 +18,29 @@ def score_game(difficulty, mistakes, time_taken):
         time_taken (int): Time taken in seconds
     """
     # Base difficulty multipliers
-    difficulty_multipliers = {
-        'easy': 1,
-        'medium': 2,
-        'hard': 4
-    }
+    difficulty_multipliers = {'easy': 1, 'medium': 2, 'hard': 4}
 
     # Base score calculation
     base_score = 1000 * difficulty_multipliers.get(difficulty, 1)
 
     # Mistake penalty (exponential)
-    mistake_factor = math.exp(-0.2 * mistakes)  # Each mistake reduces score exponentially
+    mistake_factor = math.exp(
+        -0.2 * mistakes)  # Each mistake reduces score exponentially
 
     # Time factor (faster = higher score, with diminishing returns)
-    time_factor = math.exp(-0.001 * time_taken)  # Longer time reduces score exponentially
+    time_factor = math.exp(
+        -0.001 * time_taken)  # Longer time reduces score exponentially
 
     final_score = int(base_score * mistake_factor * time_factor)
     return max(final_score, 1)  # Ensure minimum score of 1
 
-def record_game_score(user_id, game_id, score, mistakes, time_taken, completed=True):
+
+def record_game_score(user_id,
+                      game_id,
+                      score,
+                      mistakes,
+                      time_taken,
+                      completed=True):
     """
     Record a completed game's score and details.
 
@@ -44,25 +53,30 @@ def record_game_score(user_id, game_id, score, mistakes, time_taken, completed=T
         completed (bool): Whether the game was completed (won or lost)
     """
     # Extract difficulty from game_id (format: "difficulty-uuid")
-    difficulty = game_id.split('-')[0] if '-' in game_id else 'medium'
+    # difficulty = game_id.split('-')[0] if '-' in game_id else 'medium'
 
     # Get today's date for challenge tracking
     challenge_date = datetime.utcnow().strftime('%Y-%m-%d')
 
-    game_score = GameScore(
-        user_id=user_id,
-        game_id=game_id,
-        score=score,
-        mistakes=mistakes,
-        time_taken=time_taken,
-        game_type='regular',
-        challenge_date=challenge_date,
-        completed=completed,
-        created_at=datetime.utcnow()
-    )
+    game_score = GameScore(user_id=user_id,
+                           game_id=game_id,
+                           score=score,
+                           mistakes=mistakes,
+                           time_taken=time_taken,
+                           game_type='regular',
+                           challenge_date=challenge_date,
+                           completed=completed,
+                           created_at=datetime.utcnow())
+    #delete activegamestate record
+    active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
+    if active_game:
+        logger.info(
+            f"Deleting active game for user {user_id} after completion")
+        db.session.delete(active_game)
 
     db.session.add(game_score)
     db.session.commit()
+
 
 def update_active_game_state(user_id, game_state):
     """
@@ -94,8 +108,7 @@ def update_active_game_state(user_id, game_state):
             major_attribution=game_state.get('major_attribution', ''),
             minor_attribution=game_state.get('minor_attribution', ''),
             created_at=game_state.get('start_time', datetime.utcnow()),
-            last_updated=datetime.utcnow()
-        )
+            last_updated=datetime.utcnow())
 
         db.session.add(active_game)
         db.session.commit()

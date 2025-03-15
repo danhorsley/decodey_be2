@@ -35,6 +35,44 @@ def start():
     try:
         username = get_jwt_identity()
 
+        # Get skip_active_game_check parameter from request
+        # skip_active_game_check = request.args.get('skipActiveGameCheck',
+        #                                           'false').lower() == 'true'
+
+        # Check for active game only if we're not skipping the check
+        active_game_info = {"has_active_game": False}
+        # if not skip_active_game_check:
+        # Check for active game first
+        active_game = ActiveGameState.query.filter_by(user_id=username).first()
+
+        # Create active game info if one exists
+        if active_game:
+            # Calculate completion percentage
+            encrypted_letters = set(c for c in active_game.encrypted_paragraph
+                                    if c.isalpha())
+            completion_percentage = (len(active_game.correctly_guessed) /
+                                     len(encrypted_letters) *
+                                     100) if encrypted_letters else 0
+
+            # Extract difficulty from game_id
+            difficulty = active_game.game_id.split(
+                '-')[0] if active_game.game_id else 'medium'
+
+            # Calculate time spent
+            time_spent = int(
+                (datetime.utcnow() - active_game.created_at).total_seconds())
+
+            # Build active game info
+            active_game_info = {
+                "has_active_game": True,
+                "game_id": active_game.game_id,
+                "difficulty": difficulty,
+                "mistakes": active_game.mistakes,
+                "completion_percentage": round(completion_percentage, 1),
+                "time_spent": time_spent,
+                "max_mistakes": DIFFICULTY_SETTINGS[difficulty]['max_mistakes']
+            }
+
         # Get difficulty from query params - map frontend values to backend values
         frontend_difficulty = request.args.get('difficulty', 'normal')
 
@@ -77,6 +115,7 @@ def start():
             f"Game state saved with encrypted text: {game_data['encrypted_paragraph'][:20]}..."
         )
 
+        # Create the response data
         response_data = {
             "display": game_data['display'],
             "encrypted_paragraph": game_data['encrypted_paragraph'],
@@ -90,6 +129,9 @@ def start():
             "difficulty":
             frontend_difficulty  # Return the frontend difficulty value
         }
+
+        # Add active game info to the response
+        response_data["active_game_info"] = active_game_info
 
         return jsonify(response_data), 200
     except Exception as e:
