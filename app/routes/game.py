@@ -102,7 +102,7 @@ def start():
             'max_mistakes']
         game_state['start_time'] = datetime.utcnow()
         game_state['game_complete'] = False
-
+        print(game_state)
         # For authenticated users, save to database
         if not is_anonymous:
             logger.info(
@@ -120,26 +120,22 @@ def start():
             logger.info(f"Storing anonymous game state for game ID {game_id}")
             try:
                 anon_id = f"{game_id}_anon"
-                anon_game = AnonymousGameState(
-                    anon_id=anon_id,
-                    game_id=game_id,
-                    original_paragraph=game_data.get('original_paragraph', ''),
-                    encrypted_paragraph=game_data['encrypted_paragraph'],
-                    mapping=game_state['mapping'],
-                    reverse_mapping=game_state['reverse_mapping'],
-                    correctly_guessed=game_state['correctly_guessed'],
-                    mistakes=game_state['mistakes'],
-                    major_attribution=game_state.get('major_attribution', ''),
-                    minor_attribution=game_state.get('minor_attribution', ''))
-                db.session.add(anon_game)
-                db.session.commit()
+                save_anonymous_game_state(anon_id, game_state)
+
                 logger.info(
-                    f"Anonymous game state stored in database with anon_id {anon_id}"
+                    f"Anonymous game state stored with anon_id {anon_id}")
+
+                # Log the fields for debugging
+                logger.debug(
+                    f"Saved fields - original_paragraph: {game_state.get('original_paragraph', '')[:50]}..."
+                )
+                logger.debug(f"Saved fields - game_id: {game_id}")
+                logger.debug(
+                    f"Saved fields - correctly_guessed: {game_state.get('correctly_guessed', [])}"
                 )
             except Exception as e:
                 logger.error(f"Failed to store anonymous game state: {str(e)}",
                              exc_info=True)
-                db.session.rollback()
 
         status = check_game_status(game_state)
 
@@ -214,8 +210,11 @@ def guess():
     guessed_letter = data.get('guessed_letter')
     game_id = data.get('game_id')
 
-    logger.debug(f"Guess from {'anonymous' if is_anonymous else username}: {encrypted_letter} -> {guessed_letter}")
+    logger.debug(
+        f"Guess from {'anonymous' if is_anonymous else username}: {encrypted_letter} -> {guessed_letter}"
+    )
 
+    # In the guess function, replace the anonymous game updating code with:
     if is_anonymous:
         # Get anonymous game state from database
         anon_id = f"{game_id}_anon"
@@ -224,20 +223,31 @@ def guess():
         if not anon_game:
             logger.error(f"No anonymous game found with ID: {anon_id}")
             return jsonify({"msg": "No active game"}), 400
-
+        
         # Convert database model to game state dictionary
         game_state = {
-            'mapping': anon_game.mapping,
-            'reverse_mapping': anon_game.reverse_mapping,
-            'correctly_guessed': anon_game.correctly_guessed,
-            'mistakes': anon_game.mistakes,
-            'encrypted_paragraph': anon_game.encrypted_paragraph,
-            'game_id': anon_game.game_id
+            'mapping':
+            anon_game.mapping,
+            'reverse_mapping':
+            anon_game.reverse_mapping,
+            'correctly_guessed':
+            anon_game.correctly_guessed or [],  # Handle None case
+            'mistakes':
+            anon_game.mistakes,
+            'encrypted_paragraph':
+            anon_game.encrypted_paragraph,
+            'game_id':
+            anon_game.game_id,
+            'original_paragraph':
+            anon_game.original_paragraph,
+            'difficulty':
+            anon_game.game_id.split('-')[0] if anon_game.game_id else 'medium'
         }
 
         # Process the guess
         is_correct = False
-        if game_state['reverse_mapping'].get(encrypted_letter) == guessed_letter.upper():
+        if game_state['reverse_mapping'].get(
+                encrypted_letter) == guessed_letter.upper():
             is_correct = True
             if encrypted_letter not in game_state['correctly_guessed']:
                 game_state['correctly_guessed'].append(encrypted_letter)
@@ -245,34 +255,39 @@ def guess():
             game_state['mistakes'] += 1
 
         # Generate display
-        display = get_display(
-            game_state['encrypted_paragraph'],
-            game_state['correctly_guessed'],
-            game_state['reverse_mapping']
-        )
+        display = get_display(game_state['encrypted_paragraph'],
+                              game_state['correctly_guessed'],
+                              game_state['reverse_mapping'])
 
         # Check game status
         status = check_game_status(game_state)
+        game_state['game_complete'] = status['game_complete']
+        game_state['hasWon'] = status['hasWon']
 
-        # Update anonymous game in database
-        anon_game.correctly_guessed = game_state['correctly_guessed']
-        anon_game.mistakes = game_state['mistakes']
-        anon_game.last_updated = datetime.utcnow()
+        # Save updated state using helper function
+        # We're now passing game_state directly without a separate original_paragraph parameter
+        save_anonymous_game_state(anon_id, game_state)
 
-        # Check if game is complete
-        if status['game_complete']:
-            anon_game.completed = True
-            anon_game.won = status['hasWon']
-
-        db.session.commit()
+        # Log the update for debugging
+        logger.debug(
+            f"Updated anonymous game state: correctly_guessed={game_state['correctly_guessed']}"
+        )
 
         return jsonify({
-            'display': display,
-            'mistakes': game_state['mistakes'],
-            'correctly_guessed': game_state['correctly_guessed'],
-            'game_complete': status['game_complete'],
-            'hasWon': status['hasWon'],
-            'is_correct': is_correct
+            'display':
+            display,
+            'mistakes':
+            game_state['mistakes'],
+            'correctly_guessed':
+            game_state['correctly_guessed'],
+            'game_complete':
+            status['game_complete'],
+            'hasWon':
+            status['hasWon'],
+            'is_correct':
+            is_correct,
+            'max_mistakes':
+            DIFFICULTY_SETTINGS[game_state['difficulty']]['max_mistakes']
         }), 200
 
     logger.debug(
@@ -321,23 +336,50 @@ def hint():
     # Get auth status
     username = get_jwt_identity()
     is_anonymous = username is None
+    data = request.get_json()
 
-    # Get game ID from request for anonymous users
-    game_id = request.get_json().get('game_id')
+    # Get game ID from request
+    game_id = data.get('game_id')
 
-    # For anonymous users, construct the username from game_id
-    if is_anonymous and game_id:
-        username = f"{game_id}_anon"
-        logger.debug(f"Anonymous hint for game: {game_id}")
+    logger.debug(
+        f"Hint requested by {'anonymous' if is_anonymous else username}")
 
-    logger.debug(f"Hint requested by user: {username}")
+    if is_anonymous:
+        # Get anonymous game state from database (same pattern as /guess)
+        anon_id = f"{game_id}_anon"
+        anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
 
-    # Get game state - works for both authenticated and anonymous users
-    game_state = get_game_state(username)
-    if not game_state:
-        logger.error(f"No active game found for user: {username}")
-        return jsonify({"msg": "No active game"}), 400
+        if not anon_game:
+            logger.error(f"No anonymous game found with ID: {anon_id}")
+            return jsonify({"msg": "No active game"}), 400
 
+        # Convert database model to game state dictionary
+        game_state = {
+            'mapping':
+            anon_game.mapping,
+            'reverse_mapping':
+            anon_game.reverse_mapping,
+            'correctly_guessed':
+            anon_game.correctly_guessed or [],  # Handle None case
+            'mistakes':
+            anon_game.mistakes,
+            'encrypted_paragraph':
+            anon_game.encrypted_paragraph,
+            'game_id':
+            anon_game.game_id,
+            'original_paragraph':
+            anon_game.original_paragraph,
+            'difficulty':
+            anon_game.game_id.split('-')[0] if anon_game.game_id else 'medium'
+        }
+    else:
+        # For authenticated users, get game state from normal function
+        game_state = get_game_state(username)
+        if not game_state:
+            logger.error(f"No active game found for user: {username}")
+            return jsonify({"msg": "No active game"}), 400
+
+    # Common logic for both anonymous and authenticated users
     all_encrypted = list(game_state['mapping'].values())
     unmapped = [
         letter for letter in all_encrypted
@@ -365,19 +407,38 @@ def hint():
                           game_state['correctly_guessed'],
                           game_state['reverse_mapping'])
 
-    save_game_state(username, game_state)
-    update_active_game_state(username, game_state)  # Update ActiveGameState
+    # Check game status
     status = check_game_status(game_state)
-    logger.debug(f"Updated game state saved after hint for user {username}")
+
+    # Save state based on user type
+    if is_anonymous:
+        # Save anonymous game state
+        save_anonymous_game_state(anon_id, game_state)
+        logger.debug(
+            f"Updated anonymous game state after hint: correctly_guessed={game_state['correctly_guessed']}"
+        )
+    else:
+        # Save authenticated user game state
+        save_game_state(username, game_state)
+        update_active_game_state(username, game_state)
+        logger.debug(
+            f"Updated authenticated game state after hint for user {username}")
 
     return jsonify({
-        'display': display,
-        'mistakes': game_state['mistakes'],
-        'correctly_guessed': game_state['correctly_guessed'],
-        'game_complete': status['game_complete'],
-        'hasWon': status['hasWon'],
-        'max_mistakes': game_state['max_mistakes'],
-        'difficulty': game_state['difficulty']
+        'display':
+        display,
+        'mistakes':
+        game_state['mistakes'],
+        'correctly_guessed':
+        game_state['correctly_guessed'],
+        'game_complete':
+        status['game_complete'],
+        'hasWon':
+        status['hasWon'],
+        'max_mistakes':
+        DIFFICULTY_SETTINGS[difficulty]['max_mistakes'],
+        'difficulty':
+        difficulty
     }), 200
 
 
@@ -626,7 +687,8 @@ def convert_anonymous_game(game_id, user_id):
         anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
 
         if not anon_game:
-            logger.warning(f"No anonymous game found with ID {anon_id} for conversion")
+            logger.warning(
+                f"No anonymous game found with ID {anon_id} for conversion")
             return False
 
         # Create a new ActiveGameState entry for the authenticated user
@@ -642,8 +704,7 @@ def convert_anonymous_game(game_id, user_id):
             major_attribution=anon_game.major_attribution,
             minor_attribution=anon_game.minor_attribution,
             created_at=anon_game.created_at,
-            last_updated=datetime.utcnow()
-        )
+            last_updated=datetime.utcnow())
 
         # Update the anonymous game to mark conversion
         anon_game.conversion_status = "converted"
@@ -652,9 +713,82 @@ def convert_anonymous_game(game_id, user_id):
         db.session.add(active_game)
         db.session.commit()
 
-        logger.info(f"Successfully converted anonymous game {anon_id} to user {user_id}")
+        logger.info(
+            f"Successfully converted anonymous game {anon_id} to user {user_id}"
+        )
         return True
     except Exception as e:
-        logger.error(f"Error converting anonymous game: {str(e)}", exc_info=True)
+        logger.error(f"Error converting anonymous game: {str(e)}",
+                     exc_info=True)
+        db.session.rollback()
+        return False
+
+
+def save_anonymous_game_state(anon_id, game_state):
+    """
+    Save or update anonymous game state in the database
+
+    Args:
+        anon_id (str): The anonymous game ID (typically game_id + "_anon")
+        game_state (dict): Current game state to save
+    """
+    try:
+        # Check if the anonymous game already exists
+        anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
+
+        # Get original_paragraph from game_state
+        original_paragraph = game_state.get('original_paragraph', '')
+
+        # Log what we're about to save
+        logger.debug(
+            f"Saving anonymous game state: anon_id={anon_id}, original_paragraph={original_paragraph[:30]}..."
+        )
+
+        if anon_game:
+            # Update existing anonymous game
+            anon_game.mapping = game_state.get('mapping', {})
+            anon_game.reverse_mapping = game_state.get('reverse_mapping', {})
+            anon_game.correctly_guessed = game_state.get(
+                'correctly_guessed', [])
+            anon_game.mistakes = game_state.get('mistakes', 0)
+            anon_game.last_updated = datetime.utcnow()
+
+            # Only update original_paragraph if it's not already set or is empty
+            if original_paragraph and (not anon_game.original_paragraph
+                                       or anon_game.original_paragraph == ''):
+                anon_game.original_paragraph = original_paragraph
+                logger.debug(
+                    f"Updated original_paragraph for existing anon_game: {original_paragraph[:30]}..."
+                )
+
+            # Check if game is complete
+            if game_state.get('game_complete', False):
+                anon_game.completed = True
+                anon_game.won = game_state.get('hasWon', False)
+        else:
+            # Create new anonymous game entry
+            anon_game = AnonymousGameState(
+                anon_id=anon_id,
+                game_id=game_state.get('game_id', ''),
+                original_paragraph=original_paragraph,
+                encrypted_paragraph=game_state.get('encrypted_paragraph', ''),
+                mapping=game_state.get('mapping', {}),
+                reverse_mapping=game_state.get('reverse_mapping', {}),
+                correctly_guessed=game_state.get('correctly_guessed', []),
+                mistakes=game_state.get('mistakes', 0),
+                major_attribution=game_state.get('major_attribution', ''),
+                minor_attribution=game_state.get('minor_attribution', ''))
+            db.session.add(anon_game)
+            logger.debug(
+                f"Created new anon_game with original_paragraph: {original_paragraph[:30]}..."
+            )
+
+        # Commit changes
+        db.session.commit()
+        logger.debug(f"Anonymous game state saved for {anon_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Error saving anonymous game state: {str(e)}",
+                     exc_info=True)
         db.session.rollback()
         return False
