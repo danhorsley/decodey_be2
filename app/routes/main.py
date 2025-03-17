@@ -41,3 +41,5 @@ def stats():
 def leaderboard():
     """Show leaderboard page"""
     return render_template('leaderboard.html')
+
+

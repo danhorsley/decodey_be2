@@ -252,11 +252,11 @@ def get_max_mistakes_from_game_id(game_id):
     # Difficulty settings
     difficulty_settings = {
         'easy': 8,
-        'medium': 6,
-        'hard': 4
+        'medium': 5,
+        'hard': 3
     }
 
-    return difficulty_settings.get(difficulty, 6)  # Default to medium (6)
+    return difficulty_settings.get(difficulty, 5)  # Default to medium (6)
 
 def calculate_game_score(game_state, time_taken):
     """
@@ -535,7 +535,7 @@ def process_hint(game_state):
     hint_penalties = {
         'easy': 1,
         'medium': 1,
-        'hard': 2
+        'hard': 1
     }
     game_state['mistakes'] = game_state.get('mistakes', 0) + hint_penalties.get(difficulty, 1)
 

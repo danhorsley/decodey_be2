@@ -36,7 +36,7 @@ def start():
             'hard': 'hard'
         }
         backend_difficulty = difficulty_mapping.get(frontend_difficulty, 'medium')
-
+        print("backend difficulty on start: ", backend_difficulty)
         # Generate the game ID
         game_id = f"{backend_difficulty}-{str(uuid.uuid4())}"
 
@@ -523,3 +523,4 @@ def convert_anonymous_game_route():
     except Exception as e:
         logger.error(f"Error converting game: {str(e)}", exc_info=True)
         return jsonify({"error": "Error converting game"}), 500
+

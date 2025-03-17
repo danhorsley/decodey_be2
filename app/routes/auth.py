@@ -10,7 +10,7 @@ import logging
 bp = Blueprint('auth', __name__)
 
 
-@bp.route('/register', methods=['POST'])
+@bp.route('/signup', methods=['POST'])
 def register():
     try:
         data = request.get_json()
@@ -164,3 +164,35 @@ def update_email_consent():
         logging.error(f"Error updating email consent: {str(e)}")
         db.session.rollback()
         return jsonify({"msg": "Error updating email consent"}), 500
+@bp.route('/check-username', methods=['POST'])
+def check_username():
+    """Check if a username is available for registration"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+
+        if not username:
+            return jsonify({"available": False, "message": "Username is required"}), 400
+
+        # Check minimum length
+        if len(username) < 3:
+            return jsonify({"available": False, "message": "Username must be at least 3 characters"}), 400
+
+        # Check if username contains invalid characters
+        if not username.isalnum() and not any(c in username for c in '_-'):
+            return jsonify({
+                "available": False, 
+                "message": "Username can only contain letters, numbers, underscores and hyphens"
+            }), 400
+
+        # Check if username already exists
+        existing_user = User.query.filter(User.username == username).first()
+
+        if existing_user:
+            return jsonify({"available": False, "message": "Username already taken"}), 200
+
+        return jsonify({"available": True, "message": "Username available!"}), 200
+
+    except Exception as e:
+        logging.error(f"Error checking username: {str(e)}")
+        return jsonify({"available": False, "message": "Error checking username"}), 500
