@@ -3,7 +3,7 @@ from flask_jwt_extended import (create_access_token, create_refresh_token,
                                 get_jwt_identity, jwt_required, get_jwt)
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import jwt_blocklist
-from app.models import db, User, ActiveGameState
+from app.models import db, User, ActiveGameState, UserStats, GameScore
 import logging
 
 
@@ -196,3 +196,118 @@ def check_username():
     except Exception as e:
         logging.error(f"Error checking username: {str(e)}")
         return jsonify({"available": False, "message": "Error checking username"}), 500
+
+# Add to app/auth.py
+
+@bp.route('/api/user-data', methods=['GET'])
+@jwt_required()
+def get_user_data():
+    try:
+        # Get the current user's ID
+        user_id = get_jwt_identity()
+
+        if not user_id:
+            return jsonify({"msg": "User not authenticated"}), 401
+
+        # Find the user
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({"msg": "User not found"}), 404
+
+        # Get user data (excluding password hash)
+        user_data = {
+            "user_id": user.user_id,
+            "username": user.username,
+            "email": user.email,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "email_consent": user.email_consent,
+            "consent_date": user.consent_date.isoformat() if user.consent_date else None
+        }
+
+        # Get user stats
+        user_stats = UserStats.query.filter_by(user_id=user_id).first()
+        stats_data = {}
+
+        if user_stats:
+            stats_data = {
+                "current_streak": user_stats.current_streak,
+                "max_streak": user_stats.max_streak,
+                "current_noloss_streak": user_stats.current_noloss_streak,
+                "max_noloss_streak": user_stats.max_noloss_streak,
+                "total_games_played": user_stats.total_games_played,
+                "games_won": user_stats.games_won,
+                "cumulative_score": user_stats.cumulative_score,
+                "highest_weekly_score": user_stats.highest_weekly_score,
+                "last_played_date": user_stats.last_played_date.isoformat() if user_stats.last_played_date else None
+            }
+
+        # Get game history
+        game_scores = GameScore.query.filter_by(user_id=user_id).all()
+        games_data = []
+
+        for game in game_scores:
+            games_data.append({
+                "game_id": game.game_id,
+                "score": game.score,
+                "mistakes": game.mistakes,
+                "time_taken": game.time_taken,
+                "game_type": game.game_type,
+                "challenge_date": game.challenge_date,
+                "completed": game.completed,
+                "created_at": game.created_at.isoformat() if game.created_at else None
+            })
+
+        # Combine all data
+        all_data = {
+            "user_info": user_data,
+            "stats": stats_data,
+            "game_history": games_data
+        }
+
+        return jsonify(all_data), 200
+
+    except Exception as e:
+        logging.error(f"Error retrieving user data: {str(e)}")
+        return jsonify({"msg": "An error occurred retrieving your data"}), 500
+
+@bp.route('/api/delete-account', methods=['DELETE'])
+@jwt_required()
+def delete_account():
+    try:
+        # Get the current user's ID
+        user_id = get_jwt_identity()
+
+        if not user_id:
+            return jsonify({"msg": "User not authenticated"}), 401
+
+        # Find the user
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({"msg": "User not found"}), 404
+
+        # Delete ALL user related data
+        GameScore.query.filter_by(user_id=user_id).delete()
+        UserStats.query.filter_by(user_id=user_id).delete()
+        ActiveGameState.query.filter_by(user_id=user_id).delete()
+
+        # If you have any other tables with user_id references, delete those records too
+        # For example:
+        # UserPreferences.query.filter_by(user_id=user_id).delete()
+
+        # Delete the user
+        db.session.delete(user)
+        db.session.commit()
+
+        # Add the JWT to blocklist to force logout
+        token = get_jwt()
+        jti = token["jti"]
+        jwt_blocklist.add(jti)
+
+        return jsonify({"msg": "Account deleted successfully"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error deleting account: {str(e)}")
+        return jsonify({"msg": "An error occurred deleting your account"}), 500
