@@ -5,6 +5,7 @@ from config import Config
 from app.models import db
 import logging
 from flask_jwt_extended import exceptions as jwt_exceptions
+from flask_migrate import Migrate
 
 jwt = JWTManager()
 # Store revoked tokens in memory
@@ -68,6 +69,7 @@ def create_app(config_class=Config):
         # Initialize extensions
         jwt.init_app(app)
         db.init_app(app)
+        migrate = Migrate(app, db)
         logger.info("Successfully initialized Flask extensions")
 
         # Register token blocklist loader
