@@ -85,14 +85,9 @@ def start():
                 db.session.rollback()
 
         # Get difficulty from query params
-        frontend_difficulty = request.args.get('difficulty', 'normal')
-        difficulty_mapping = {
-            'easy': 'easy',
-            'normal': 'medium',
-            'hard': 'hard'
-        }
-        backend_difficulty = difficulty_mapping.get(frontend_difficulty,
-                                                    'medium')
+        frontend_difficulty = request.args.get('difficulty', 'medium')
+
+        backend_difficulty = frontend_difficulty  #find cleaner way to do this later
         print("backend difficulty on start: ", backend_difficulty)
         # Generate the game ID
         game_id = f"{backend_difficulty}-{str(uuid.uuid4())}"
