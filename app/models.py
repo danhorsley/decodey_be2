@@ -21,6 +21,8 @@ class User(UserMixin, db.Model):
     email_consent = db.Column(db.Boolean,
                               default=False)  # GDPR email marketing consent
     consent_date = db.Column(db.DateTime)  # When consent was given
+    is_admin = db.Column(db.Boolean, default=False)
+    admin_password_hash = db.Column(db.String(256), nullable=True)
 
     def __init__(self, email, username, password, email_consent=False):
         self.email = email
