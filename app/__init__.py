@@ -52,7 +52,7 @@ def create_app(config_class=Config):
 
     @jwt.revoked_token_loader
     def revoked_token_callback(jwt_header, jwt_payload):
-        return jsonify({"error": "Token has been revoked"}), 
+        return jsonify({"error": "Token has been revoked"}),
 
     # Configure SQLAlchemy
     try:
@@ -83,12 +83,14 @@ def create_app(config_class=Config):
 
         # Register blueprints without API prefixes
         from app.routes import auth, game, stats, main, dev
+        from app.routes.admin import admin_bp
+        app.register_blueprint(admin_bp)
         app.register_blueprint(main.bp)  # Main routes
         app.register_blueprint(
             auth.bp)  # Auth routes (/login, /register, etc.)
         app.register_blueprint(game.bp, url_prefix='/api')
-        app.register_blueprint(stats.bp, url_prefix='/api') 
-        app.register_blueprint(dev.bp, url_prefix='/dev')# dev routes
+        app.register_blueprint(stats.bp, url_prefix='/api')
+        app.register_blueprint(dev.bp, url_prefix='/dev')  # dev routes
         logger.info("Successfully registered all blueprints")
 
     except Exception as e:

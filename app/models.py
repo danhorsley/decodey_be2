@@ -41,6 +41,9 @@ class User(UserMixin, db.Model):
     def get_id(self):
         return str(self.user_id)
 
+    def set_admin_password(self, password):
+        self.admin_password_hash = generate_password_hash(password)
+
 
 class UserStats(db.Model):
     user_id = db.Column(db.String,
@@ -79,7 +82,7 @@ class ActiveGameState(db.Model):
     encrypted_paragraph = db.Column(db.Text)
     mapping = db.Column(db.JSON)
     reverse_mapping = db.Column(db.JSON)
-    correctly_guessed =  db.Column(db.JSON, default=lambda: [])
+    correctly_guessed = db.Column(db.JSON, default=lambda: [])
     mistakes = db.Column(db.Integer, default=0)
     major_attribution = db.Column(db.String)
     minor_attribution = db.Column(db.String)
@@ -97,7 +100,7 @@ class AnonymousGameState(db.Model):
     encrypted_paragraph = db.Column(db.Text)
     mapping = db.Column(db.JSON)
     reverse_mapping = db.Column(db.JSON)
-    correctly_guessed =  db.Column(db.JSON, default=lambda: [])
+    correctly_guessed = db.Column(db.JSON, default=lambda: [])
     mistakes = db.Column(db.Integer, default=0)
     major_attribution = db.Column(db.String)
     minor_attribution = db.Column(db.String)
