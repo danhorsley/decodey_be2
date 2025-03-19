@@ -6,7 +6,6 @@ from app import jwt_blocklist
 from app.models import db, User, ActiveGameState, UserStats, GameScore
 import logging
 
-
 bp = Blueprint('auth', __name__)
 
 
@@ -77,15 +76,17 @@ def login():
             identity=user.get_id()) if remember else None
         # After successful authentication, check for active game
         has_active_game = False
-        active_game = ActiveGameState.query.filter_by(user_id=user.get_id()).first()
+        active_game = ActiveGameState.query.filter_by(
+            user_id=user.get_id()).first()
         if active_game:
             has_active_game = True
         logging.info(f"Successful login for user: {user.username}")
         return jsonify({
             "access_token": access_token,
-            "refresh_token": refresh_token,
+            "refresh_token": refresh_token if remember else None,
             "username": user.username,
-            "has_active_game": has_active_game
+            "has_active_game": has_active_game,
+            "user_id": user.user_id  # Add this line to include the user ID
         }), 200
 
     except Exception as e:
@@ -164,6 +165,8 @@ def update_email_consent():
         logging.error(f"Error updating email consent: {str(e)}")
         db.session.rollback()
         return jsonify({"msg": "Error updating email consent"}), 500
+
+
 @bp.route('/check-username', methods=['POST'])
 def check_username():
     """Check if a username is available for registration"""
@@ -172,32 +175,51 @@ def check_username():
         username = data.get('username')
 
         if not username:
-            return jsonify({"available": False, "message": "Username is required"}), 400
+            return jsonify({
+                "available": False,
+                "message": "Username is required"
+            }), 400
 
         # Check minimum length
         if len(username) < 3:
-            return jsonify({"available": False, "message": "Username must be at least 3 characters"}), 400
+            return jsonify({
+                "available": False,
+                "message": "Username must be at least 3 characters"
+            }), 400
 
         # Check if username contains invalid characters
         if not username.isalnum() and not any(c in username for c in '_-'):
             return jsonify({
-                "available": False, 
-                "message": "Username can only contain letters, numbers, underscores and hyphens"
+                "available":
+                False,
+                "message":
+                "Username can only contain letters, numbers, underscores and hyphens"
             }), 400
 
         # Check if username already exists
         existing_user = User.query.filter(User.username == username).first()
 
         if existing_user:
-            return jsonify({"available": False, "message": "Username already taken"}), 200
+            return jsonify({
+                "available": False,
+                "message": "Username already taken"
+            }), 200
 
-        return jsonify({"available": True, "message": "Username available!"}), 200
+        return jsonify({
+            "available": True,
+            "message": "Username available!"
+        }), 200
 
     except Exception as e:
         logging.error(f"Error checking username: {str(e)}")
-        return jsonify({"available": False, "message": "Error checking username"}), 500
+        return jsonify({
+            "available": False,
+            "message": "Error checking username"
+        }), 500
+
 
 # Add to app/auth.py
+
 
 @bp.route('/api/user-data', methods=['GET'])
 @jwt_required()
@@ -217,12 +239,18 @@ def get_user_data():
 
         # Get user data (excluding password hash)
         user_data = {
-            "user_id": user.user_id,
-            "username": user.username,
-            "email": user.email,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-            "email_consent": user.email_consent,
-            "consent_date": user.consent_date.isoformat() if user.consent_date else None
+            "user_id":
+            user.user_id,
+            "username":
+            user.username,
+            "email":
+            user.email,
+            "created_at":
+            user.created_at.isoformat() if user.created_at else None,
+            "email_consent":
+            user.email_consent,
+            "consent_date":
+            user.consent_date.isoformat() if user.consent_date else None
         }
 
         # Get user stats
@@ -231,15 +259,25 @@ def get_user_data():
 
         if user_stats:
             stats_data = {
-                "current_streak": user_stats.current_streak,
-                "max_streak": user_stats.max_streak,
-                "current_noloss_streak": user_stats.current_noloss_streak,
-                "max_noloss_streak": user_stats.max_noloss_streak,
-                "total_games_played": user_stats.total_games_played,
-                "games_won": user_stats.games_won,
-                "cumulative_score": user_stats.cumulative_score,
-                "highest_weekly_score": user_stats.highest_weekly_score,
-                "last_played_date": user_stats.last_played_date.isoformat() if user_stats.last_played_date else None
+                "current_streak":
+                user_stats.current_streak,
+                "max_streak":
+                user_stats.max_streak,
+                "current_noloss_streak":
+                user_stats.current_noloss_streak,
+                "max_noloss_streak":
+                user_stats.max_noloss_streak,
+                "total_games_played":
+                user_stats.total_games_played,
+                "games_won":
+                user_stats.games_won,
+                "cumulative_score":
+                user_stats.cumulative_score,
+                "highest_weekly_score":
+                user_stats.highest_weekly_score,
+                "last_played_date":
+                user_stats.last_played_date.isoformat()
+                if user_stats.last_played_date else None
             }
 
         # Get game history
@@ -248,14 +286,22 @@ def get_user_data():
 
         for game in game_scores:
             games_data.append({
-                "game_id": game.game_id,
-                "score": game.score,
-                "mistakes": game.mistakes,
-                "time_taken": game.time_taken,
-                "game_type": game.game_type,
-                "challenge_date": game.challenge_date,
-                "completed": game.completed,
-                "created_at": game.created_at.isoformat() if game.created_at else None
+                "game_id":
+                game.game_id,
+                "score":
+                game.score,
+                "mistakes":
+                game.mistakes,
+                "time_taken":
+                game.time_taken,
+                "game_type":
+                game.game_type,
+                "challenge_date":
+                game.challenge_date,
+                "completed":
+                game.completed,
+                "created_at":
+                game.created_at.isoformat() if game.created_at else None
             })
 
         # Combine all data
@@ -270,6 +316,7 @@ def get_user_data():
     except Exception as e:
         logging.error(f"Error retrieving user data: {str(e)}")
         return jsonify({"msg": "An error occurred retrieving your data"}), 500
+
 
 @bp.route('/api/delete-account', methods=['DELETE'])
 @jwt_required()
