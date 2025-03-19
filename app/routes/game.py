@@ -1,11 +1,11 @@
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token
 from app.services.game_logic import start_game
-from app.services.game_state import (
-    get_unified_game_state, save_unified_game_state, 
-    check_game_status, get_display, process_guess, process_hint,
-    abandon_game, get_attribution_from_quotes
-)
+from app.services.game_state import (get_unified_game_state,
+                                     save_unified_game_state,
+                                     check_game_status, get_display,
+                                     process_guess, process_hint, abandon_game,
+                                     get_attribution_from_quotes)
 from app.models import db, ActiveGameState, AnonymousGameState, GameScore
 from datetime import datetime
 import logging
@@ -15,6 +15,7 @@ import uuid
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('game', __name__)
+
 
 @bp.route('/start', methods=['GET', 'OPTIONS'])
 @jwt_required(optional=True)
@@ -28,6 +29,61 @@ def start():
         user_id = get_jwt_identity()
         is_anonymous = user_id is None
 
+        # For authenticated users, check and clean up any existing active games
+        if not is_anonymous:
+            try:
+                # Find ALL active games for this user
+                active_games = ActiveGameState.query.filter_by(
+                    user_id=user_id).all()
+                if active_games:
+                    logger.info(
+                        f"Found {len(active_games)} active games for user {user_id} - abandoning all"
+                    )
+
+                    # Loop through all active games and abandon them
+                    for active_game in active_games:
+                        logger.info(
+                            f"Abandoning existing active game {active_game.game_id} for user {user_id}"
+                        )
+
+                        # Record the abandoned game with completed=False
+                        game_score = GameScore(
+                            user_id=user_id,
+                            game_id=active_game.game_id,
+                            score=0,  # Zero score for abandoned games
+                            mistakes=active_game.mistakes,
+                            time_taken=int(
+                                (datetime.utcnow() -
+                                 active_game.created_at).total_seconds()),
+                            game_type='regular',
+                            challenge_date=datetime.utcnow().strftime(
+                                '%Y-%m-%d'),
+                            completed=False,  # Mark as incomplete
+                            created_at=datetime.utcnow())
+
+                        # Add game score to the session
+                        db.session.add(game_score)
+
+                        # Delete the active game
+                        db.session.delete(active_game)
+
+                    # Commit all changes at once
+                    db.session.commit()
+
+                    # Update user stats to reflect the broken streak
+                    from app.utils.stats import initialize_or_update_user_stats
+                    initialize_or_update_user_stats(user_id)
+
+                    logger.info(
+                        f"Successfully abandoned all existing games for user {user_id}"
+                    )
+            except Exception as abandon_err:
+                logger.error(
+                    f"Error abandoning existing game for user {user_id}: {str(abandon_err)}"
+                )
+                # Continue with new game creation anyway
+                db.session.rollback()
+
         # Get difficulty from query params
         frontend_difficulty = request.args.get('difficulty', 'normal')
         difficulty_mapping = {
@@ -35,7 +91,8 @@ def start():
             'normal': 'medium',
             'hard': 'hard'
         }
-        backend_difficulty = difficulty_mapping.get(frontend_difficulty, 'medium')
+        backend_difficulty = difficulty_mapping.get(frontend_difficulty,
+                                                    'medium')
         print("backend difficulty on start: ", backend_difficulty)
         # Generate the game ID
         game_id = f"{backend_difficulty}-{str(uuid.uuid4())}"
@@ -46,20 +103,30 @@ def start():
             active_game = get_unified_game_state(user_id, is_anonymous=False)
             if active_game:
                 # Calculate completion percentage
-                encrypted_letters = set(c for c in active_game['encrypted_paragraph'] if c.isalpha())
+                encrypted_letters = set(
+                    c for c in active_game['encrypted_paragraph']
+                    if c.isalpha())
                 completion_percentage = (
-                    len(active_game['correctly_guessed']) / len(encrypted_letters) * 100
-                ) if encrypted_letters else 0
+                    len(active_game['correctly_guessed']) /
+                    len(encrypted_letters) * 100) if encrypted_letters else 0
 
                 # Build active game info
                 active_game_info = {
-                    "has_active_game": True,
-                    "game_id": active_game['game_id'],
-                    "difficulty": active_game['difficulty'],
-                    "mistakes": active_game['mistakes'],
-                    "completion_percentage": round(completion_percentage, 1),
-                    "time_spent": int((datetime.utcnow() - active_game['start_time']).total_seconds()),
-                    "max_mistakes": active_game['max_mistakes']
+                    "has_active_game":
+                    True,
+                    "game_id":
+                    active_game['game_id'],
+                    "difficulty":
+                    active_game['difficulty'],
+                    "mistakes":
+                    active_game['mistakes'],
+                    "completion_percentage":
+                    round(completion_percentage, 1),
+                    "time_spent":
+                    int((datetime.utcnow() -
+                         active_game['start_time']).total_seconds()),
+                    "max_mistakes":
+                    active_game['max_mistakes']
                 }
 
         logger.debug(
@@ -81,7 +148,9 @@ def start():
         identifier = game_id + "_anon" if is_anonymous else user_id
 
         # Save game state using unified function
-        save_unified_game_state(identifier, game_state, is_anonymous=is_anonymous)
+        save_unified_game_state(identifier,
+                                game_state,
+                                is_anonymous=is_anonymous)
 
         # Check game status for consistency
         status = check_game_status(game_state)
@@ -109,6 +178,7 @@ def start():
     except Exception as e:
         logger.error(f"Error starting game: {str(e)}", exc_info=True)
         return jsonify({"error": "Failed to start game"}), 500
+
 
 @bp.route('/guess', methods=['POST', 'OPTIONS'])
 @jwt_required(optional=True)
@@ -139,9 +209,12 @@ def guess():
         identifier = f"{game_id}_anon" if is_anonymous else user_id
 
         # Get current game state
-        game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
+        game_state = get_unified_game_state(identifier,
+                                            is_anonymous=is_anonymous)
         if not game_state:
-            logger.error(f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}")
+            logger.error(
+                f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}"
+            )
             return jsonify({"error": "No active game"}), 400
 
         # Process the guess
@@ -150,24 +223,36 @@ def guess():
             return jsonify({"error": result['message']}), 400
 
         # Save updated game state
-        save_unified_game_state(identifier, result['game_state'], is_anonymous=is_anonymous)
+        save_unified_game_state(identifier,
+                                result['game_state'],
+                                is_anonymous=is_anonymous)
 
         # For debugging
-        logger.debug(f"Game complete: {result['complete']}, HasWon: {result['has_won']}")
+        logger.debug(
+            f"Game complete: {result['complete']}, HasWon: {result['has_won']}"
+        )
 
         # Return result to client
         return jsonify({
-            'display': result['display'],
-            'mistakes': result['game_state']['mistakes'],
-            'correctly_guessed': result['game_state']['correctly_guessed'],
-            'game_complete': result['complete'],
-            'hasWon': result['has_won'],  # Use the front-end expected key
-            'is_correct': result['is_correct'],
-            'max_mistakes': result['game_state']['max_mistakes']
+            'display':
+            result['display'],
+            'mistakes':
+            result['game_state']['mistakes'],
+            'correctly_guessed':
+            result['game_state']['correctly_guessed'],
+            'game_complete':
+            result['complete'],
+            'hasWon':
+            result['has_won'],  # Use the front-end expected key
+            'is_correct':
+            result['is_correct'],
+            'max_mistakes':
+            result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing guess: {str(e)}", exc_info=True)
         return jsonify({"error": "Error processing guess"}), 500
+
 
 @bp.route('/hint', methods=['POST', 'OPTIONS'])
 @jwt_required(optional=True)
@@ -186,39 +271,53 @@ def hint():
         game_id = data.get('game_id')
 
         logger.debug(
-            f"Hint requested by {'anonymous' if is_anonymous else user_id}"
+            f"Hint requested by {'anonymous' if is_anonymous else user_id}")
+
+        # Get identifier based on user type
+        identifier = f"{game_id}_anon" if is_anonymous else user_id
+
+        # Get current game state
+        game_state = get_unified_game_state(identifier,
+                                            is_anonymous=is_anonymous)
+        if not game_state:
+            logger.error(
+                f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}"
+            )
+            return jsonify({"error": "No active game"}), 400
+
+        # Process the hint
+        result = process_hint(game_state)
+        if not result['valid']:
+            return jsonify({"error": result['message']}), 400
+
+        # Save updated game state
+        save_unified_game_state(identifier,
+                                result['game_state'],
+                                is_anonymous=is_anonymous)
+
+        # For debugging
+        logger.debug(
+            f"Game complete: {result['complete']}, HasWon: {result['has_won']}"
         )
 
-        # Get identifier based on user type
-        identifier = f"{game_id}_anon" if is_anonymous else user_id
-
-        # Get current game state
-        game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
-        if not game_state:
-            logger.error(f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}")
-            return jsonify({"error": "No active game"}), 400
-
-        # Process the hint
-        result = process_hint(game_state)
-        if not result['valid']:
-            return jsonify({"error": result['message']}), 400
-
-        # Save updated game state
-        save_unified_game_state(identifier, result['game_state'], is_anonymous=is_anonymous)
-
-        # For debugging
-        logger.debug(f"Game complete: {result['complete']}, HasWon: {result['has_won']}")
-
         # Return result to client
         return jsonify({
-            'display': result['display'],
-            'mistakes': result['game_state']['mistakes'],
-            'correctly_guessed': result['game_state']['correctly_guessed'],
-            'game_complete': result['complete'],
-            'hasWon': result['has_won'],  # Use the front-end expected key
-            'hint_letter': result['hint_letter'],
-            'hint_value': result['hint_value'],
-            'max_mistakes': result['game_state']['max_mistakes']
+            'display':
+            result['display'],
+            'mistakes':
+            result['game_state']['mistakes'],
+            'correctly_guessed':
+            result['game_state']['correctly_guessed'],
+            'game_complete':
+            result['complete'],
+            'hasWon':
+            result['has_won'],  # Use the front-end expected key
+            'hint_letter':
+            result['hint_letter'],
+            'hint_value':
+            result['hint_value'],
+            'max_mistakes':
+            result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing hint: {str(e)}", exc_info=True)
@@ -228,9 +327,12 @@ def hint():
         identifier = f"{game_id}_anon" if is_anonymous else user_id
 
         # Get current game state
-        game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
+        game_state = get_unified_game_state(identifier,
+                                            is_anonymous=is_anonymous)
         if not game_state:
-            logger.error(f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}")
+            logger.error(
+                f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}"
+            )
             return jsonify({"error": "No active game"}), 400
 
         # Process the hint
@@ -239,21 +341,33 @@ def hint():
             return jsonify({"error": result['message']}), 400
 
         # Save updated game state
-        save_unified_game_state(identifier, result['game_state'], is_anonymous=is_anonymous)
+        save_unified_game_state(identifier,
+                                result['game_state'],
+                                is_anonymous=is_anonymous)
 
         # For debugging
-        logger.debug(f"Game complete: {result['complete']}, HasWon: {result['has_won']}")
+        logger.debug(
+            f"Game complete: {result['complete']}, HasWon: {result['has_won']}"
+        )
 
         # Return result to client
         return jsonify({
-            'display': result['display'],
-            'mistakes': result['game_state']['mistakes'],
-            'correctly_guessed': result['game_state']['correctly_guessed'],
-            'game_complete': result['complete'],
-            'hasWon': result['has_won'],  # Use the front-end expected key
-            'hint_letter': result['hint_letter'],
-            'hint_value': result['hint_value'],
-            'max_mistakes': result['game_state']['max_mistakes']
+            'display':
+            result['display'],
+            'mistakes':
+            result['game_state']['mistakes'],
+            'correctly_guessed':
+            result['game_state']['correctly_guessed'],
+            'game_complete':
+            result['complete'],
+            'hasWon':
+            result['has_won'],  # Use the front-end expected key
+            'hint_letter':
+            result['hint_letter'],
+            'hint_value':
+            result['hint_value'],
+            'max_mistakes':
+            result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing hint: {str(e)}", exc_info=True)
@@ -263,9 +377,12 @@ def hint():
         identifier = f"{game_id}_anon" if is_anonymous else user_id
 
         # Get current game state
-        game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
+        game_state = get_unified_game_state(identifier,
+                                            is_anonymous=is_anonymous)
         if not game_state:
-            logger.error(f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}")
+            logger.error(
+                f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}"
+            )
             return jsonify({"error": "No active game"}), 400
 
         # Process the hint
@@ -274,25 +391,38 @@ def hint():
             return jsonify({"error": result['message']}), 400
 
         # Save updated game state
-        save_unified_game_state(identifier, result['game_state'], is_anonymous=is_anonymous)
+        save_unified_game_state(identifier,
+                                result['game_state'],
+                                is_anonymous=is_anonymous)
 
         # For debugging
-        logger.debug(f"Game complete: {result['complete']}, HasWon: {result['has_won']}")
+        logger.debug(
+            f"Game complete: {result['complete']}, HasWon: {result['has_won']}"
+        )
 
         # Return result to client
         return jsonify({
-            'display': result['display'],
-            'mistakes': result['game_state']['mistakes'],
-            'correctly_guessed': result['game_state']['correctly_guessed'],
-            'game_complete': result['complete'],
-            'hasWon': result['has_won'],  # Use the front-end expected key
-            'hint_letter': result['hint_letter'],
-            'hint_value': result['hint_value'],
-            'max_mistakes': result['game_state']['max_mistakes']
+            'display':
+            result['display'],
+            'mistakes':
+            result['game_state']['mistakes'],
+            'correctly_guessed':
+            result['game_state']['correctly_guessed'],
+            'game_complete':
+            result['complete'],
+            'hasWon':
+            result['has_won'],  # Use the front-end expected key
+            'hint_letter':
+            result['hint_letter'],
+            'hint_value':
+            result['hint_value'],
+            'max_mistakes':
+            result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing hint: {str(e)}", exc_info=True)
         return jsonify({"error": "Error processing hint"}), 500
+
 
 @bp.route('/check-active-game', methods=['GET', 'OPTIONS'])
 @jwt_required()
@@ -309,12 +439,14 @@ def check_active_game():
             return jsonify({"has_active_game": False}), 200
 
         # Calculate basic stats
-        encrypted_letters = set(c for c in game_state['encrypted_paragraph'] if c.isalpha())
-        completion_percentage = (
-            len(game_state['correctly_guessed']) / len(encrypted_letters) * 100
-        ) if encrypted_letters else 0
+        encrypted_letters = set(c for c in game_state['encrypted_paragraph']
+                                if c.isalpha())
+        completion_percentage = (len(game_state['correctly_guessed']) /
+                                 len(encrypted_letters) *
+                                 100) if encrypted_letters else 0
 
-        time_spent = int((datetime.utcnow() - game_state['start_time']).total_seconds())
+        time_spent = int(
+            (datetime.utcnow() - game_state['start_time']).total_seconds())
 
         return jsonify({
             "has_active_game": True,
@@ -329,6 +461,7 @@ def check_active_game():
     except Exception as e:
         logger.error(f"Error checking active game: {str(e)}", exc_info=True)
         return jsonify({"error": "Error checking active game"}), 500
+
 
 @bp.route('/continue-game', methods=['GET', 'OPTIONS'])
 @jwt_required()
@@ -346,20 +479,19 @@ def continue_game():
 
         # Generate original letters
         original_letters = sorted(
-            set(''.join(x for x in game_state['original_paragraph'].upper() if x.isalpha()))
-        )
+            set(''.join(x for x in game_state['original_paragraph'].upper()
+                        if x.isalpha())))
 
         # Generate display
-        display = get_display(
-            game_state['encrypted_paragraph'],
-            game_state['correctly_guessed'],
-            game_state['reverse_mapping']
-        )
+        display = get_display(game_state['encrypted_paragraph'],
+                              game_state['correctly_guessed'],
+                              game_state['reverse_mapping'])
 
         # Generate letter frequency
         letter_frequency = {
             letter: game_state['encrypted_paragraph'].count(letter)
-            for letter in set(game_state['encrypted_paragraph']) if letter.isalpha()
+            for letter in set(game_state['encrypted_paragraph'])
+            if letter.isalpha()
         }
 
         return jsonify({
@@ -378,6 +510,7 @@ def continue_game():
     except Exception as e:
         logger.error(f"Error continuing game: {str(e)}", exc_info=True)
         return jsonify({"error": "Error continuing game"}), 500
+
 
 @bp.route('/abandon-game', methods=['DELETE', 'OPTIONS'])
 @jwt_required()
@@ -398,6 +531,7 @@ def abandon_game_route():
         logger.error(f"Error abandoning game: {str(e)}", exc_info=True)
         return jsonify({"error": "Error abandoning game"}), 500
 
+
 @bp.route('/game-status', methods=['GET', 'OPTIONS'])
 @jwt_required(optional=True)
 def game_status():
@@ -414,17 +548,23 @@ def game_status():
         game_id = request.args.get('game_id')
 
         if is_anonymous and not game_id:
-            return jsonify({"error": "Game ID required for anonymous users"}), 400
+            return jsonify({"error":
+                            "Game ID required for anonymous users"}), 400
 
         # Get identifier based on user type
         identifier = f"{game_id}_anon" if is_anonymous else user_id
 
-        game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
+        game_state = get_unified_game_state(identifier,
+                                            is_anonymous=is_anonymous)
 
-        logger.debug(f"Game status check for {'anonymous' if is_anonymous else user_id}")
+        logger.debug(
+            f"Game status check for {'anonymous' if is_anonymous else user_id}"
+        )
 
         if not game_state:
-            logger.debug(f"No active game found for {'anonymous' if is_anonymous else user_id}")
+            logger.debug(
+                f"No active game found for {'anonymous' if is_anonymous else user_id}"
+            )
             return jsonify({"hasActiveGame": False}), 200
 
         # If game is won but not yet notified, prepare win data
@@ -432,21 +572,28 @@ def game_status():
 
         # Check if the game is won
         if game_state['has_won']:
-            logger.info(f"Win detected for {'anonymous' if is_anonymous else user_id} - preparing win data")
+            logger.info(
+                f"Win detected for {'anonymous' if is_anonymous else user_id} - preparing win data"
+            )
 
             # Mark as notified to prevent duplicate notifications
             game_state['win_notified'] = True
-            save_unified_game_state(identifier, game_state, is_anonymous=is_anonymous)
+            save_unified_game_state(identifier,
+                                    game_state,
+                                    is_anonymous=is_anonymous)
 
             # Get attribution data
-            attribution = get_attribution_from_quotes(game_state['original_paragraph'])
+            attribution = get_attribution_from_quotes(
+                game_state['original_paragraph'])
 
             # Calculate time and score
-            time_taken = int((datetime.utcnow() - game_state['start_time']).total_seconds())
+            time_taken = int(
+                (datetime.utcnow() - game_state['start_time']).total_seconds())
 
             # Import the scoring function
             from app.utils.scoring import score_game
-            score = score_game(game_state['difficulty'], game_state['mistakes'], time_taken)
+            score = score_game(game_state['difficulty'],
+                               game_state['mistakes'], time_taken)
 
             # Determine rating
             rating = get_rating_from_score(score)
@@ -475,6 +622,7 @@ def game_status():
         logger.error(f"Error getting game status: {str(e)}", exc_info=True)
         return jsonify({"error": "Error getting game status"}), 500
 
+
 def get_rating_from_score(score):
     """Determine rating based on score"""
     if score >= 900:
@@ -487,6 +635,7 @@ def get_rating_from_score(score):
         return "Cabinet Noir"
     else:
         return "Cryptanalyst"
+
 
 @bp.route('/convert-game', methods=['POST', 'OPTIONS'])
 @jwt_required()
@@ -523,4 +672,3 @@ def convert_anonymous_game_route():
     except Exception as e:
         logger.error(f"Error converting game: {str(e)}", exc_info=True)
         return jsonify({"error": "Error converting game"}), 500
-
