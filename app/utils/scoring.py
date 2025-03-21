@@ -2,7 +2,6 @@ import math
 from datetime import datetime
 from app.models import db, GameScore, ActiveGameState
 import logging
-import math
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -28,9 +27,9 @@ def score_game(difficulty, mistakes, time_taken, hardcore_mode=False):
     # More mathematically justified difficulty multipliers
     # Based on the non-linear increase in difficulty when reducing allowed mistakes
     difficulty_multipliers = {
-        'easy': 1.0,       # Base difficulty
-        'medium': 2.5,     # ~(8/5)^1.5 - non-linear increase in difficulty
-        'hard': 6.25       # ~(8/3)^2 - exponential difficulty increase
+        'easy': 1.0,  # Base difficulty
+        'medium': 2.5,  # ~(8/5)^1.5 - non-linear increase in difficulty
+        'hard': 6.25  # ~(8/3)^2 - exponential difficulty increase
     }
 
     # Additional multiplier for hardcore mode (no spaces/punctuation)
@@ -47,8 +46,8 @@ def score_game(difficulty, mistakes, time_taken, hardcore_mode=False):
     time_factor = math.exp(-0.0008 * time_taken)
 
     # Calculate final score with all factors
-    final_score = int(base_score * difficulty_multiplier * hardcore_multiplier * 
-                   mistake_factor * time_factor)
+    final_score = int(base_score * difficulty_multiplier *
+                      hardcore_multiplier * mistake_factor * time_factor)
 
     # Ensure minimum score of 1
     return max(final_score, 1)

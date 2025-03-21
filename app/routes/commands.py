@@ -1,11 +1,14 @@
-# app/commands.py or similar
+# Add this to app/routes/commands.py or create if it doesn't exist
+
 import click
 from flask.cli import with_appcontext
 from app.models import db, User
+from datetime import datetime
 
 
 @click.command('create-admin')
 @click.argument('username')
+@click.option('--email', prompt=True)
 @click.option('--password',
               prompt=True,
               hide_input=True,
@@ -15,27 +18,35 @@ from app.models import db, User
               hide_input=True,
               confirmation_prompt=True)
 @with_appcontext
-def create_admin_command(username, password, admin_password):
+def create_admin_command(username, email, password, admin_password):
     """Create an admin user."""
-    user = User.query.filter_by(username=username).first()
+    try:
+        user = User.query.filter_by(username=username).first()
 
-    if not user:
-        # Create new user with admin privileges
-        user = User(username=username, email=f"{username}@example.com")
-        user.set_password(password)
-        user.is_admin = True
-        user.set_admin_password(admin_password)
-        db.session.add(user)
-    else:
-        # Update existing user
-        user.is_admin = True
-        user.set_admin_password(admin_password)
-        user.set_password(password)
+        if user:
+            # Update existing user
+            click.echo(
+                f"User {username} already exists. Updating admin privileges.")
+            user.is_admin = True
+            user.set_password(password)
+            user.set_admin_password(admin_password)
+        else:
+            # Create new user with admin privileges
+            click.echo(f"Creating new admin user: {username}")
+            user = User(username=username, email=email, password=password)
+            user.is_admin = True
+            user.set_admin_password(admin_password)
+            user.created_at = datetime.utcnow()
+            db.session.add(user)
 
-    db.session.commit()
-    click.echo(f"Admin user {username} created successfully.")
+        db.session.commit()
+        click.echo(f"Admin user {username} created/updated successfully.")
+
+    except Exception as e:
+        db.session.rollback()
+        click.echo(f"Error creating admin user: {str(e)}", err=True)
 
 
-# Register in app
+# Make sure this is registered in the app
 def register_commands(app):
     app.cli.add_command(create_admin_command)

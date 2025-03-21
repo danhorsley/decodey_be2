@@ -95,6 +95,10 @@ def create_app(config_class=Config):
         app.register_blueprint(dev.bp, url_prefix='/dev')  # dev routes
         logger.info("Successfully registered all blueprints")
 
+        # Initialize admin-specific features
+        from app.admin_setup import init_admin
+        init_admin(app)
+
     except Exception as e:
         logger.error(f"Error during application initialization: {str(e)}")
         raise

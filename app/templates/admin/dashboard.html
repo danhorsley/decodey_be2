@@ -1,0 +1,78 @@
+<!-- app/templates/admin/dashboard.html -->
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar Navigation -->
+        <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-dark sidebar collapse">
+            <div class="sidebar-sticky pt-3">
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" href="{{ url_for('admin.dashboard') }}">
+                            <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_tab == 'users' %}active{% endif %}" href="{{ url_for('admin.users') }}">
+                            <i class="fas fa-users me-2"></i> User Management
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_tab == 'quotes' %}active{% endif %}" href="{{ url_for('admin.quotes') }}">
+                            <i class="fas fa-quote-left me-2"></i> Quote Management
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_tab == 'backup' %}active{% endif %}" href="{{ url_for('admin.backup') }}">
+                            <i class="fas fa-database me-2"></i> Database Backup
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_tab == 'settings' %}active{% endif %}" href="{{ url_for('admin.settings') }}">
+                            <i class="fas fa-cog me-2"></i> System Settings
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+            <!-- Display errors if any -->
+            {% if error %}
+            <div class="alert alert-danger" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <!-- Display success messages if any -->
+            {% if success %}
+            <div class="alert alert-success" role="alert">
+                <i class="fas fa-check-circle me-2"></i> {{ success }}
+            </div>
+            {% endif %}
+
+            {% block admin_content %}
+            <!-- This will be replaced by specific admin pages -->
+            {% endblock %}
+        </main>
+    </div>
+</div>
+
+<script>
+// Add common admin-specific JavaScript if needed
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle logout
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            // Clear the admin token cookie
+            document.cookie = "admin_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            // Redirect to login page
+            window.location.href = "{{ url_for('admin.admin_login_page') }}";
+        });
+    }
+});
+</script>
+{% endblock %}

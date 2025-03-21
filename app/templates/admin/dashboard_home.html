@@ -1,0 +1,108 @@
+<!-- app/templates/admin/dashboard_home.html -->
+{% extends "admin/dashboard.html" %}
+
+{% block admin_content %}
+<!-- Dashboard Section -->
+<section class="mb-5">
+    <h2 class="section-header">Dashboard</h2>
+
+    <!-- System Status -->
+    <div class="alert alert-success" role="alert">
+        <i class="fas fa-check-circle me-2"></i> All systems operational
+    </div>
+
+    <!-- Quick Stats Cards -->
+    <div class="row row-cols-1 row-cols-md-4 g-4 mb-4">
+        <div class="col">
+            <div class="card bg-primary text-white stats-card">
+                <div class="card-body">
+                    <h5 class="card-title">Total Users</h5>
+                    <h2 class="card-text">{{ stats.total_users }}</h2>
+                    <p class="card-text"><small>+{{ stats.new_users_percentage }}% this week</small></p>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card bg-success text-white stats-card">
+                <div class="card-body">
+                    <h5 class="card-title">Games Played</h5>
+                    <h2 class="card-text">{{ stats.total_games }}</h2>
+                    <p class="card-text"><small>+{{ stats.new_games_percentage }}% this week</small></p>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card bg-info text-white stats-card">
+                <div class="card-body">
+                    <h5 class="card-title">Active Now</h5>
+                    <h2 class="card-text">{{ stats.active_users }}</h2>
+                    <p class="card-text"><small>Last updated: {{ stats.last_updated }}</small></p>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card bg-warning text-dark stats-card">
+                <div class="card-body">
+                    <h5 class="card-title">Avg. Completion</h5>
+                    <h2 class="card-text">{{ stats.completion_rate }}%</h2>
+                    <p class="card-text"><small>+{{ stats.completion_rate_change }}% this week</small></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Table -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-history me-1"></i> Recent Activity
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Activity</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for activity in recent_activities %}
+                        <tr>
+                            <td>{{ activity.time_ago }}</td>
+                            <td>{{ activity.username }}</td>
+                            <td>{{ activity.action }}</td>
+                            <td>{{ activity.details }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-bolt me-1"></i> Quick Actions
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('admin.users') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-user-plus me-1"></i> Manage Users
+                </a>
+                <a href="{{ url_for('admin.quotes') }}" class="btn btn-outline-success">
+                    <i class="fas fa-plus-circle me-1"></i> Add Quote
+                </a>
+                <a href="{{ url_for('admin.backup') }}" class="btn btn-outline-info">
+                    <i class="fas fa-database me-1"></i> Backup Database
+                </a>
+                <a href="{{ url_for('admin.settings') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-wrench me-1"></i> System Settings
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

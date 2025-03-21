@@ -42,6 +42,7 @@ class User(UserMixin, db.Model):
         return str(self.user_id)
 
     def set_admin_password(self, password):
+        """Set a separate admin password hash for admin users"""
         self.admin_password_hash = generate_password_hash(password)
 
 

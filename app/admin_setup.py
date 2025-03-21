@@ -8,12 +8,11 @@ from app.models import db
 from app.routes.admin import admin_bp
 from app.models.backup import BackupRecord, BackupSettings
 
+# Update to app/admin_setup.py
+
 
 def init_admin(app):
     """Initialize admin module in the app"""
-    # Register the Blueprint
-    app.register_blueprint(admin_bp)
-
     # Register CLI commands
     app.cli.add_command(create_admin_command)
 
@@ -21,6 +20,16 @@ def init_admin(app):
     from pathlib import Path
     backup_dir = Path(app.root_path) / 'backups'
     backup_dir.mkdir(exist_ok=True, parents=True)
+
+    # Make sure the admin templates are accessible
+    app.jinja_env.add_extension('jinja2.ext.loopcontrols')
+
+    # Add admin-specific context processors if needed
+    @app.context_processor
+    def inject_admin_context():
+        return {'app_name': 'Uncrypt Admin Portal', 'version': '1.0.0'}
+
+    app.logger.info("Admin portal initialized successfully")
 
 
 @click.command('create-admin')
