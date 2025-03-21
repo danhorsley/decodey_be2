@@ -1,5 +1,5 @@
 # app/routes/admin.py
-from flask import Blueprint, request, jsonify, redirect, url_for, render_template, current_app, send_file
+from flask import Blueprint, request, jsonify, redirect, url_for, render_template, current_app, send_file, session
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 from werkzeug.security import check_password_hash
 from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupRecord, BackupSettings
