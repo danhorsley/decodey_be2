@@ -1,0 +1,102 @@
+<!-- app/templates/admin/backup.html -->
+{% extends "admin/dashboard.html" %}
+
+{% block admin_content %}
+<!-- Database Backup Section -->
+<section class="mb-5">
+    <h2 class="section-header">Database Backup</h2>
+
+    <!-- Backup Actions -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Backup Status</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Last Backup:</strong> {{ backup_info.last_backup_time }}</p>
+                    <p><strong>Status:</strong> <span class="badge bg-{{ 'success' if backup_info.status == 'Success' else 'danger' }}">{{ backup_info.status }}</span></p>
+                    <p><strong>Size:</strong> {{ backup_info.size }}</p>
+                    <p><strong>Location:</strong> {{ backup_info.location }}</p>
+                    <form method="POST" action="{{ url_for('admin.create_backup') }}">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sync"></i> Create New Backup
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Scheduled Backups</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.update_backup_settings') }}">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="dailyBackup" name="daily_backup" {% if backup_settings.daily_backup %}checked{% endif %}>
+                            <label class="form-check-label" for="dailyBackup">Daily Backup (2:00 AM)</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="weeklyBackup" name="weekly_backup" {% if backup_settings.weekly_backup %}checked{% endif %}>
+                            <label class="form-check-label" for="weeklyBackup">Weekly Backup (Sunday 3:00 AM)</label>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Retention Policy</label>
+                            <select class="form-select" name="retention_days">
+                                <option value="7" {% if backup_settings.retention_days == 7 %}selected{% endif %}>Keep last 7 daily backups</option>
+                                <option value="14" {% if backup_settings.retention_days == 14 %}selected{% endif %}>Keep last 14 daily backups</option>
+                                <option value="30" {% if backup_settings.retention_days == 30 %}selected{% endif %}>Keep last 30 daily backups</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Settings
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup History -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Backup History</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Type</th>
+                            <th>Size</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup in backups %}
+                        <tr>
+                            <td>{{ backup.created_at }}</td>
+                            <td>{{ backup.type }}</td>
+                            <td>{{ backup.size }}</td>
+                            <td><span class="badge bg-{{ 'success' if backup.status == 'Success' else 'danger' }}">{{ backup.status }}</span></td>
+                            <td>
+                                {% if backup.status == 'Success' %}
+                                <a href="{{ url_for('admin.download_backup', backup_id=backup.id) }}" class="btn btn-sm btn-outline-primary">Download</a>
+                                <a href="{{ url_for('admin.restore_backup', backup_id=backup.id) }}" class="btn btn-sm btn-outline-secondary" onclick="return confirm('Are you sure you want to restore this backup? This will replace all current data.')">Restore</a>
+                                {% else %}
+                                <a href="{{ url_for('admin.view_backup_log', backup_id=backup.id) }}" class="btn btn-sm btn-outline-info">View Logs</a>
+                                {% endif %}
+                                <a href="{{ url_for('admin.delete_backup', backup_id=backup.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this backup?')">Delete</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
