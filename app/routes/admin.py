@@ -2,7 +2,7 @@
 from flask import Blueprint, request, jsonify, redirect, url_for, render_template, current_app, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 from werkzeug.security import check_password_hash
-from app.models import db, User, GameScore, UserStats, ActiveGameState
+from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupRecord, BackupSettings
 import logging
 import os
 import datetime
@@ -14,26 +14,6 @@ import tempfile
 from urllib.parse import urlparse
 from functools import wraps
 from datetime import datetime, timedelta
-
-try:
-    from app.models.backup import BackupRecord, BackupSettings
-except ImportError:
-    # Method 2: Try importing through the app.models package if Method 1 fails
-    try:
-        from app.models import BackupRecord, BackupSettings
-    except ImportError:
-        # Fallback - log the error
-        logging.error(
-            "Could not import backup models. Backup functionality will be limited."
-        )
-
-        # Define placeholder classes to prevent runtime errors
-        class BackupRecord:
-            pass
-
-        class BackupSettings:
-            pass
-
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 logger = logging.getLogger(__name__)

@@ -6,7 +6,7 @@ from flask.cli import with_appcontext
 import click
 from app.models import db
 from app.routes.admin import admin_bp
-from app.models.backup import BackupRecord, BackupSettings
+from app.models import BackupRecord, BackupSettings
 
 # Update to app/admin_setup.py
 
