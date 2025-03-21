@@ -6,6 +6,7 @@ from app.models import db
 import logging
 from flask_jwt_extended import exceptions as jwt_exceptions
 from flask_migrate import Migrate
+import os
 
 jwt = JWTManager()
 # Store revoked tokens in memory
@@ -38,6 +39,7 @@ def create_app(config_class=Config):
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):

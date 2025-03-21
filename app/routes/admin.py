@@ -21,45 +21,31 @@ logger = logging.getLogger(__name__)
 
 # Admin authentication decorator
 def admin_required(f):
+    from functools import wraps
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Check for admin token in cookie first
-        admin_token = request.cookies.get('admin_token')
+        # Check if user is logged in as admin using session
+        admin_id = session.get('admin_id')
 
-        if admin_token:
-            try:
-                # Verify the token
-                from flask_jwt_extended import decode_token
-                decoded_token = decode_token(admin_token)
+        if not admin_id:
+            return redirect(
+                url_for('admin.admin_login_page',
+                        error="Please log in to access the admin area"))
 
-                # Make sure it has the admin claim
-                if not decoded_token.get('is_admin', False):
-                    return redirect(
-                        url_for('admin.admin_login_page',
-                                error="Admin privileges required"))
+        # Get the user
+        user = User.query.get(admin_id)
 
-                # Get the user
-                user_id = decoded_token.get('sub')
-                user = User.query.get(user_id)
+        if not user or not user.is_admin:
+            # Clear session and redirect
+            session.pop('admin_id', None)
+            return redirect(
+                url_for('admin.admin_login_page',
+                        error="Invalid admin credentials"))
 
-                if not user or not user.is_admin:
-                    return redirect(
-                        url_for('admin.admin_login_page',
-                                error="Invalid admin credentials"))
-
-                # Pass the admin user to the view
-                kwargs['current_admin'] = user
-                return f(*args, **kwargs)
-
-            except Exception as e:
-                logger.error(f"Admin token validation error: {str(e)}")
-                return redirect(
-                    url_for('admin.admin_login_page',
-                            error="Session expired, please log in again"))
-
-        # No admin token found, redirect to login
-        return redirect(url_for('admin.admin_login_page'))
+        # Pass the admin user to the view
+        kwargs['current_admin'] = user
+        return f(*args, **kwargs)
 
     return decorated_function
 
@@ -134,23 +120,11 @@ def admin_login_page():
         return render_template('admin/login.html',
                                error="Invalid admin password")
 
-    # Create admin token with extended expiration and admin claim
-    admin_token = create_access_token(
-        identity=user.get_id(),
-        additional_claims={"is_admin": True},
-        expires_delta=datetime.timedelta(hours=2)  # Short expiry for security
-    )
+    # Store admin ID in session
+    session['admin_id'] = user.get_id()
 
-    # Set cookie with the admin token
-    response = redirect(url_for('admin.dashboard'))
-    response.set_cookie('admin_token',
-                        admin_token,
-                        httponly=True,
-                        secure=True,
-                        max_age=7200)  # 2 hours
-
-    logger.info(f"Admin login successful: {user.username}")
-    return response
+    # Redirect to dashboard
+    return redirect(url_for('admin.dashboard'))
 
 
 # Admin API login (for AJAX requests)
@@ -194,14 +168,12 @@ def admin_login():
 
 
 # Admin logout
-@admin_bp.route('/logout', methods=['GET'])
-@admin_required
-def admin_logout(current_admin):
+# Add admin logout route
+@admin_bp.route('/logout')
+def admin_logout():
     """Log out admin user"""
-    logger.info(f"Admin logout: {current_admin.username}")
-    response = redirect(url_for('admin.admin_login_page'))
-    response.delete_cookie('admin_token')
-    return response
+    session.pop('admin_id', None)
+    return redirect(url_for('admin.admin_login_page'))
 
 
 #
