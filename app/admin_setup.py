@@ -51,8 +51,9 @@ def create_admin_command(username, password, admin_password):
 
     if not user:
         # Create new user with admin privileges
-        user = User(username=username, email=f"{username}@example.com")
-        user.set_password(password)
+        user = User(username=username, 
+                   email=f"{username}@example.com",
+                   password=password)
         user.is_admin = True
         user.set_admin_password(admin_password)
         db.session.add(user)
