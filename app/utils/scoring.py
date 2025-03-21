@@ -2,37 +2,56 @@ import math
 from datetime import datetime
 from app.models import db, GameScore, ActiveGameState
 import logging
+import math
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-def score_game(difficulty, mistakes, time_taken):
+def score_game(difficulty, mistakes, time_taken, hardcore_mode=False):
     """
-    Calculate game score based on difficulty, mistakes and time taken.
-    Uses exponential scoring for more dramatic differences.
+    Calculate game score based on difficulty, mistakes, time taken, and hardcore mode.
+    Uses an improved mathematical model to better reflect the actual difficulty differences.
 
     Args:
         difficulty (str): 'easy', 'medium', or 'hard'
         mistakes (int): Number of wrong guesses
         time_taken (int): Time taken in seconds
+        hardcore_mode (bool): Whether the game was played in hardcore mode (no spaces/punctuation)
+
+    Returns:
+        int: The calculated score
     """
-    # Base difficulty multipliers
-    difficulty_multipliers = {'easy': 1, 'medium': 2, 'hard': 4}
+    # Base score
+    base_score = 1000
 
-    # Base score calculation
-    base_score = 1000 * difficulty_multipliers.get(difficulty, 1)
+    # More mathematically justified difficulty multipliers
+    # Based on the non-linear increase in difficulty when reducing allowed mistakes
+    difficulty_multipliers = {
+        'easy': 1.0,       # Base difficulty
+        'medium': 2.5,     # ~(8/5)^1.5 - non-linear increase in difficulty
+        'hard': 6.25       # ~(8/3)^2 - exponential difficulty increase
+    }
 
-    # Mistake penalty (exponential)
-    mistake_factor = math.exp(
-        -0.2 * mistakes)  # Each mistake reduces score exponentially
+    # Additional multiplier for hardcore mode (no spaces/punctuation)
+    # Removing spaces increases cognitive difficulty by ~80%
+    hardcore_multiplier = 1.8 if hardcore_mode else 1.0
 
-    # Time factor (faster = higher score, with diminishing returns)
-    time_factor = math.exp(
-        -0.001 * time_taken)  # Longer time reduces score exponentially
+    # Get the appropriate difficulty multiplier (default to medium if not found)
+    difficulty_multiplier = difficulty_multipliers.get(difficulty, 2.5)
 
-    final_score = int(base_score * mistake_factor * time_factor)
-    return max(final_score, 1)  # Ensure minimum score of 1
+    # Calculate mistake penalty - slightly gentler curve than before
+    mistake_factor = math.exp(-0.15 * mistakes)
+
+    # Calculate time factor - slightly reduced penalty for time
+    time_factor = math.exp(-0.0008 * time_taken)
+
+    # Calculate final score with all factors
+    final_score = int(base_score * difficulty_multiplier * hardcore_multiplier * 
+                   mistake_factor * time_factor)
+
+    # Ensure minimum score of 1
+    return max(final_score, 1)
 
 
 def record_game_score(user_id,

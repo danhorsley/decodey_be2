@@ -16,4 +16,5 @@ dependencies = [
     "flask-wtf>=1.2.2",
     "gevent>=24.11.1",
     "flask-migrate>=4.1.0",
+    "celery==5.4.0",
 ]
