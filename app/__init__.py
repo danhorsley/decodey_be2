@@ -39,8 +39,10 @@ def create_app(config_class=Config):
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
-    app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # During development, can disable CSRF protection for simplicity
-    app.config['JWT_COOKIE_SECURE'] = False  # Dev environment may not have HTTPS
+    app.config[
+        'JWT_COOKIE_CSRF_PROTECT'] = False  # During development, can disable CSRF protection for simplicity
+    app.config[
+        'JWT_COOKIE_SECURE'] = False  # Dev environment may not have HTTPS
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
     @jwt.expired_token_loader
@@ -90,6 +92,7 @@ def create_app(config_class=Config):
         # Register blueprints without API prefixes
         from app.routes import auth, game, stats, main, dev
         from app.routes.admin import admin_bp
+        from app.routes.admin_process import admin_process_bp
         app.register_blueprint(admin_bp)
         app.register_blueprint(main.bp)  # Main routes
         app.register_blueprint(
@@ -97,6 +100,7 @@ def create_app(config_class=Config):
         app.register_blueprint(game.bp, url_prefix='/api')
         app.register_blueprint(stats.bp, url_prefix='/api')
         app.register_blueprint(dev.bp, url_prefix='/dev')  # dev routes
+        app.register_blueprint(admin_process_bp)
         logger.info("Successfully registered all blueprints")
 
         # Initialize admin-specific features

@@ -39,7 +39,7 @@
                     <h5 class="mb-0">Game Configuration</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('admin.update_game_settings') }}" id="gameSettingsForm">
+                    <form method="POST" action="{{ url_for('admin_process.update_game_settings') }}" id="gameSettingsForm">
                         <h6 class="mb-3">Difficulty Settings</h6>
                         <div class="row mb-4">
                             <div class="col-md-4">
@@ -103,7 +103,7 @@
                     <h5 class="mb-0">System Status Control</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('admin.update_system_status') }}" id="systemStatusForm">
+                    <form method="POST" action="{{ url_for('admin_process.update_system_status') }}" id="systemStatusForm">
                         <div class="mb-4">
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="maintenanceMode" name="maintenance_mode" {% if system_status.maintenance_mode %}checked{% endif %}>
@@ -138,7 +138,7 @@
                     <h5 class="mb-0">Security Configuration</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('admin.update_security_settings') }}" id="securitySettingsForm">
+                    <form method="POST" action="{{ url_for('admin_process.update_security_settings') }}" id="securitySettingsForm">
                         <div class="mb-4">
                             <label class="form-label">JWT Secret Key Status</label>
                             <div class="input-group">
@@ -187,7 +187,7 @@
                     <h5 class="mb-0">Email Configuration</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('admin.update_email_settings') }}" id="emailSettingsForm">
+                    <form method="POST" action="{{ url_for('admin_process.update_email_settings') }}" id="emailSettingsForm">
                         <div class="row mb-3">
                             <div class="col-md-8">
                                 <label class="form-label">SMTP Server</label>
@@ -259,7 +259,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="POST" action="{{ url_for('admin.rotate_jwt_key') }}">
+                <form method="POST" action="{{ url_for('admin_process.rotate_jwt_key') }}">
                     <button type="submit" class="btn btn-warning">Rotate Key</button>
                 </form>
             </div>
@@ -276,7 +276,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="testEmailForm" method="POST" action="{{ url_for('admin.test_email') }}">
+                <form id="testEmailForm" method="POST" action="{{ url_for('admin_process.test_email') }}">
                     <div class="mb-3">
                         <label class="form-label">Recipient Email</label>
                         <input type="email" class="form-control" name="test_email" required>

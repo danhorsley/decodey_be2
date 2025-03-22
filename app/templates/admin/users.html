@@ -64,7 +64,7 @@
                                     {% if user.is_suspended %}
                                     <a href="{{ url_for('admin.activate_user', user_id=user.user_id) }}" class="btn btn-sm btn-outline-success">Activate</a>
                                     {% else %}
-                                    <a href="{{ url_for('admin.suspend_user', user_id=user.user_id) }}" class="btn btn-sm btn-outline-danger">Suspend</a>
+                                    <a href="{{ url_for('admin_process.suspend_user', user_id=user.user_id) }}" class="btn btn-sm btn-outline-danger">Suspend</a>
                                     {% endif %}
                                 </div>
                             </td>
