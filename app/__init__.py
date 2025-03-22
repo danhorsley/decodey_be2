@@ -39,6 +39,8 @@ def create_app(config_class=Config):
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
+    app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # During development, can disable CSRF protection for simplicity
+    app.config['JWT_COOKIE_SECURE'] = False  # Dev environment may not have HTTPS
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
     @jwt.expired_token_loader

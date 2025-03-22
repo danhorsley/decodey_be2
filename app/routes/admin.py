@@ -5,7 +5,6 @@ from werkzeug.security import check_password_hash
 from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupRecord, BackupSettings
 import logging
 import os
-import datetime
 import subprocess
 from pathlib import Path
 import csv
@@ -53,7 +52,7 @@ def admin_required(f):
 # Helper function to format time ago
 def get_time_ago(timestamp):
     """Format timestamp as relative time (e.g., '2 hours ago')"""
-    now = datetime.datetime.utcnow()
+    now = datetime.utcnow()
     diff = now - timestamp
 
     if diff.days > 0:
@@ -127,46 +126,6 @@ def admin_login_page():
     return redirect(url_for('admin.dashboard'))
 
 
-# Admin API login (for AJAX requests)
-@admin_bp.route('/api/login', methods=['POST'])
-@jwt_required()  # Require existing user authentication first
-def admin_login():
-    """Admin login API endpoint (for AJAX)"""
-    # Get username from token
-    user_id = get_jwt_identity()
-    user = User.query.get(user_id)
-
-    if not user:
-        return jsonify({"error": "User not found"}), 404
-
-    # Get admin password from request
-    data = request.get_json()
-    admin_password = data.get('admin_password')
-
-    if not admin_password:
-        return jsonify({"error": "Admin password required"}), 400
-
-    # Check if user is admin and verify password
-    if user.is_admin and check_password_hash(user.admin_password_hash,
-                                             admin_password):
-        # Create admin token with extended expiration
-        admin_token = create_access_token(
-            identity=user_id,
-            additional_claims={"is_admin": True},
-            expires_delta=datetime.timedelta(
-                hours=2)  # Short expiry for security
-        )
-
-        return jsonify({
-            "message": "Admin login successful",
-            "admin_token": admin_token
-        }), 200
-
-    # Log failed admin login attempts
-    logging.warning(f"Failed admin login attempt for user: {user.username}")
-    return jsonify({"error": "Invalid admin credentials"}), 401
-
-
 # Admin logout
 # Add admin logout route
 @admin_bp.route('/logout')
@@ -190,7 +149,7 @@ def dashboard(current_admin):
     try:
         # User stats
         total_users = User.query.count()
-        week_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        week_ago = datetime.utcnow() - timedelta(days=7)
         new_users = User.query.filter(User.created_at >= week_ago).count()
         new_users_percentage = round(
             (new_users / total_users) * 100) if total_users > 0 else 0
@@ -203,7 +162,7 @@ def dashboard(current_admin):
             (new_games / total_games) * 100) if total_games > 0 else 0
 
         # Active users (with games in the last 24 hours)
-        day_ago = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+        day_ago = datetime.utcnow() - timedelta(days=1)
         active_users = db.session.query(GameScore.user_id).distinct().filter(
             GameScore.created_at >= day_ago).count()
 
@@ -213,8 +172,7 @@ def dashboard(current_admin):
             (completed_games / total_games) * 100) if total_games > 0 else 0
 
         # Last week's completion rate for comparison
-        two_weeks_ago = datetime.datetime.utcnow() - datetime.timedelta(
-            days=14)
+        two_weeks_ago = datetime.utcnow() - timedelta(days=14)
         old_completed = GameScore.query.filter(
             GameScore.created_at >= two_weeks_ago, GameScore.created_at
             < week_ago, GameScore.completed == True).count()
@@ -761,15 +719,15 @@ def analytics(current_admin):
     date_range = request.args.get('date_range', 'last_30_days')
 
     if date_range == 'last_7_days':
-        start_date = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        start_date = datetime.utcnow() - datetime.timedelta(days=7)
     elif date_range == 'last_90_days':
-        start_date = datetime.datetime.utcnow() - datetime.timedelta(days=90)
+        start_date = datetime.utcnow() - datetime.timedelta(days=90)
     elif date_range == 'last_year':
-        start_date = datetime.datetime.utcnow() - datetime.timedelta(days=365)
+        start_date = datetime.utcnow() - datetime.timedelta(days=365)
     elif date_range == 'all_time':
-        start_date = datetime.datetime(2000, 1, 1)  # A date far in the past
+        start_date = datetime(2000, 1, 1)  # A date far in the past
     else:  # default to 30 days
-        start_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+        start_date = datetime.utcnow() - timedelta(days=30)
 
     # Basic statistics for cards
     try:
@@ -812,8 +770,8 @@ def analytics(current_admin):
             (completed_games / period_games) * 100) if period_games > 0 else 0
 
         # Previous period for comparison
-        period_length = (datetime.datetime.utcnow() - start_date).days
-        prev_start_date = start_date - datetime.timedelta(days=period_length)
+        period_length = (datetime.utcnow() - start_date).days
+        prev_start_date = start_date - timedelta(days=period_length)
 
         prev_completed = GameScore.query.filter(
             GameScore.created_at >= prev_start_date, GameScore.created_at
@@ -1199,7 +1157,7 @@ def backup(current_admin):
         for file in backup_files:
             file_stat = file.stat()
             file_size = get_size_format(file_stat.st_size)
-            creation_time = datetime.datetime.fromtimestamp(file_stat.st_ctime)
+            creation_time = datetime.fromtimestamp(file_stat.st_ctime)
 
             # Extract backup type from filename
             if 'daily' in file.name:
@@ -1262,7 +1220,7 @@ def create_backup(current_admin):
     """Create a new database backup"""
     try:
         # Create timestamp for filename
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_dir = Path(current_app.root_path) / 'backups'
 
         # Create backup directory if it doesn't exist

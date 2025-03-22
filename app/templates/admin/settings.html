@@ -1,0 +1,303 @@
+<!-- app/templates/admin/settings.html -->
+{% extends "admin/dashboard.html" %}
+
+{% block admin_content %}
+<!-- System Settings Section -->
+<section class="mb-5">
+    <h2 class="section-header">System Settings</h2>
+
+    <!-- Settings Navigation Tabs -->
+    <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="game-tab" data-bs-toggle="tab" data-bs-target="#game-settings" type="button" role="tab" aria-controls="game-settings" aria-selected="true">
+                <i class="fas fa-gamepad me-2"></i> Game Settings
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="system-tab" data-bs-toggle="tab" data-bs-target="#system-status" type="button" role="tab" aria-controls="system-status" aria-selected="false">
+                <i class="fas fa-server me-2"></i> System Status
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security-settings" type="button" role="tab" aria-controls="security-settings" aria-selected="false">
+                <i class="fas fa-shield-alt me-2"></i> Security
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="email-tab" data-bs-toggle="tab" data-bs-target="#email-settings" type="button" role="tab" aria-controls="email-settings" aria-selected="false">
+                <i class="fas fa-envelope me-2"></i> Email
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="settingsTabContent">
+        <!-- Game Settings Tab -->
+        <div class="tab-pane fade show active" id="game-settings" role="tabpanel" aria-labelledby="game-tab">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Game Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.update_game_settings') }}" id="gameSettingsForm">
+                        <h6 class="mb-3">Difficulty Settings</h6>
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label">Easy Mode (Max Mistakes)</label>
+                                <input type="number" class="form-control" name="easy_max_mistakes" value="{{ game_settings.easy_max_mistakes }}" min="1" max="15">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Medium Mode (Max Mistakes)</label>
+                                <input type="number" class="form-control" name="medium_max_mistakes" value="{{ game_settings.medium_max_mistakes }}" min="1" max="15">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Hard Mode (Max Mistakes)</label>
+                                <input type="number" class="form-control" name="hard_max_mistakes" value="{{ game_settings.hard_max_mistakes }}" min="1" max="15">
+                            </div>
+                        </div>
+
+                        <h6 class="mb-3">Quote Selection</h6>
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="quote_selection" id="quoteSelectionRandom" value="random" {% if game_settings.quote_selection == 'random' %}checked{% endif %}>
+                                <label class="form-check-label" for="quoteSelectionRandom">
+                                    Random selection
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="quote_selection" id="quoteSelectionWeighted" value="weighted" {% if game_settings.quote_selection == 'weighted' %}checked{% endif %}>
+                                <label class="form-check-label" for="quoteSelectionWeighted">
+                                    Weighted by difficulty (prioritize unused quotes)
+                                </label>
+                            </div>
+                        </div>
+
+                        <h6 class="mb-3">Advanced Settings</h6>
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="enableHardcore" name="enable_hardcore" {% if game_settings.get('enable_hardcore', False) %}checked{% endif %}>
+                                    <label class="form-check-label" for="enableHardcore">Enable Hardcore Mode (no spaces/punctuation)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="enableAnonymous" name="enable_anonymous" {% if game_settings.get('enable_anonymous', True) %}checked{% endif %}>
+                                    <label class="form-check-label" for="enableAnonymous">Allow Anonymous Play</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i> Save Game Settings
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status Tab -->
+        <div class="tab-pane fade" id="system-status" role="tabpanel" aria-labelledby="system-tab">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">System Status Control</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.update_system_status') }}" id="systemStatusForm">
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="maintenanceMode" name="maintenance_mode" {% if system_status.maintenance_mode %}checked{% endif %}>
+                                <label class="form-check-label" for="maintenanceMode">Maintenance Mode</label>
+                            </div>
+                            <div class="form-text mb-2">When enabled, users will see a maintenance message instead of the game.</div>
+
+                            <label class="form-label">Maintenance Message</label>
+                            <textarea class="form-control" name="maintenance_message" rows="3">{{ system_status.maintenance_message }}</textarea>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="allowRegistrations" name="allow_registrations" {% if system_status.allow_registrations %}checked{% endif %}>
+                                <label class="form-check-label" for="allowRegistrations">Allow New Registrations</label>
+                            </div>
+                            <div class="form-text">When disabled, new user registration will be blocked.</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i> Save System Status
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Settings Tab -->
+        <div class="tab-pane fade" id="security-settings" role="tabpanel" aria-labelledby="security-tab">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Security Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.update_security_settings') }}" id="securitySettingsForm">
+                        <div class="mb-4">
+                            <label class="form-label">JWT Secret Key Status</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" value="Last rotated: {{ security_settings.jwt_last_rotated }}" disabled>
+                                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#rotateKeyModal">
+                                    <i class="fas fa-sync-alt"></i> Rotate Key
+                                </button>
+                            </div>
+                            <div class="form-text">Warning: Rotating the key will invalidate all existing sessions.</div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Login Rate Limit (Attempts)</label>
+                                <input type="number" class="form-control" name="login_rate_limit_attempts" value="{{ security_settings.login_rate_limit_attempts }}" min="1" max="20">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Rate Limit Window (Minutes)</label>
+                                <input type="number" class="form-control" name="login_rate_limit_minutes" value="{{ security_settings.login_rate_limit_minutes }}" min="1" max="60">
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">User Session Timeout (Minutes)</label>
+                                <input type="number" class="form-control" name="user_session_timeout" value="{{ security_settings.user_session_timeout }}" min="5" max="1440">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Admin Session Timeout (Minutes)</label>
+                                <input type="number" class="form-control" name="admin_session_timeout" value="{{ security_settings.admin_session_timeout }}" min="5" max="60">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i> Save Security Settings
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Email Settings Tab -->
+        <div class="tab-pane fade" id="email-settings" role="tabpanel" aria-labelledby="email-tab">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Email Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin.update_email_settings') }}" id="emailSettingsForm">
+                        <div class="row mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label">SMTP Server</label>
+                                <input type="text" class="form-control" name="smtp_server" value="{{ email_settings.smtp_server }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">SMTP Port</label>
+                                <input type="number" class="form-control" name="smtp_port" value="{{ email_settings.smtp_port }}" min="1" max="65535">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">SMTP Username</label>
+                                <input type="text" class="form-control" name="smtp_username" value="{{ email_settings.smtp_username }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">SMTP Password</label>
+                                <input type="password" class="form-control" name="smtp_password" value="{{ email_settings.smtp_password }}">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="useSSL" name="use_ssl" {% if email_settings.use_ssl %}checked{% endif %}>
+                                <label class="form-check-label" for="useSSL">Use SSL/TLS</label>
+                            </div>
+                        </div>
+
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">From Name</label>
+                                <input type="text" class="form-control" name="from_name" value="{{ email_settings.from_name }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">From Email</label>
+                                <input type="email" class="form-control" name="from_email" value="{{ email_settings.from_email }}">
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i> Save Email Settings
+                            </button>
+                            <button type="button" class="btn btn-info" id="testEmailBtn">
+                                <i class="fas fa-paper-plane me-2"></i> Test Email
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Rotate Key Confirmation Modal -->
+<div class="modal fade" id="rotateKeyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rotate JWT Secret Key</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i> <strong>Warning:</strong> Rotating the JWT secret key will invalidate all existing user sessions. Everyone will need to log in again.
+                </div>
+                <p>Are you sure you want to proceed?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('admin.rotate_jwt_key') }}">
+                    <button type="submit" class="btn btn-warning">Rotate Key</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Email Modal -->
+<div class="modal fade" id="testEmailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Send Test Email</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="testEmailForm" method="POST" action="{{ url_for('admin.test_email') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Recipient Email</label>
+                        <input type="email" class="form-control" name="test_email" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="testEmailForm" class="btn btn-primary">Send Test</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show test email modal when the test button is clicked
+        document.getElementById('testEmailBtn').addEventListener('click', function() {
+            const modal = new bootstrap.Modal(document.getElementById('testEmailModal'));
+            modal.show();
+        });
+    });
+</script>
+{% endblock %}
