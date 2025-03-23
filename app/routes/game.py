@@ -90,7 +90,11 @@ def start():
         backend_difficulty = frontend_difficulty  #find cleaner way to do this later
         print("backend difficulty on start: ", backend_difficulty)
         # Generate the game ID
-        game_id = f"{backend_difficulty}-{str(uuid.uuid4())}"
+        # Extract hardcore mode from query params
+        hardcore_mode = request.args.get('hardcore', 'false').lower() == 'true'
+        hardcore_flag = 'hardcore-' if hardcore_mode else ''
+        print("hardcore mode on start: ", hardcore_mode, hardcore_flag)
+        game_id = f"{backend_difficulty}-{hardcore_flag}{str(uuid.uuid4())}"
 
         # For authenticated users, check for active games
         active_game_info = {"has_active_game": False}
@@ -138,6 +142,7 @@ def start():
         game_state['start_time'] = datetime.utcnow()
         game_state['game_complete'] = False
         game_state['has_won'] = False
+        game_state['hardcore_mode'] = hardcore_mode
 
         # Generate identifier for storage
         identifier = game_id + "_anon" if is_anonymous else user_id
