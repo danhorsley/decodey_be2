@@ -14,32 +14,43 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint('daily', __name__)
 
-@bp.route('/daily', methods=['GET'])
+
+@bp.route('/daily/<date_string>', methods=['GET', 'OPTIONS'])
 @jwt_required(optional=True)
-def get_daily_challenge():
-    """Get the daily challenge for today"""
+def get_daily_challenge(date_string=None):
+    """Get the daily challenge for a specific date or today"""
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200  # Handle OPTIONS request for CORS
+
     try:
         # Get user identification
         user_id = get_jwt_identity()
         is_anonymous = user_id is None
 
-        # Get today's date
-        today = date.today()
+        # Get the requested date or use today
+        if date_string:
+            try:
+                requested_date = datetime.strptime(date_string,
+                                                   '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify(
+                    {"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+        else:
+            requested_date = date.today()
 
-        # Find today's scheduled quote
-        daily_quote = Quote.query.filter_by(daily_date=today).first()
+        # Find the scheduled quote for the requested date
+        daily_quote = Quote.query.filter_by(daily_date=requested_date).first()
 
         if not daily_quote:
-            # If no quote is scheduled for today, return an error
-            logger.error(f"No daily challenge found for {today}")
-            return jsonify({"error": "No daily challenge available for today"}), 404
+            # If no quote is scheduled for this date, return an error
+            logger.error(f"No daily challenge found for {requested_date}")
+            return jsonify(
+                {"error": "No daily challenge available for this date"})
 
         # Check if authenticated user has already completed today's challenge
         if not is_anonymous:
             completion = DailyCompletion.query.filter_by(
-                user_id=user_id, 
-                challenge_date=today
-            ).first()
+                user_id=user_id, challenge_date=requested_date).first()
 
             if completion:
                 return jsonify({
@@ -56,7 +67,7 @@ def get_daily_challenge():
         # Generate cryptogram for the quote
         # We'll use easy difficulty for daily challenges
         difficulty = "easy"
-        game_id = f"{difficulty}-daily-{today}-{str(uuid.uuid4())}"
+        game_id = f"{difficulty}-daily-{requested_date}-{str(uuid.uuid4())}"
 
         mapping = generate_mapping()
         encrypted_paragraph = encrypt_paragraph(daily_quote.text, mapping)
@@ -77,7 +88,7 @@ def get_daily_challenge():
             'game_id': game_id,
             'difficulty': difficulty,
             'is_daily': True,
-            'daily_date': today.isoformat(),
+            'daily_date': requested_date.isoformat(),
             'start_time': datetime.utcnow(),
             'game_complete': False,
             'has_won': False
@@ -121,13 +132,17 @@ def get_daily_challenge():
         return jsonify(response_data), 200
 
     except Exception as e:
-        logger.error(f"Error starting daily challenge: {str(e)}", exc_info=True)
+        logger.error(f"Error starting daily challenge: {str(e)}",
+                     exc_info=True)
         return jsonify({"error": "Failed to start daily challenge"}), 500
 
-@bp.route('/daily-stats', methods=['GET'])
+
+@bp.route('/daily-stats', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def get_daily_stats():
     """Get daily challenge statistics for the current user"""
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200  # Handle OPTIONS request for CORS
     try:
         user_id = get_jwt_identity()
 
@@ -141,16 +156,15 @@ def get_daily_stats():
             db.session.commit()
 
         # Get daily completion history
-        completions = DailyCompletion.query.filter_by(user_id=user_id).order_by(
-            DailyCompletion.challenge_date.desc()
-        ).all()
+        completions = DailyCompletion.query.filter_by(
+            user_id=user_id).order_by(
+                DailyCompletion.challenge_date.desc()).all()
 
         # Calculate completion rate
         today = date.today()
         # Get the first daily we ever offered
         first_daily = Quote.query.filter(
-            Quote.daily_date.isnot(None)
-        ).order_by(Quote.daily_date).first()
+            Quote.daily_date.isnot(None)).order_by(Quote.daily_date).first()
 
         total_possible = 0
         if first_daily and first_daily.daily_date:
@@ -167,16 +181,19 @@ def get_daily_stats():
         recent_completions = []
         for completion in completions[:30]:  # Limit to most recent 30
             recent_completions.append({
-                "date": completion.challenge_date.isoformat(),
-                "score": completion.score,
-                "mistakes": completion.mistakes,
-                "time_taken": completion.time_taken
+                "date":
+                completion.challenge_date.isoformat(),
+                "score":
+                completion.score,
+                "mistakes":
+                completion.mistakes,
+                "time_taken":
+                completion.time_taken
             })
 
         # Get top 5 highest scoring daily completions
         top_scores = DailyCompletion.query.filter_by(user_id=user_id).order_by(
-            DailyCompletion.score.desc()
-        ).limit(5).all()
+            DailyCompletion.score.desc()).limit(5).all()
 
         top_scores_data = []
         for score in top_scores:
@@ -189,33 +206,52 @@ def get_daily_stats():
 
         # Format response data
         stats_data = {
-            "current_streak": user_stats.current_daily_streak,
-            "max_streak": user_stats.max_daily_streak,
-            "total_completed": user_stats.total_daily_completed,
-            "last_completed_date": user_stats.last_daily_completed_date.isoformat() if user_stats.last_daily_completed_date else None,
-            "completion_rate": round(completion_rate, 1),
-            "recent_completions": recent_completions,
-            "top_scores": top_scores_data
+            "current_streak":
+            user_stats.current_daily_streak,
+            "max_streak":
+            user_stats.max_daily_streak,
+            "total_completed":
+            user_stats.total_daily_completed,
+            "last_completed_date":
+            user_stats.last_daily_completed_date.isoformat()
+            if user_stats.last_daily_completed_date else None,
+            "completion_rate":
+            round(completion_rate, 1),
+            "recent_completions":
+            recent_completions,
+            "top_scores":
+            top_scores_data
         }
 
         return jsonify(stats_data), 200
 
     except Exception as e:
         logger.error(f"Error getting daily stats: {str(e)}", exc_info=True)
-        return jsonify({"error": "Failed to retrieve daily challenge statistics"}), 500
+        return jsonify(
+            {"error": "Failed to retrieve daily challenge statistics"}), 500
 
-@bp.route('/daily-completion/<date_string>', methods=['GET'])
+
+@bp.route('/daily-completion', methods=['GET', 'OPTIONS'])
 @jwt_required()
-def check_daily_completion(date_string):
+def check_daily_completion():
     """Check if user has completed a specific daily challenge"""
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200  # Handle OPTIONS request for CORS
+
     try:
         user_id = get_jwt_identity()
+
+        # Get date from query parameter instead of URL parameter
+        date_string = request.args.get('date')
+        if not date_string:
+            return jsonify({"error": "Date parameter is required"}), 400
 
         # Parse date string (expected format: YYYY-MM-DD)
         try:
             challenge_date = datetime.strptime(date_string, '%Y-%m-%d').date()
         except ValueError:
-            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+            return jsonify({"error":
+                            "Invalid date format. Use YYYY-MM-DD"}), 400
 
         # Check if challenge exists for this date
         daily_quote = Quote.query.filter_by(daily_date=challenge_date).first()
@@ -227,9 +263,7 @@ def check_daily_completion(date_string):
 
         # Check if user has completed this challenge
         completion = DailyCompletion.query.filter_by(
-            user_id=user_id,
-            challenge_date=challenge_date
-        ).first()
+            user_id=user_id, challenge_date=challenge_date).first()
 
         if not completion:
             return jsonify({
@@ -250,8 +284,11 @@ def check_daily_completion(date_string):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error checking daily completion: {str(e)}", exc_info=True)
-        return jsonify({"error": "Failed to check daily challenge completion"}), 500
+        logger.error(f"Error checking daily completion: {str(e)}",
+                     exc_info=True)
+        return jsonify({"error":
+                        "Failed to check daily challenge completion"}), 500
+
 
 def update_daily_streak(user_id, completion_date):
     """Update user's daily challenge streak"""
