@@ -606,7 +606,38 @@ def game_status():
                 'rating': rating,
                 'attribution': attribution
             }
+        if game_state.get('is_daily', False) and not is_anonymous:
+            # Record daily challenge completion
+            try:
+                # Parse the daily date
+                daily_date = datetime.strptime(game_state.get('daily_date'), '%Y-%m-%d').date()
 
+                # Check if already completed
+                existing_completion = DailyCompletion.query.filter_by(
+                    user_id=user_id, 
+                    challenge_date=daily_date
+                ).first()
+
+                if not existing_completion:
+                    # Create new completion record
+                    completion = DailyCompletion(
+                        user_id=user_id,
+                        quote_id=daily_quote_id,  # You'll need to add this to game_state
+                        challenge_date=daily_date,
+                        completed_at=datetime.utcnow(),
+                        score=score,  # From the score calculation above
+                        mistakes=game_state['mistakes'],
+                        time_taken=time_taken
+                    )
+                    db.session.add(completion)
+
+                    # Update user's daily streak
+                    update_daily_streak(user_id, daily_date)
+
+                    db.session.commit()
+                    logger.info(f"Recorded daily challenge completion for user {user_id}, date {daily_date}")
+            except Exception as e:
+                logger.error(f"Error recording daily completion: {str(e)}", exc_info=True)
         response_data = {
             "hasActiveGame": True,
             "gameComplete": game_state['game_complete'],
@@ -615,7 +646,7 @@ def game_status():
             "mistakes": game_state['mistakes'],
             "maxMistakes": game_state['max_mistakes'],
         }
-
+        
         logger.debug(f"Returning game status: {response_data}")
         return jsonify(response_data), 200
     except Exception as e:

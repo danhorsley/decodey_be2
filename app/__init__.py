@@ -90,7 +90,7 @@ def create_app(config_class=Config):
             logger.info("Database tables created successfully")
 
         # Register blueprints without API prefixes
-        from app.routes import auth, game, stats, main, dev
+        from app.routes import auth, game, stats, main, dev, daily
         from app.routes.admin import admin_bp
         from app.routes.admin_process import admin_process_bp
         app.register_blueprint(admin_bp)
@@ -99,6 +99,7 @@ def create_app(config_class=Config):
             auth.bp)  # Auth routes (/login, /register, etc.)
         app.register_blueprint(game.bp, url_prefix='/api')
         app.register_blueprint(stats.bp, url_prefix='/api')
+        app.register_blueprint(daily.bp, url_prefix='/api')
         app.register_blueprint(dev.bp, url_prefix='/dev')  # dev routes
         app.register_blueprint(admin_process_bp)
         logger.info("Successfully registered all blueprints")
