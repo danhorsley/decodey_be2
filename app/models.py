@@ -63,6 +63,10 @@ class UserStats(db.Model):
     max_daily_streak = db.Column(db.Integer, default=0)
     total_daily_completed = db.Column(db.Integer, default=0)
     last_daily_completed_date = db.Column(db.Date, nullable=True)
+    current_daily_streak = db.Column(db.Integer, default=0)
+    max_daily_streak = db.Column(db.Integer, default=0)
+    total_daily_completed = db.Column(db.Integer, default=0)
+    last_daily_completed_date = db.Column(db.Date, nullable=True)
 
 
 class GameScore(db.Model):
@@ -116,6 +120,7 @@ class AnonymousGameState(db.Model):
     completed = db.Column(db.Boolean, default=False)
     won = db.Column(db.Boolean, default=False)
     conversion_status = db.Column(db.String, default="anonymous")
+
 
 class BackupRecord(db.Model):
     """Model to track database backups"""
@@ -187,21 +192,30 @@ class BackupSettings(db.Model):
             db.session.commit()
         return settings
 
+
 class Quote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     text = db.Column(db.Text, nullable=False)
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
-    difficulty = db.Column(db.Float, default=0.0)  # Float for more nuanced difficulty ratings
-    daily_date = db.Column(db.Date, unique=True, nullable=True)  # NULL for general pool, date for daily challenges
+    difficulty = db.Column(
+        db.Float, default=0.0)  # Float for more nuanced difficulty ratings
+    daily_date = db.Column(
+        db.Date, unique=True,
+        nullable=True)  # NULL for general pool, date for daily challenges
     times_used = db.Column(db.Integer, default=0)  # Track usage statistics
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime,
+                           default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
+
 
 class DailyCompletion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.String, db.ForeignKey('user.user_id'), nullable=False)
+    user_id = db.Column(db.String,
+                        db.ForeignKey('user.user_id'),
+                        nullable=False)
     quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'), nullable=False)
     challenge_date = db.Column(db.Date, nullable=False)
     completed_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -210,8 +224,12 @@ class DailyCompletion(db.Model):
     time_taken = db.Column(db.Integer, default=0)  # Time in seconds
 
     # Define a unique constraint to ensure one completion per user per day
-    __table_args__ = (db.UniqueConstraint('user_id', 'challenge_date', name='user_daily_completion_constraint'),)
+    __table_args__ = (db.UniqueConstraint(
+        'user_id', 'challenge_date',
+        name='user_daily_completion_constraint'), )
 
     # Relationships
-    user = db.relationship('User', backref=db.backref('daily_completions', lazy=True))
-    quote = db.relationship('Quote', backref=db.backref('completions', lazy=True))
+    user = db.relationship('User',
+                           backref=db.backref('daily_completions', lazy=True))
+    quote = db.relationship('Quote',
+                            backref=db.backref('completions', lazy=True))

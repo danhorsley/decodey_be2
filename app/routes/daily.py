@@ -126,7 +126,7 @@ def get_daily_challenge(date_string=None):
             "difficulty": difficulty,
             "is_anonymous": is_anonymous,
             "is_daily": True,
-            "daily_date": today.isoformat()
+            "daily_date": requested_date.isoformat()
         }
 
         return jsonify(response_data), 200
