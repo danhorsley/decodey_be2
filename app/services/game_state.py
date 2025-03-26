@@ -1,6 +1,6 @@
 from datetime import datetime
 import logging
-from app.models import db, ActiveGameState, AnonymousGameState, GameScore
+from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats
 import json
 
 # Set up logging
@@ -356,9 +356,11 @@ def record_game_score(user_id, game_id, score, mistakes, time_taken, completed=T
     """
     try:
         # Get today's date for challenge tracking
+        from datetime import datetime
         challenge_date = datetime.utcnow().strftime('%Y-%m-%d')
 
         # Create GameScore record
+        from app.models import db, GameScore
         game_score = GameScore(
             user_id=user_id,
             game_id=game_id,
@@ -378,10 +380,19 @@ def record_game_score(user_id, game_id, score, mistakes, time_taken, completed=T
         # Update user stats
         from app.utils.stats import initialize_or_update_user_stats
         initialize_or_update_user_stats(user_id)
+        print("pre- daily win detector")
+        # Check if this is a daily challenge and record completion
+        if 'daily' in game_id and completed:
+            print("***daily win detected***")
+            record_daily_completion(user_id, game_id, score, mistakes, time_taken)
 
         return True
     except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
         logger.error(f"Error recording game score: {str(e)}", exc_info=True)
+
+        from app.models import db
         db.session.rollback()
         return False
 
@@ -559,3 +570,117 @@ def process_hint(game_state):
         'complete': status['game_complete'],
         'has_won': status['has_won']
     }
+
+def record_daily_completion(user_id, game_id, score, mistakes, time_taken):
+    """
+    Record a daily challenge completion in the DailyCompletion model with enhanced debugging.
+    """
+    logger = logging.getLogger(__name__)
+
+    logger.info(f"DAILY DEBUG: Starting daily completion recording for user={user_id}, game_id={game_id}")
+
+    # Only proceed if this is a daily challenge
+    if 'daily' not in game_id:
+        logger.info(f"DAILY DEBUG: Not a daily challenge (no 'daily' in game_id): {game_id}")
+        return True  # Not a daily challenge, so no need to record
+
+    logger.info(f"DAILY DEBUG: Confirmed this is a daily challenge")
+
+    try:
+        from app.models import db, Quote, DailyCompletion
+        from datetime import datetime
+
+        # Extract date from game_id (format: "difficulty-daily-YYYY-MM-DD-uuid")
+        logger.info(f"DAILY DEBUG: Attempting to extract date from game_id: {game_id}")
+        date_parts = game_id.split('-')
+        logger.info(f"DAILY DEBUG: Split game_id into parts: {date_parts}")
+
+        if len(date_parts) < 5:
+            logger.warning(f"DAILY DEBUG: Invalid daily game_id format (not enough parts): {game_id}")
+            return False
+
+        # Parse the date components
+        try:
+            challenge_date_str = f"{date_parts[2]}-{date_parts[3]}-{date_parts[4]}"
+            logger.info(f"DAILY DEBUG: Extracted date string: {challenge_date_str}")
+            challenge_date = datetime.strptime(challenge_date_str, '%Y-%m-%d').date()
+            logger.info(f"DAILY DEBUG: Parsed date object: {challenge_date}")
+        except (ValueError, IndexError) as e:
+            logger.error(f"DAILY DEBUG: Error parsing date from game_id {game_id}: {str(e)}")
+            return False
+
+        # Find the quote for this date
+        logger.info(f"DAILY DEBUG: Looking up quote for date: {challenge_date}")
+        daily_quote = Quote.query.filter_by(daily_date=challenge_date).first()
+
+        if not daily_quote:
+            logger.warning(f"DAILY DEBUG: No daily quote found for date {challenge_date}")
+
+            # Additional debugging for available quotes
+            try:
+                all_daily_quotes = Quote.query.filter(Quote.daily_date is not None).all()
+                logger.info(f"DAILY DEBUG: Found {len(all_daily_quotes)} quotes with daily dates")
+                logger.info(f"DAILY DEBUG: Sample daily dates: {[q.daily_date for q in all_daily_quotes[:5]]}")
+            except Exception as quote_err:
+                logger.error(f"DAILY DEBUG: Error querying available quotes: {str(quote_err)}")
+
+            return False
+
+        logger.info(f"DAILY DEBUG: Found quote: id={daily_quote.id}, author={daily_quote.author}")
+
+        # Check if user already completed this daily challenge
+        logger.info(f"DAILY DEBUG: Checking for existing completion for user={user_id}, date={challenge_date}")
+        existing_completion = DailyCompletion.query.filter_by(
+            user_id=user_id, 
+            challenge_date=challenge_date
+        ).first()
+
+        if existing_completion:
+            logger.info(f"DAILY DEBUG: User {user_id} already completed daily challenge for {challenge_date}")
+            return True  # Already recorded
+
+        logger.info(f"DAILY DEBUG: No existing completion found, creating new record")
+
+        # Create new completion record
+        completion = DailyCompletion(
+            user_id=user_id,
+            quote_id=daily_quote.id,
+            challenge_date=challenge_date,
+            completed_at=datetime.utcnow(),
+            score=score,
+            mistakes=mistakes,
+            time_taken=time_taken
+        )
+
+        logger.info(f"DAILY DEBUG: Created completion object, adding to session")
+        db.session.add(completion)
+
+        # Update the user's daily streak
+        logger.info(f"DAILY DEBUG: About to update user's daily streak")
+        try:
+            from app.routes.game import update_daily_streak
+            update_daily_streak(user_id, challenge_date)
+            logger.info(f"DAILY DEBUG: Daily streak updated successfully")
+        except Exception as streak_err:
+            logger.error(f"DAILY DEBUG: Error updating daily streak: {str(streak_err)}", exc_info=True)
+            # Continue despite streak update error
+
+        logger.info(f"DAILY DEBUG: Committing transaction")
+        db.session.commit()
+        logger.info(f"DAILY DEBUG: Successfully recorded daily completion for user {user_id} on {challenge_date}")
+        return True
+
+    except Exception as e:
+        from app.models import db
+        logger.error(f"DAILY DEBUG: Error recording daily completion: {str(e)}", exc_info=True)
+
+        # Additional error context
+        logger.error(f"DAILY DEBUG: Error details - user_id: {user_id}, game_id: {game_id}")
+
+        try:
+            db.session.rollback()
+            logger.info("DAILY DEBUG: Session rolled back successfully")
+        except Exception as rollback_err:
+            logger.error(f"DAILY DEBUG: Error during rollback: {str(rollback_err)}")
+
+        return False

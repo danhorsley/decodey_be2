@@ -5,7 +5,7 @@ from app.services.game_state import (get_unified_game_state,
                                      save_unified_game_state,
                                      check_game_status, get_display,process_guess, process_hint, abandon_game,
                                     get_attribution_from_quotes)
-from app.models import db, ActiveGameState, AnonymousGameState, GameScore
+from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats
 from datetime import datetime, date
 import logging
 import uuid
