@@ -28,6 +28,9 @@ def start():
         user_id = get_jwt_identity()
         is_anonymous = user_id is None
 
+        # Extract longText parameter
+        long_text = request.args.get('longText', 'false').lower() == 'true'
+
         # For authenticated users, check and clean up any existing active games
         if not is_anonymous:
             try:
@@ -132,7 +135,7 @@ def start():
         )
 
         # Start a new game and get game data
-        game_data = start_game()
+        game_data = start_game(long_text=long_text)
         game_state = game_data['game_state']
 
         # Add additional info to game state
