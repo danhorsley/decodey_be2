@@ -4,18 +4,18 @@ import csv
 from pathlib import Path
 from collections import Counter
 
-def load_quotes():
-    quotes_file = Path('quotes.csv')
-    quotes = []
-    with open(quotes_file, 'r') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            quotes.append({
-                'quote': row['quote'],
-                'author': row['author'],
-                'minor_attribution': row['minor_attribution']
-            })
-    return quotes
+# def load_quotes():
+#     quotes_file = Path('quotes.csv')
+#     quotes = []
+#     with open(quotes_file, 'r') as f:
+#         reader = csv.DictReader(f)
+#         for row in reader:
+#             quotes.append({
+#                 'quote': row['quote'],
+#                 'author': row['author'],
+#                 'minor_attribution': row['minor_attribution']
+#             })
+#     return quotes
 
 def generate_mapping():
     # Create a substitution mapping for uppercase letters only
@@ -54,11 +54,34 @@ def generate_display_blocks(text):
     return display
 
 def start_game():
-    quotes = load_quotes()
-    quote_data = random.choice(quotes)
-    paragraph = quote_data['quote']
-    author = quote_data['author']
-    minor_attribution = quote_data['minor_attribution']
+    """
+    Start a new game by selecting a random quote and creating the game state
+    """
+    from app.models import Quote
+    from sqlalchemy.sql import func
+
+    # Get a random quote directly from the database
+    # This avoids loading all quotes into memory
+    random_quote = Quote.query.filter_by(active=True).filter(Quote.daily_date.is_(None)).order_by(func.random()).first()
+
+    # Handle case where no quotes are found
+    if not random_quote:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("No quotes found in database. Make sure quotes are loaded and active.")
+        # Return a fallback quote to prevent complete failure
+        paragraph = "The database appears to be empty. Please add quotes."
+        author = "System"
+        minor_attribution = "Error"
+    else:
+        paragraph = random_quote.text
+        author = random_quote.author
+        minor_attribution = random_quote.minor_attribution
+
+        # Update usage count for this quote
+        random_quote.times_used += 1
+        from app.models import db
+        db.session.commit()
 
     mapping = generate_mapping()
     reverse_mapping = {v: k for k, v in mapping.items()}

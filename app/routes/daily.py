@@ -5,7 +5,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from datetime import datetime, date
 from app.models import db, Quote, DailyCompletion, UserStats
 from app.services.game_logic import generate_mapping, encrypt_paragraph, get_letter_frequency, get_unique_letters, generate_display_blocks
-from app.services.game_state import get_max_mistakes_from_game_id
+from app.services.game_state import get_max_mistakes_from_game_id, save_unified_game_state
 import logging
 import uuid
 
@@ -105,11 +105,11 @@ def get_daily_challenge(date_string=None):
 
         # For authenticated users, save game state
         if not is_anonymous:
-            from app.services.game_state import save_unified_game_state
             save_unified_game_state(user_id, game_state, is_anonymous=False)
         else:
             # For anonymous users, save with anon ID
             anon_id = f"{game_id}_anon"
+            # print("***SUGS data***",anon_id,game_state)
             save_unified_game_state(anon_id, game_state, is_anonymous=True)
 
         # Create response data

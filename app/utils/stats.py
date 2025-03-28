@@ -34,7 +34,7 @@ def initialize_or_update_user_stats(user_id):
         max_noloss_streak = 0
 
         # Sort games by date to calculate streaks
-        sorted_games = sorted(games, key=lambda x: x.created_at, reverse=False)
+        sorted_games = sorted(games, key=lambda x: x.created_at, reverse=True)
 
         # Calculate streaks
         for game in sorted_games:
@@ -53,7 +53,7 @@ def initialize_or_update_user_stats(user_id):
             days=datetime.utcnow().weekday())
         weekly_score = sum(game.score for game in games
                            if game.created_at >= week_start)
-
+        most_recent_game = GameScore.query.filter_by(user_id=user_id).order_by(GameScore.created_at.desc()).first()
         # Update user stats
         user_stats.total_games_played = total_games
         user_stats.games_won = games_won
@@ -64,8 +64,7 @@ def initialize_or_update_user_stats(user_id):
         user_stats.max_noloss_streak = max_noloss_streak
         user_stats.highest_weekly_score = max(
             weekly_score, user_stats.highest_weekly_score or 0)
-        user_stats.last_played_date = sorted_games[
-            0].created_at if sorted_games else None
+        user_stats.last_played_date = most_recent_game.created_at if most_recent_game else None
 
         db.session.commit()
         logging.info(f"Successfully updated stats for user {user_id}")
