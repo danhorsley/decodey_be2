@@ -7,9 +7,6 @@ def update_daily_dates():
     # Get all quotes with populated daily_date
     quotes_with_dates = Quote.query.filter(Quote.daily_date.isnot(None)).all()
     
-    # Get remaining quotes without daily_date
-    quotes_without_dates = Quote.query.filter(Quote.daily_date.is_(None)).all()
-    
     if not quotes_with_dates:
         print("No quotes found with daily dates")
         return
@@ -18,20 +15,16 @@ def update_daily_dates():
     n = len(quotes_with_dates)
     print(f"Found {n} quotes with daily dates")
     
-    # Get random quotes to assign dates to
-    quotes_to_update = random.sample(quotes_with_dates, n)
+    # Get today's date
+    today = datetime.utcnow().date()
     
-    # Get the latest date from existing daily quotes
-    latest_date = max(q.daily_date for q in quotes_with_dates)
+    # Create list of next N consecutive days
+    future_dates = [today + timedelta(days=i) for i in range(1, n+1)]
     
-    # Start assigning dates from the day after latest date
-    current_date = latest_date + timedelta(days=1)
-    
-    # Assign dates to quotes
-    for quote in quotes_to_update:
-        quote.daily_date = current_date
-        current_date += timedelta(days=1)
+    # Update each quote with a new consecutive date
+    for quote, new_date in zip(quotes_with_dates, future_dates):
+        quote.daily_date = new_date
     
     # Commit changes
     db.session.commit()
-    print(f"Successfully updated {n} quotes with new daily dates")
+    print(f"Successfully reassigned dates for {n} quotes")
