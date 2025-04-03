@@ -40,8 +40,11 @@ def get_daily_challenge(date_string=None):
 
         logger.debug(f"Looking for daily challenge on date: {requested_date}")
 
-        # Find the scheduled quote for the requested date
-        daily_quote = Quote.query.filter_by(daily_date=requested_date).first()
+        # Find the first quote scheduled between requested date and next day
+        daily_quote = Quote.query.filter(
+            Quote.daily_date >= requested_date,
+            Quote.daily_date < requested_date + timedelta(days=1)
+        ).order_by(Quote.daily_date).first()
         logger.debug(f"Found daily quote: {daily_quote}")
 
         if not daily_quote:
