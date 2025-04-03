@@ -200,9 +200,7 @@ class Quote(db.Model):
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(
         db.Float, default=0.0)  # Float for more nuanced difficulty ratings
-    daily_date = db.Column(
-        db.Date, unique=True,
-        nullable=True)  # NULL for general pool, date for daily challenges
+    daily_date = db.Column(db.Date, unique=True, nullable=True)  # NULL for general pool, date for daily challenges
     times_used = db.Column(db.Integer, default=0)  # Track usage statistics
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

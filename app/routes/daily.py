@@ -37,28 +37,13 @@ def get_daily_challenge(date_string=None):
                     {"error": "Invalid date format. Use YYYY-MM-DD"}), 400
         else:
             requested_date = date.today()
-            day_start = datetime.combine(requested_date, datetime.min.time())
-            day_end = datetime.combine(requested_date, datetime.max.time())
-        logger.debug(f"Searching for daily quote between {day_start} and {day_end}")
+
+        logger.debug(f"Looking for daily challenge on date: {requested_date}")
 
         # Find the scheduled quote for the requested date
-        daily_quote = Quote.query.filter(
-            Quote.daily_date >= day_start,
-            Quote.daily_date <= day_end
-        ).first()
+        daily_quote = Quote.query.filter_by(daily_date=requested_date).first()
+        logger.debug(f"Found daily quote: {daily_quote}")
 
-        # Alternative approach using string cast and LIKE
-        if not daily_quote:
-            logger.debug("First query failed, trying string pattern match")
-            date_str = requested_date.strftime('%Y-%m-%d')
-            daily_quote = Quote.query.filter(
-                cast(Quote.daily_date, String).like(f"{date_str}%")
-            ).first()
-
-        logger.debug(f"Found daily quote: {daily_quote.id if daily_quote else 'None'}")
-        if daily_quote:
-            logger.debug(f"Quote date in DB: {daily_quote.daily_date}")
-        logger.debug(f"Found daily quote: {daily_quote.id if daily_quote else 'None'}")
         if not daily_quote:
             # If no quote is scheduled for this date, return an error
             logger.error(f"No daily challenge found for {requested_date}")
