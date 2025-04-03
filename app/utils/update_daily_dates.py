@@ -19,7 +19,7 @@ def update_daily_dates():
     print(f"Found {n} quotes with daily dates")
     
     # Get random quotes to assign dates to
-    quotes_to_update = random.sample(quotes_without_dates, n)
+    quotes_to_update = random.sample(quotes_with_dates, n)
     
     # Get the latest date from existing daily quotes
     latest_date = max(q.daily_date for q in quotes_with_dates)
