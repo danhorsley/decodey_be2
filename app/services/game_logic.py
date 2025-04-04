@@ -74,7 +74,6 @@ def start_game(long_text=False):
 
     # Get a random quote directly from the database with length constraint
     random_quote = Quote.query.filter_by(active=True)\
-                             .filter(Quote.daily_date.is_(None))\
                              .filter(length_filter)\
                              .order_by(func.random())\
                              .first()
@@ -92,6 +91,7 @@ def start_game(long_text=False):
 
     # Handle case where a quote was found
     if random_quote:
+        print("length filter : ", length_filter)
         paragraph = random_quote.text
         author = random_quote.author
         minor_attribution = random_quote.minor_attribution

@@ -41,11 +41,13 @@ def get_daily_challenge(date_string=None):
         logger.debug(f"Looking for daily challenge on date: {requested_date}")
 
         # Find the first quote scheduled between requested date and next day
+        from sqlalchemy import func
+        my_tomorrow = requested_date + timedelta(days=1)
         daily_quote = Quote.query.filter(
-            Quote.daily_date >= requested_date,
-            Quote.daily_date <= requested_date + timedelta(days=1)
-        ).order_by(Quote.daily_date).first()
-        logger.debug(f"Found daily quote: {daily_quote}")
+            func.date(Quote.daily_date) >= requested_date,
+            func.date(Quote.daily_date) <= my_tomorrow).order_by(
+                func.date(Quote.daily_date).desc()).first()
+        logger.debug(f"Found daily quote: {daily_quote.text}")
 
         if not daily_quote:
             # If no quote is scheduled for this date, return an error
