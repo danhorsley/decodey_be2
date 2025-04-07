@@ -488,7 +488,10 @@ def continue_game():
         display = get_display(game_state['encrypted_paragraph'],
                               game_state['correctly_guessed'],
                               game_state['reverse_mapping'])
-        display_guessed = game_state['']
+        
+        # Map encrypted correctly guessed letters to original letters
+        display_guessed = [game_state['reverse_mapping'][letter] for letter in game_state['correctly_guessed']]
+        
         # Generate letter frequency
         letter_frequency = {
             letter: game_state['encrypted_paragraph'].count(letter)
@@ -509,6 +512,7 @@ def continue_game():
             "difficulty": game_state['difficulty'],
             "original_letters": original_letters,
             "reverse_mapping": game_state['reverse_mapping'],
+            "guessed_letters": display_guessed
         }
         print(ret)
         return jsonify(ret), 200
