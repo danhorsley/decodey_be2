@@ -488,7 +488,7 @@ def continue_game():
         display = get_display(game_state['encrypted_paragraph'],
                               game_state['correctly_guessed'],
                               game_state['reverse_mapping'])
-
+        display_guessed = game_state['']
         # Generate letter frequency
         letter_frequency = {
             letter: game_state['encrypted_paragraph'].count(letter)
@@ -496,7 +496,7 @@ def continue_game():
             if letter.isalpha()
         }
 
-        return jsonify({
+        ret =  {
             "display": display,
             "encrypted_paragraph": game_state['encrypted_paragraph'],
             "game_id": game_state['game_id'],
@@ -507,8 +507,11 @@ def continue_game():
             "hasWon": game_state['has_won'],
             "max_mistakes": game_state['max_mistakes'],
             "difficulty": game_state['difficulty'],
-            "original_letters": original_letters
-        }), 200
+            "original_letters": original_letters,
+            "reverse_mapping": game_state['reverse_mapping'],
+        }
+        print(ret)
+        return jsonify(ret), 200
     except Exception as e:
         logger.error(f"Error continuing game: {str(e)}", exc_info=True)
         return jsonify({"error": "Error continuing game"}), 500
