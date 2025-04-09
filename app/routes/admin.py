@@ -1025,35 +1025,15 @@ def import_quotes(current_admin):
 def delete_quote(current_admin, quote_id):
     """Delete a quote"""
     try:
-        # Convert quote_id to zero-based index
-        index = quote_id - 1
+        quote = Quote.query.get(quote_id)
+        if not quote:
+            return redirect(url_for('admin.quotes', error="Quote not found"))
 
-        # Read existing quotes
-        quotes_file = Path('quotes.csv')
-        quotes = []
-
-        with open(quotes_file, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                quotes.append(row)
-
-        # Check if index is valid
-        if index < 0 or index >= len(quotes):
-            return redirect(url_for('admin.quotes', error="Invalid quote ID"))
-
-        # Remove quote
-        deleted_quote = quotes.pop(index)
-
-        # Write back to CSV
-        with open(quotes_file, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['quote', 'author', 'minor_attribution']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in quotes:
-                writer.writerow(row)
+        db.session.delete(quote)
+        db.session.commit()
 
         logger.info(
-            f"Admin {current_admin.username} deleted quote by {deleted_quote['author']}"
+            f"Admin {current_admin.username} deleted quote by {quote.author}"
         )
         return redirect(
             url_for('admin.quotes', success="Quote deleted successfully"))
