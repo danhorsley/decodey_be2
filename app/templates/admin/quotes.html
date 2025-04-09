@@ -14,6 +14,10 @@ function editQuote(text, author, attribution, quoteId) {
     // Change form action to edit endpoint
     document.getElementById('quoteForm').action = "{{ url_for('admin.edit_quote') }}";
     
+    // Change button text to reflect editing
+    document.querySelector('#addQuoteModal .modal-title').textContent = 'Edit Quote';
+    document.querySelector('#addQuoteModal .modal-footer .btn-primary').textContent = 'Save Changes';
+    
     // Show the modal
     new bootstrap.Modal(document.getElementById('addQuoteModal')).show();
 }
@@ -131,7 +135,7 @@ function editQuote(text, author, attribution, quoteId) {
                         <input type="hidden" name="quote_id" id="quoteId" value="">
                         <div class="mb-3">
                             <label class="form-label">Quote Text</label>
-                            <textarea class="form-control" name="quote" id="quoteText" rows="3" required></textarea>
+                            <textarea class="form-control" name="quoteText" id="quoteText" rows="3" required></textarea>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Author</label>
