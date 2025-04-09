@@ -28,20 +28,20 @@ function editQuote(text, author, attribution, quoteId) {
     modal.show();
 }
 
-// Add event listeners when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
     const modalEl = document.getElementById('addQuoteModal');
     if (modalEl) {
-        modalEl.addEventListener('show.bs.modal', () => {
+        modalEl.addEventListener('show.bs.modal', function() {
             console.log('Modal is about to show');
         });
-        modalEl.addEventListener('shown.bs.modal', () => {
+        modalEl.addEventListener('shown.bs.modal', function() {
             console.log('Modal is shown');
         });
-        modalEl.addEventListener('hide.bs.modal', () => {
+        modalEl.addEventListener('hide.bs.modal', function() {
             console.log('Modal is about to hide');
         });
     }
+});
 });
 </script>
 
