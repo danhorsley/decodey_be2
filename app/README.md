@@ -1,4 +1,4 @@
-# Uncrypt Game
+# decodey Game
 
 A cryptogram puzzle game where players decrypt quotes by guessing letter substitutions. This web application includes both player-facing game features and an administrative backend for management.
 
@@ -114,7 +114,7 @@ flask run
 ## Project Structure
 
 ```
-uncrypt-game/
+decodey-game/
 ├── app/                        # Application package
 │   ├── models.py               # Database models
 │   ├── routes/                 # Route handlers
