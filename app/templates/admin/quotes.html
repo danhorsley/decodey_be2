@@ -82,14 +82,14 @@ function editQuote(text, author, attribution, quoteId) {
                     <tbody>
                         {% for quote in quotes %}
                         <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ quote.quote }}</td>
+                            <td>{{ quote.id }}</td>
+                            <td>{{ quote.text }}</td>
                             <td>{{ quote.author }}</td>
                             <td>{{ quote.minor_attribution }}</td>
                             <td>{{ quote.usage_count }}</td>
                             <td>
                                 <button class="btn btn-sm btn-outline-primary" onclick="editQuote('{{ quote.text }}', '{{ quote.author }}', '{{ quote.minor_attribution }}', '{{ quote.id }}')">Edit</button>
-                                <a href="{{ url_for('admin.delete_quote', quote_id=loop.index) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this quote?')">Delete</a>
+                                <a href="{{ url_for('admin.delete_quote', quote_id=quote.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this quote?')">Delete</a>
                             </td>
                         </tr>
                         {% endfor %}
