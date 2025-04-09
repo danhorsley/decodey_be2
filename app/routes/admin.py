@@ -902,7 +902,7 @@ def get_popular_quotes_data(start_date):
 def edit_quote(current_admin):
     """Edit an existing quote"""
     quote_id = request.form.get('quote_id', '')
-    quote_text = request.form.get('quote', '')
+    quote_text = request.form.get('quoteText', '')
     author = request.form.get('author', '')
     attribution = request.form.get('attribution', '')
 
