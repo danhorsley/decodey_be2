@@ -19,6 +19,7 @@ function editQuote(text, author, attribution, quoteId) {
     // Update form action and modal title
     const form = document.getElementById('quoteForm');
     form.action = "{{ url_for('admin.edit_quote') }}";
+    form.method = "POST";
     
     modalEl.querySelector('.modal-title').textContent = 'Edit Quote';
     modalEl.querySelector('.modal-footer .btn-primary').textContent = 'Save Changes';
@@ -156,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input type="hidden" name="quote_id" id="quoteId" value="">
                         <div class="mb-3">
                             <label class="form-label">Quote Text</label>
-                            <textarea class="form-control" name="quote" id="quoteText" rows="3" required></textarea>
+                            <textarea class="form-control" name="quoteText" id="quoteText" rows="3" required></textarea>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Author</label>
@@ -164,7 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Attribution (Optional)</label>
-                            <input type="text" class="form-control" name="minor_attribution" id="quoteAttribution">
+                            <input type="text" class="form-control" name="attribution" id="quoteAttribution">
                         </div>
                     </form>
                 </div>
