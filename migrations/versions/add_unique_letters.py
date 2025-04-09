@@ -1,12 +1,19 @@
 
 """add unique letters column
 
-Revision ID: add_unique_letters
+Revision ID: 2677feefef64
+Revises: fix_daily_date_time
 Create Date: 2025-04-09 12:10:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import text
+
+# revision identifiers, used by Alembic.
+revision = '2677feefef64'
+down_revision = 'fix_daily_date_time'
+branch_labels = None
+depends_on = None
 
 def upgrade():
     # Add column
