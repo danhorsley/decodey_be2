@@ -193,9 +193,23 @@ class BackupSettings(db.Model):
         return settings
 
 
+from sqlalchemy import event
+
 class Quote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     text = db.Column(db.Text, nullable=False)
+
+    @staticmethod
+    def _count_unique_letters(text):
+        return len(set(char.upper() for char in text if char.isalpha()))
+
+    def _update_unique_letters(self):
+        self.unique_letters = self._count_unique_letters(self.text)
+
+@event.listens_for(Quote, 'before_insert')
+@event.listens_for(Quote, 'before_update')
+def set_unique_letters(mapper, connection, target):
+    target._update_unique_letters()
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(
