@@ -946,6 +946,9 @@ def edit_quote(current_admin):
         logger.info(f"Admin {current_admin.username} edited quote #{quote_id}")
         return redirect(
             url_for('admin.quotes', success="Quote updated successfully"))
+    except Exception as e:
+            logger.error(f"Error editing quotes: {str(e)}")
+            return redirect(url_for('admin.quotes', error=f"Error editing quotes: {str(e)}"))
 
 
 @admin_bp.route('/quotes/export', methods=['GET'])
