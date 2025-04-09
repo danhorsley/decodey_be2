@@ -5,23 +5,42 @@
 
 <script>
 function editQuote(text, author, attribution, quoteId) {
-    // Populate the modal with quote data
+    console.log('Edit quote called with:', {text, author, attribution, quoteId});
+    
+    // Get the modal element
+    const modalEl = document.getElementById('addQuoteModal');
+    
+    // Populate the form fields
     document.getElementById('quoteId').value = quoteId;
     document.getElementById('quoteText').value = text || '';
     document.getElementById('quoteAuthor').value = author || '';
     document.getElementById('quoteAttribution').value = attribution || '';
     
-    // Change form action to edit endpoint
-    document.getElementById('quoteForm').action = "{{ url_for('admin.edit_quote') }}";
+    // Update form action and modal title
+    const form = document.getElementById('quoteForm');
+    form.action = "{{ url_for('admin.edit_quote') }}";
     
-    // Change button text to reflect editing
-    document.querySelector('#addQuoteModal .modal-title').textContent = 'Edit Quote';
-    document.querySelector('#addQuoteModal .modal-footer .btn-primary').textContent = 'Save Changes';
+    modalEl.querySelector('.modal-title').textContent = 'Edit Quote';
+    modalEl.querySelector('.modal-footer .btn-primary').textContent = 'Save Changes';
     
     // Show the modal
-    const modal = new bootstrap.Modal(document.getElementById('addQuoteModal'));
+    const modal = new bootstrap.Modal(modalEl);
     modal.show();
 }
+
+// Debug any modal issues
+document.addEventListener('DOMContentLoaded', function() {
+    const modalEl = document.getElementById('addQuoteModal');
+    modalEl.addEventListener('show.bs.modal', function() {
+        console.log('Modal is about to show');
+    });
+    modalEl.addEventListener('shown.bs.modal', function() {
+        console.log('Modal is shown');
+    });
+    modalEl.addEventListener('hide.bs.modal', function() {
+        console.log('Modal is about to hide');
+    });
+});
 </script>
 
 <!-- Quotes Management Section -->
