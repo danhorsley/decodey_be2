@@ -381,65 +381,41 @@ def quotes(current_admin):
     author_filter = request.args.get('author', '')
 
     try:
-        # Read quotes from CSV
-        quotes_file = Path('quotes.csv')
-        all_quotes = []
-        authors = set()
+        # Base query
+        query = Quote.query
 
-        with open(quotes_file, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                all_quotes.append({
-                    'quote': row['quote'],
-                    'author': row['author'],
-                    'minor_attribution': row['minor_attribution'],
-                    'usage_count': 0  # Placeholder, would need actual tracking
-                })
-                authors.add(row['author'])
-
-        # Apply filters
-        filtered_quotes = all_quotes
+        # Apply search filter
         if search_query:
-            filtered_quotes = [
-                q for q in filtered_quotes
-                if search_query.lower() in q['quote'].lower()
-                or search_query.lower() in q['author'].lower()
-            ]
+            query = query.filter((Quote.text.ilike(f'%{search_query}%')) |
+                               (Quote.author.ilike(f'%{search_query}%')))
 
+        # Apply author filter
         if author_filter:
-            filtered_quotes = [
-                q for q in filtered_quotes if q['author'] == author_filter
-            ]
+            query = query.filter(Quote.author == author_filter)
 
-        # Paginate manually
-        total_pages = (len(filtered_quotes) + per_page - 1) // per_page
-        start_idx = (page - 1) * per_page
-        end_idx = min(start_idx + per_page, len(filtered_quotes))
-        paginated_quotes = filtered_quotes[start_idx:end_idx]
+        # Get distinct authors for filter dropdown
+        authors = db.session.query(Quote.author).distinct().all()
+        authors = [author[0] for author in authors]
 
-        # Create pagination object
-        pagination = {
-            'page': page,
-            'per_page': per_page,
-            'total': len(filtered_quotes),
-            'pages': total_pages
-        }
+        # Execute query with pagination
+        pagination = query.paginate(page=page, per_page=per_page)
+        quotes_list = pagination.items
 
         return render_template('admin/quotes.html',
-                               active_tab='quotes',
-                               quotes=paginated_quotes,
-                               authors=sorted(authors),
-                               pagination=pagination,
-                               search_query=search_query,
-                               author_filter=author_filter)
+                             active_tab='quotes',
+                             quotes=quotes_list,
+                             authors=sorted(authors),
+                             pagination=pagination,
+                             search_query=search_query,
+                             author_filter=author_filter)
 
     except Exception as e:
         logger.error(f"Error loading quotes: {str(e)}")
         return render_template('admin/quotes.html',
-                               active_tab='quotes',
-                               quotes=[],
-                               authors=[],
-                               error=f"Error loading quotes: {str(e)}")
+                             active_tab='quotes',
+                             quotes=[],
+                             authors=[],
+                             error=f"Error loading quotes: {str(e)}")
 
 
 # Add quote
@@ -447,38 +423,26 @@ def quotes(current_admin):
 @admin_required
 def add_quote(current_admin):
     """Add a new quote"""
-    quote = request.form.get('quote', '')
+    quote_text = request.form.get('quote', '')
     author = request.form.get('author', '')
     attribution = request.form.get('attribution', '')
 
-    if not quote or not author:
+    if not quote_text or not author:
         return redirect(
             url_for('admin.quotes', error="Quote and author are required"))
 
     try:
-        # Read existing quotes
-        quotes_file = Path('quotes.csv')
-        quotes = []
-
-        with open(quotes_file, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                quotes.append(row)
-
-        # Add new quote
-        quotes.append({
-            'quote': quote,
-            'author': author,
-            'minor_attribution': attribution
-        })
-
-        # Write back to CSV
-        with open(quotes_file, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['quote', 'author', 'minor_attribution']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in quotes:
-                writer.writerow(row)
+        quote = Quote(
+            text=quote_text,
+            author=author,
+            minor_attribution=attribution,
+            active=True
+        )
+        db.session.add(quote)
+        db.session.commit()
+        
+        logger.info(f"Admin {current_admin.username} added new quote by {author}")
+        return redirect(url_for('admin.quotes', success="Quote added successfully"))
 
         logger.info(
             f"Admin {current_admin.username} created a database backup: {backup_file.name}"
@@ -982,6 +946,89 @@ def edit_quote(current_admin):
         logger.info(f"Admin {current_admin.username} edited quote #{quote_id}")
         return redirect(
             url_for('admin.quotes', success="Quote updated successfully"))
+
+
+@admin_bp.route('/quotes/export', methods=['GET'])
+@admin_required
+def export_quotes(current_admin):
+    """Export quotes as CSV"""
+    try:
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow(['text', 'author', 'minor_attribution', 'daily_date', 'times_used'])
+        
+        # Write quotes
+        quotes = Quote.query.all()
+        for quote in quotes:
+            writer.writerow([
+                quote.text,
+                quote.author,
+                quote.minor_attribution,
+                quote.daily_date.isoformat() if quote.daily_date else '',
+                quote.times_used
+            ])
+        
+        # Prepare response
+        output.seek(0)
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name='quotes.csv'
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting quotes: {str(e)}")
+        return redirect(url_for('admin.quotes', error=f"Error exporting quotes: {str(e)}"))
+
+@admin_bp.route('/quotes/import', methods=['POST'])
+@admin_required
+def import_quotes(current_admin):
+    """Import quotes from CSV"""
+    if 'csv_file' not in request.files:
+        return redirect(url_for('admin.quotes', error="No file provided"))
+
+    file = request.files['csv_file']
+    if file.filename == '':
+        return redirect(url_for('admin.quotes', error="No file selected"))
+
+    replace_existing = request.form.get('replace_existing', 'off') == 'on'
+
+    try:
+        # Read CSV file
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        reader = csv.DictReader(stream)
+
+        # Validate CSV structure
+        required_fields = ['text', 'author']
+        for field in required_fields:
+            if field not in reader.fieldnames:
+                return redirect(url_for('admin.quotes', error=f"Missing required field: {field}"))
+
+        if replace_existing:
+            # Delete existing quotes
+            Quote.query.delete()
+
+        # Import quotes
+        for row in reader:
+            quote = Quote(
+                text=row['text'],
+                author=row['author'],
+                minor_attribution=row.get('minor_attribution', ''),
+                active=True
+            )
+            db.session.add(quote)
+
+        db.session.commit()
+        logger.info(f"Admin {current_admin.username} imported quotes from CSV")
+        return redirect(url_for('admin.quotes', success="Quotes imported successfully"))
+
+    except Exception as e:
+        logger.error(f"Error importing quotes: {str(e)}")
+        return redirect(url_for('admin.quotes', error=f"Error importing quotes: {str(e)}"))
 
     except Exception as e:
         logger.error(f"Error editing quote: {str(e)}")

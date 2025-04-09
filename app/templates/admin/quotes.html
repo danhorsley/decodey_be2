@@ -145,10 +145,12 @@
                 <div class="modal-body">
                     <form id="importForm" method="POST" action="{{ url_for('admin.import_quotes') }}" enctype="multipart/form-data">
                         <div class="mb-3">
-                            <label class="form-label">CSV File</label>
-                            <input type="file" class="form-control" name="csv_file" accept=".csv" required>
+                            <div class="drop-zone">
+                                <span class="drop-zone__prompt">Drop CSV file here or click to upload</span>
+                                <input type="file" name="csv_file" class="drop-zone__input" accept=".csv" required>
+                            </div>
                             <div class="form-text">
-                                The CSV file should have columns for "quote", "author", and "minor_attribution".
+                                The CSV file should have columns for "text", "author", and optionally "minor_attribution".
                             </div>
                         </div>
                         <div class="form-check mb-3">
@@ -167,30 +169,93 @@
         </div>
     </div>
 
-    <script>
-        function editQuote(quote, author, attribution, id) {
-            document.getElementById('quoteId').value = id;
-            document.getElementById('quoteText').value = quote;
-            document.getElementById('quoteAuthor').value = author;
-            document.getElementById('quoteAttribution').value = attribution;
-
-            // Update form action
-            document.getElementById('quoteForm').action = "{{ url_for('admin.edit_quote') }}";
-
-            // Update modal title
-            document.querySelector('#addQuoteModal .modal-title').textContent = 'Edit Quote';
-
-            // Show modal
-            new bootstrap.Modal(document.getElementById('addQuoteModal')).show();
+    <style>
+        .drop-zone {
+            max-width: 100%;
+            height: 200px;
+            padding: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-weight: 500;
+            font-size: 20px;
+            cursor: pointer;
+            color: #cccccc;
+            border: 4px dashed #009578;
+            border-radius: 10px;
         }
 
-        // Reset form when adding a new quote
-        document.querySelector('[data-bs-target="#addQuoteModal"]').addEventListener('click', function() {
-            document.getElementById('quoteId').value = '';
-            document.getElementById('quoteForm').reset();
-            document.getElementById('quoteForm').action = "{{ url_for('admin.add_quote') }}";
-            document.querySelector('#addQuoteModal .modal-title').textContent = 'Add New Quote';
+        .drop-zone--over {
+            border-style: solid;
+        }
+
+        .drop-zone__input {
+            display: none;
+        }
+
+        .drop-zone__thumb {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+            background-color: #cccccc;
+            background-size: cover;
+            position: relative;
+        }
+    </style>
+    <script>
+        document.querySelectorAll(".drop-zone__input").forEach((inputElement) => {
+            const dropZoneElement = inputElement.closest(".drop-zone");
+
+            dropZoneElement.addEventListener("click", (e) => {
+                inputElement.click();
+            });
+
+            inputElement.addEventListener("change", (e) => {
+                if (inputElement.files.length) {
+                    updateThumbnail(dropZoneElement, inputElement.files[0]);
+                }
+            });
+
+            dropZoneElement.addEventListener("dragover", (e) => {
+                e.preventDefault();
+                dropZoneElement.classList.add("drop-zone--over");
+            });
+
+            ["dragleave", "dragend"].forEach((type) => {
+                dropZoneElement.addEventListener(type, (e) => {
+                    dropZoneElement.classList.remove("drop-zone--over");
+                });
+            });
+
+            dropZoneElement.addEventListener("drop", (e) => {
+                e.preventDefault();
+
+                if (e.dataTransfer.files.length) {
+                    inputElement.files = e.dataTransfer.files;
+                    updateThumbnail(dropZoneElement, e.dataTransfer.files[0]);
+                }
+
+                dropZoneElement.classList.remove("drop-zone--over");
+            });
         });
+
+        function updateThumbnail(dropZoneElement, file) {
+            let thumbnailElement = dropZoneElement.querySelector(".drop-zone__thumb");
+
+            if (dropZoneElement.querySelector(".drop-zone__prompt")) {
+                dropZoneElement.querySelector(".drop-zone__prompt").remove();
+            }
+
+            if (!thumbnailElement) {
+                thumbnailElement = document.createElement("div");
+                thumbnailElement.classList.add("drop-zone__thumb");
+                dropZoneElement.appendChild(thumbnailElement);
+            }
+
+            thumbnailElement.textContent = file.name;
+        }
     </script>
 </section>
 {% endblock %}
