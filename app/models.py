@@ -198,6 +198,15 @@ from sqlalchemy import event
 class Quote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     text = db.Column(db.Text, nullable=False)
+    author = db.Column(db.String(255), nullable=False)
+    minor_attribution = db.Column(db.String(255))
+    difficulty = db.Column(db.Float, default=0.0)
+    daily_date = db.Column(db.Date, unique=True, nullable=True)
+    times_used = db.Column(db.Integer, default=0)
+    unique_letters = db.Column(db.Integer)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     @staticmethod
     def _count_unique_letters(text):
@@ -210,7 +219,6 @@ class Quote(db.Model):
 @event.listens_for(Quote, 'before_update')
 def set_unique_letters(mapper, connection, target):
     target._update_unique_letters()
-    author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(
         db.Float, default=0.0)  # Float for more nuanced difficulty ratings
