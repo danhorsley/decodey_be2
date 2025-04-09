@@ -2,6 +2,23 @@
 {% extends "admin/dashboard.html" %}
 
 {% block admin_content %}
+
+<script>
+function editQuote(text, author, attribution, quoteId) {
+    // Populate the modal with quote data
+    document.getElementById('quoteId').value = quoteId;
+    document.getElementById('quoteText').value = text;
+    document.getElementById('quoteAuthor').value = author;
+    document.getElementById('quoteAttribution').value = attribution || '';
+    
+    // Change form action to edit endpoint
+    document.getElementById('quoteForm').action = "{{ url_for('admin.edit_quote') }}";
+    
+    // Show the modal
+    new bootstrap.Modal(document.getElementById('addQuoteModal')).show();
+}
+</script>
+
 <!-- Quotes Management Section -->
 <section class="mb-5">
     <h2 class="section-header">Quote Management</h2>
@@ -71,7 +88,7 @@
                             <td>{{ quote.minor_attribution }}</td>
                             <td>{{ quote.usage_count }}</td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary" onclick="editQuote('{{ quote.quote }}', '{{ quote.author }}', '{{ quote.minor_attribution }}', {{ loop.index }})">Edit</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick="editQuote('{{ quote.text }}', '{{ quote.author }}', '{{ quote.minor_attribution }}', '{{ quote.id }}')">Edit</button>
                                 <a href="{{ url_for('admin.delete_quote', quote_id=loop.index) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this quote?')">Delete</a>
                             </td>
                         </tr>

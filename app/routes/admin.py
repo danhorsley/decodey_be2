@@ -902,46 +902,26 @@ def get_popular_quotes_data(start_date):
 def edit_quote(current_admin):
     """Edit an existing quote"""
     quote_id = request.form.get('quote_id', '')
-    quote = request.form.get('quote', '')
+    quote_text = request.form.get('quote', '')
     author = request.form.get('author', '')
     attribution = request.form.get('attribution', '')
 
-    if not quote_id or not quote or not author:
+    if not quote_id or not quote_text or not author:
         return redirect(
             url_for('admin.quotes',
                     error="Quote ID, quote text, and author are required"))
 
     try:
-        # Convert quote_id to integer index (1-based)
-        index = int(quote_id) - 1
+        quote = Quote.query.get(quote_id)
+        if not quote:
+            return redirect(url_for('admin.quotes', error="Quote not found"))
 
-        # Read existing quotes
-        quotes_file = Path('quotes.csv')
-        quotes = []
+        quote.text = quote_text
+        quote.author = author
+        quote.minor_attribution = attribution
+        quote.updated_at = datetime.utcnow()
 
-        with open(quotes_file, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                quotes.append(row)
-
-        # Check if index is valid
-        if index < 0 or index >= len(quotes):
-            return redirect(url_for('admin.quotes', error="Invalid quote ID"))
-
-        # Update quote
-        quotes[index] = {
-            'quote': quote,
-            'author': author,
-            'minor_attribution': attribution
-        }
-
-        # Write back to CSV
-        with open(quotes_file, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['quote', 'author', 'minor_attribution']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in quotes:
-                writer.writerow(row)
+        db.session.commit()
 
         logger.info(f"Admin {current_admin.username} edited quote #{quote_id}")
         return redirect(
