@@ -69,9 +69,9 @@ def start_game(long_text=False):
     author = "System"
     minor_attribution = "Error"
 
-    # Determine length filtering criteria - use func.length() instead of text.length()
+    # Only apply length filtering for short quotes
     if long_text:
-        length_filter = func.length(Quote.text) > 65
+        length_filter = True  # No length restriction for long quotes
     else:
         # For short quotes, ensure both total length <= 65 and unique chars <= 18
         from sqlalchemy import and_
