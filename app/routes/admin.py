@@ -1084,21 +1084,7 @@ def delete_quote(current_admin, quote_id):
             url_for('admin.quotes', error=f"Error deleting quote: {str(e)}"))
 
 
-# Export quotes
-@admin_bp.route('/quotes/export', methods=['GET'])
-@admin_required
-def export_quotes(current_admin):
-    """Export quotes as CSV"""
-    try:
-        quotes_file = Path('quotes.csv')
-        return send_file(quotes_file,
-                         as_attachment=True,
-                         download_name='quotes.csv')
-
-    except Exception as e:
-        logger.error(f"Error exporting quotes: {str(e)}")
-        return redirect(
-            url_for('admin.quotes', error=f"Error exporting quotes: {str(e)}"))
+# This section intentionally removed to fix duplicate route
 
 
 # Import quotes
