@@ -28,16 +28,17 @@ function editQuote(text, author, attribution, quoteId) {
     modal.show();
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+// Add event listeners when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
     const modalEl = document.getElementById('addQuoteModal');
     if (modalEl) {
-        modalEl.addEventListener('show.bs.modal', function() {
+        modalEl.addEventListener('show.bs.modal', () => {
             console.log('Modal is about to show');
         });
-        modalEl.addEventListener('shown.bs.modal', function() {
+        modalEl.addEventListener('shown.bs.modal', () => {
             console.log('Modal is shown');
         });
-        modalEl.addEventListener('hide.bs.modal', function() {
+        modalEl.addEventListener('hide.bs.modal', () => {
             console.log('Modal is about to hide');
         });
     }
