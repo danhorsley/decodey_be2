@@ -70,7 +70,14 @@ def start_game(long_text=False):
     minor_attribution = "Error"
 
     # Determine length filtering criteria - use func.length() instead of text.length()
-    length_filter = func.length(Quote.text) > 65 if long_text else func.length(Quote.text) <= 65
+    if long_text:
+        length_filter = func.length(Quote.text) > 65
+    else:
+        # For short quotes, ensure both total length <= 65 and unique chars <= 18
+        from sqlalchemy import and_, func
+        # First convert to uppercase and remove non-letters, then count distinct characters
+        unique_chars = func.length(func.regexp_replace(func.upper(func.regexp_replace(Quote.text, '[^A-Za-z]', '', 'g')), '(.)(?=.*\\1)', '', 'g'))
+        length_filter = and_(func.length(Quote.text) <= 65, unique_chars <= 18)
 
     # Get a random quote directly from the database with length constraint
     random_quote = Quote.query.filter_by(active=True)\
@@ -136,7 +143,7 @@ def start_game(long_text=False):
         'major_attribution': author,
         'minor_attribution': minor_attribution
     }
-    
+
 def make_guess(game_state, encrypted_letter, guessed_letter):
     if encrypted_letter not in game_state['reverse_mapping']:
         return {'valid': False, 'message': 'Invalid encrypted letter'}
