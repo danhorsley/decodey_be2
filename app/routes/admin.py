@@ -1087,73 +1087,7 @@ def delete_quote(current_admin, quote_id):
 # This section intentionally removed to fix duplicate route
 
 
-# Import quotes
-@admin_bp.route('/quotes/import', methods=['POST'])
-@admin_required
-def import_quotes(current_admin):
-    """Import quotes from CSV"""
-    if 'csv_file' not in request.files:
-        return redirect(url_for('admin.quotes', error="No file provided"))
-
-    file = request.files['csv_file']
-    if file.filename == '':
-        return redirect(url_for('admin.quotes', error="No file selected"))
-
-    replace_existing = request.form.get('replace_existing', 'off') == 'on'
-
-    try:
-        # Read the uploaded file
-        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-        csv_input = csv.DictReader(stream)
-
-        # Validate CSV structure
-        required_fields = ['quote', 'author', 'minor_attribution']
-        for field in required_fields:
-            if field not in csv_input.fieldnames:
-                return redirect(
-                    url_for('admin.quotes',
-                            error=f"Missing required field: {field}"))
-
-        # Process the uploaded CSV
-        new_quotes = [row for row in csv_input]
-
-        if replace_existing:
-            # Replace all quotes
-            quotes = new_quotes
-        else:
-            # Append to existing quotes
-            quotes_file = Path('quotes.csv')
-            existing_quotes = []
-
-            with open(quotes_file, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    existing_quotes.append(row)
-
-            quotes = existing_quotes + new_quotes
-
-        # Write back to CSV
-        quotes_file = Path('quotes.csv')
-        with open(quotes_file, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['quote', 'author', 'minor_attribution']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in quotes:
-                writer.writerow(
-                    {field: row.get(field, '')
-                     for field in fieldnames})
-
-        logger.info(
-            f"Admin {current_admin.username} imported {len(new_quotes)} quotes"
-        )
-        return redirect(
-            url_for('admin.quotes',
-                    success=f"Successfully imported {len(new_quotes)} quotes"))
-
-    except Exception as e:
-        logger.error(f"Error importing quotes: {str(e)}")
-        return redirect(
-            url_for('admin.quotes', error=f"Error importing quotes: {str(e)}"))
+# Import quotes route moved to top of file
 
 
 #
