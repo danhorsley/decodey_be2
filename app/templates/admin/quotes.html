@@ -4,8 +4,8 @@
 {% block admin_content %}
 
 <script>
-function editQuote(text, author, attribution, quoteId) {
-    console.log('Edit quote called with:', {text, author, attribution, quoteId});
+function editQuote(text, author, attribution, quoteId, daily_date, times_used) {
+    console.log('Edit quote called with:', {text, author, attribution, quoteId, daily_date, times_used});
     
     // Get the modal element
     const modalEl = document.getElementById('addQuoteModal');
@@ -15,6 +15,8 @@ function editQuote(text, author, attribution, quoteId) {
     document.getElementById('quoteText').value = text || '';
     document.getElementById('quoteAuthor').value = author || '';
     document.getElementById('quoteAttribution').value = attribution || '';
+    document.getElementById('quoteDailyDate').value = daily_date || '';
+    document.getElementById('quoteTimes').value = times_used || 0;
     
     // Update form action and modal title
     const form = document.getElementById('quoteForm');
@@ -114,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <td>{{ quote.minor_attribution }}</td>
                             <td>{{ quote.times_used }}</td>
                             <td>
-                                <button class="btn btn-sm btn-outline-primary" onclick='editQuote({{ quote.text|tojson|safe }}, {{ quote.author|tojson|safe }}, {{ quote.minor_attribution|tojson|safe }}, {{ quote.id }})'>Edit</button>
+                                <button class="btn btn-sm btn-outline-primary" onclick='editQuote({{ quote.text|tojson|safe }}, {{ quote.author|tojson|safe }}, {{ quote.minor_attribution|tojson|safe }}, {{ quote.id }}, {{ quote.daily_date|tojson|safe if quote.daily_date else "null"|tojson|safe }}, {{ quote.times_used }})'>Edit</button>
                                 <a href="{{ url_for('admin.delete_quote', quote_id=quote.id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to delete this quote?')">Delete</a>
                             </td>
                         </tr>
@@ -166,6 +168,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="mb-3">
                             <label class="form-label">Attribution (Optional)</label>
                             <input type="text" class="form-control" name="attribution" id="quoteAttribution">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Daily Date (Optional)</label>
+                            <input type="date" class="form-control" name="daily_date" id="quoteDailyDate">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Usage Count</label>
+                            <input type="number" class="form-control" name="times_used" id="quoteTimes" readonly>
                         </div>
                     </form>
                 </div>
