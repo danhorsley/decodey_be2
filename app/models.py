@@ -202,6 +202,7 @@ class Quote(db.Model):
         db.Float, default=0.0)  # Float for more nuanced difficulty ratings
     daily_date = db.Column(db.Date, unique=True, nullable=True)  # NULL for general pool, date for daily challenges
     times_used = db.Column(db.Integer, default=0)  # Track usage statistics
+    unique_letters = db.Column(db.Integer)  # Count of unique letters in text
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime,
