@@ -40,7 +40,14 @@ def create_app(config_class=Config):
         app.config['JWT_COOKIE_SECURE'] = False
         app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
     else:
-        CORS(app, resources={r"/*": {"origins": "https://decodey.game"}})
+        CORS(app, resources={
+            r"/*": {
+                "origins": "https://decodey.game",
+                "allow_credentials": True,
+                "expose_headers": ["Content-Type", "Authorization"],
+                "allow_headers": ["Content-Type", "Authorization"]
+            }
+        })
         app.config['JWT_COOKIE_CSRF_PROTECT'] = True
         app.config['JWT_COOKIE_SECURE'] = False
         app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
