@@ -9,5 +9,7 @@ class Config:
     DATABASE_URL = os.environ.get('DATABASE_URL')
     # FLASK_ENV = os.environ.get('FLASK_ENV', 'production')
     FLASK_ENV = os.environ.get('FLASK_ENV', 'development')
+    MAILGUN_API_KEY = os.environ.get('MAILGUN_API_KEY')
+    MAILGUN_DOMAIN = os.environ.get('MAILGUN_DOMAIN')
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL environment variable is not set")

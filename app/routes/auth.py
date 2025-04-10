@@ -1,6 +1,9 @@
-from flask import Blueprint, request, jsonify, redirect, url_for
+from flask import Blueprint, request, jsonify, redirect, url_for, current_app
 from flask_jwt_extended import (create_access_token, create_refresh_token,
                                 get_jwt_identity, jwt_required, get_jwt)
+import requests
+import secrets
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import jwt_blocklist
 from app.models import db, User, ActiveGameState, UserStats, GameScore
@@ -358,3 +361,50 @@ def delete_account():
         db.session.rollback()
         logging.error(f"Error deleting account: {str(e)}")
         return jsonify({"msg": "An error occurred deleting your account"}), 500
+@bp.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+            
+        # Find user by email
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            # For security, still return success even if email not found
+            return jsonify({"message": "If an account exists with this email, a reset link will be sent"}), 200
+            
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        user.reset_token = reset_token
+        user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+        db.session.commit()
+        
+        # Create reset link
+        reset_url = f"{request.host_url}reset-password?token={reset_token}"
+        
+        # Send email via Mailgun
+        MAILGUN_API_KEY = current_app.config['MAILGUN_API_KEY']
+        MAILGUN_DOMAIN = current_app.config['MAILGUN_DOMAIN']
+        
+        response = requests.post(
+            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
+            auth=("api", MAILGUN_API_KEY),
+            data={
+                "from": f"Password Reset <noreply@{MAILGUN_DOMAIN}>",
+                "to": email,
+                "subject": "Password Reset Request",
+                "text": f"To reset your password, please click the following link: {reset_url}\n\nThis link will expire in 1 hour."
+            }
+        )
+        
+        if response.status_code != 200:
+            raise Exception("Failed to send email")
+            
+        return jsonify({"message": "If an account exists with this email, a reset link will be sent"}), 200
+        
+    except Exception as e:
+        logging.error(f"Error in forgot password: {str(e)}")
+        return jsonify({"error": "Failed to process password reset request"}), 500
