@@ -30,7 +30,8 @@ def create_app(config_class=Config):
                 r"/*": {  # Apply CORS to all routes
                     "origins": "*",  # Allow all origins during development
                     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                    "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                    "allow_headers":
+                    ["Content-Type", "Authorization", "Accept"],
                     "expose_headers": ["Content-Type", "Authorization"],
                     "supports_credentials": True
                 }
@@ -38,17 +39,20 @@ def create_app(config_class=Config):
 
         app.config['JWT_COOKIE_CSRF_PROTECT'] = False
         app.config['JWT_COOKIE_SECURE'] = False
-        app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
+        app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY',
+                                                  'dev-secret-key')
     else:
-        CORS(app, resources={
-            r"/*": {
-                "origins": "https://decodey.game",
-                "allow_credentials": True,
-                "expose_headers": ["Content-Type", "Authorization"],
-                "allow_headers": ["Content-Type", "Authorization", "Accept"],
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-            }
-        })
+        CORS(app,
+             resources={
+                 r"/*": {
+                     "origins": "https://decodey.game",
+                     "allow_credentials": True,
+                     "expose_headers": ["Content-Type", "Authorization"],
+                     "allow_headers":
+                     ["Content-Type", "Authorization", "Accept"],
+                     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+                 }
+             })
         app.config['JWT_COOKIE_CSRF_PROTECT'] = True
         app.config['JWT_COOKIE_SECURE'] = True
         app.config['JWT_COOKIE_SAMESITE'] = 'None'
@@ -57,6 +61,7 @@ def create_app(config_class=Config):
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
+
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
         return jsonify({"error": "Token has expired"}), 401
@@ -130,24 +135,22 @@ def create_app(config_class=Config):
             admin_user = os.environ.get('ADMIN_USER')
             admin_pass = os.environ.get('ADMIN_PASSWORD_1')
             admin_pass2 = os.environ.get('ADMIN_PASSWORD_2')
-            
+
             if admin_user and admin_pass and admin_pass2:
                 logger.info("Setting up admin user in production")
                 with app.app_context():
                     user = User.query.filter_by(username=admin_user).first()
-                    
+
                     if not user:
-                        user = User(
-                            username=admin_user,
-                            email=f"{admin_user}@uncrypt.game",
-                            password=admin_pass
-                        )
+                        user = User(username=admin_user,
+                                    email=f"{admin_user}@decodey.game",
+                                    password=admin_pass)
                         user.is_admin = True
                         db.session.add(user)
                     else:
                         user.set_password(admin_pass)
                         user.is_admin = True
-                    
+
                     user.set_admin_password(admin_pass2)
                     db.session.commit()
                     logger.info("Admin user setup completed")
