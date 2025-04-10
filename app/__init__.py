@@ -45,11 +45,13 @@ def create_app(config_class=Config):
                 "origins": "https://decodey.game",
                 "allow_credentials": True,
                 "expose_headers": ["Content-Type", "Authorization"],
-                "allow_headers": ["Content-Type", "Authorization"]
+                "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
             }
         })
         app.config['JWT_COOKIE_CSRF_PROTECT'] = True
-        app.config['JWT_COOKIE_SECURE'] = False
+        app.config['JWT_COOKIE_SECURE'] = True
+        app.config['JWT_COOKIE_SAMESITE'] = 'None'
         app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
     # JWT Configuration
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
