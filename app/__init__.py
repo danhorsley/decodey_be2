@@ -23,28 +23,31 @@ def create_app(config_class=Config):
     logger.info("Starting application initialization")
 
     # Configure CORS
-    CORS(
-        app,
-        resources={
-            r"/*": {  # Apply CORS to all routes
-                "origins": "*",  # Allow all origins during development
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization", "Accept"],
-                "expose_headers": ["Content-Type", "Authorization"],
-                "supports_credentials": True
-            }
-        })
+    if app.config['FLASK_ENV'] == 'development':
+        CORS(
+            app,
+            resources={
+                r"/*": {  # Apply CORS to all routes
+                    "origins": "*",  # Allow all origins during development
+                    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                    "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                    "expose_headers": ["Content-Type", "Authorization"],
+                    "supports_credentials": True
+                }
+            })
 
+        app.config['JWT_COOKIE_CSRF_PROTECT'] = False
+        app.config['JWT_COOKIE_SECURE'] = False
+        app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
+    else:
+        CORS(app, resources={r"/*": {"origins": "https://decodey.game"}})
+        app.config['JWT_COOKIE_CSRF_PROTECT'] = True
+        app.config['JWT_COOKIE_SECURE'] = False
+        app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
     # JWT Configuration
     app.config['JWT_TOKEN_LOCATION'] = ['headers']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
-    app.config[
-        'JWT_COOKIE_CSRF_PROTECT'] = False  # During development, can disable CSRF protection for simplicity
-    app.config[
-        'JWT_COOKIE_SECURE'] = False  # Dev environment may not have HTTPS
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
-
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
         return jsonify({"error": "Token has expired"}), 401
