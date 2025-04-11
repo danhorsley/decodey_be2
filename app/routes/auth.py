@@ -98,12 +98,16 @@ def login():
 
 
 @bp.route('/logout', methods=['POST'])
-@jwt_required()  # Remove optional=True for consistency
+@jwt_required(optional=True)  # Make optional to handle revoked tokens
 def logout():
-    token = get_jwt()
-    jti = token["jti"]
-    jwt_blocklist.add(jti)
-    return jsonify({"msg": "Successfully logged out"}), 200
+    try:
+        token = get_jwt()
+        jti = token["jti"]
+        jwt_blocklist.add(jti)
+        return jsonify({"msg": "Successfully logged out"}), 200
+    except Exception as e:
+        # If token is already revoked or other error, still return success
+        return jsonify({"msg": "Successfully logged out"}), 200
 
 
 @bp.route('/refresh', methods=['POST'])
