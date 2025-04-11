@@ -394,16 +394,50 @@ def forgot_password():
         response = requests.post(
             f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
             auth=("api", MAILGUN_API_KEY),
-            data={
-                "from": f"Password Reset <noreply@{MAILGUN_DOMAIN}>",
+            data = {
+                "from": f"Daniel from Decodey <support@{MAILGUN_DOMAIN}>",
                 "to": email,
-                "subject": "Password Reset Request",
-                "text": f"To reset your password, please click the following link: {reset_url}\n\nThis link will expire in 1 hour."
+                "subject": "Reset your Decodey password",
+                "reply-to": f"support@{MAILGUN_DOMAIN}",
+
+                "text": f"""Hi {user.username if user.username else 'there'},
+
+            We received a request to reset your password for your Decodey account.
+
+            To reset your password, please click the link below:
+            {reset_url}
+
+            This link will expire in 1 hour. If you didn't request a password reset, you can safely ignore this email — no action is required.
+
+            — The Decodey Team
+            https://decodey.game
+            """,
+
+                "html": f"""<html>
+              <body style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+                <p>Hi {user.username if user.username else 'there'},</p>
+                <p>We received a request to reset your password for your Decodey account.</p>
+                <p>
+                  To reset your password, click the link below:<br>
+                  <a href="{reset_url}">{reset_url}</a>
+                </p>
+                <p>This link will expire in 1 hour.</p>
+                <p>If you didn't request a password reset, you can safely ignore this email — no action is required.</p>
+                <br>
+                <p>— The Decodey Team<br>
+                <a href="https://decodey.game">decodey.game</a></p>
+              </body>
+            </html>""",
+
+                "headers": {
+                    "List-Unsubscribe": f"<mailto:support@{MAILGUN_DOMAIN}>"
+                }
             }
+
         )
 
         if response.status_code != 200:
-            raise Exception("Failed to send email")
+            raise Exception(f"Mailgun error: {response.status_code} - {response.text}")
 
         return jsonify({"message": "If an account exists with this email, a reset link will be sent"}), 200
 
