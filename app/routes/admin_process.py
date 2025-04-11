@@ -838,8 +838,9 @@ def populate_daily_dates(current_admin):
         # Get quotes that meet criteria (<=65 chars and <=18 unique letters)
         eligible_quotes = Quote.query.filter(
             Quote.active == True,
-            func.length(Quote.text.cast(db.String)) <= 65,
             Quote.unique_letters <= 18
+        ).filter(
+            func.length(Quote.text) <= 65
         ).all()
 
         # Get tomorrow's date as starting point
