@@ -98,15 +98,11 @@ def login():
 
 
 @bp.route('/logout', methods=['POST'])
-@jwt_required(optional=True)
+@jwt_required()
 def logout():
-    try:
-        token = get_jwt()
-        jti = token["jti"]
-        jwt_blocklist.add(jti)
-    except:
-        # Token may already be revoked or invalid, that's fine
-        pass
+    token = get_jwt()
+    jti = token["jti"]
+    jwt_blocklist.add(jti)
     return jsonify({"msg": "Successfully logged out"}), 200
 
 
@@ -372,29 +368,29 @@ def forgot_password():
     try:
         data = request.get_json()
         email = data.get('email')
-        
+
         if not email:
             return jsonify({"error": "Email is required"}), 400
-            
+
         # Find user by email
         user = User.query.filter_by(email=email).first()
         if not user:
             # For security, still return success even if email not found
             return jsonify({"message": "If an account exists with this email, a reset link will be sent"}), 200
-            
+
         # Generate reset token
         reset_token = secrets.token_urlsafe(32)
         user.reset_token = reset_token
         user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
         db.session.commit()
-        
+
         # Create reset link
         reset_url = f"{request.host_url}reset-password?token={reset_token}"
-        
+
         # Send email via Mailgun
         MAILGUN_API_KEY = current_app.config['MAILGUN_API_KEY']
         MAILGUN_DOMAIN = current_app.config['MAILGUN_DOMAIN']
-        
+
         response = requests.post(
             f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
             auth=("api", MAILGUN_API_KEY),
@@ -405,12 +401,22 @@ def forgot_password():
                 "text": f"To reset your password, please click the following link: {reset_url}\n\nThis link will expire in 1 hour."
             }
         )
-        
+
         if response.status_code != 200:
             raise Exception("Failed to send email")
-            
+
         return jsonify({"message": "If an account exists with this email, a reset link will be sent"}), 200
-        
+
     except Exception as e:
         logging.error(f"Error in forgot password: {str(e)}")
         return jsonify({"error": "Failed to process password reset request"}), 500
+
+from flask_jwt_extended import JWTManager
+from flask_jwt_extended.exceptions import RevokedTokenError
+from flask import jsonify
+
+jwt = JWTManager(app)
+
+@jwt.revoked_token_loader
+def revoked_token_callback(jwt_header, jwt_payload):
+    return jsonify({"msg": "Token has been revoked"}), 401
