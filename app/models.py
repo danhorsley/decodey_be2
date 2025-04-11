@@ -205,7 +205,7 @@ class Quote(db.Model):
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(db.Float, default=0.0)
-    daily_date = db.Column(db.Date, unique=True, nullable=True)
+    _daily_date = db.Column(db.Date, unique=True, nullable=True)
     times_used = db.Column(db.Integer, default=0)
     unique_letters = db.Column(db.Integer)
     active = db.Column(db.Boolean, default=True)
@@ -219,21 +219,22 @@ class Quote(db.Model):
     def _update_unique_letters(self):
         self.unique_letters = self._count_unique_letters(self.text)
 
+    @property
+    def daily_date(self):
+        return self._daily_date
+
+    @daily_date.setter
+    def daily_date(self, value):
+        if isinstance(value, datetime):
+            self._daily_date = value.date()
+        else:
+            self._daily_date = value
+
 @event.listens_for(Quote, 'before_insert')
 @event.listens_for(Quote, 'before_update')
 def set_unique_letters(mapper, connection, target):
     target._update_unique_letters()
-    minor_attribution = db.Column(db.String(255))
-    difficulty = db.Column(
-        db.Float, default=0.0)  # Float for more nuanced difficulty ratings
-    daily_date = db.Column(db.Date, unique=True, nullable=True)  # NULL for general pool, date for daily challenges
-    times_used = db.Column(db.Integer, default=0)  # Track usage statistics
-    unique_letters = db.Column(db.Integer)  # Count of unique letters in text
-    active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime,
-                           default=datetime.utcnow,
-                           onupdate=datetime.utcnow)
+
 
 
 class DailyCompletion(db.Model):
