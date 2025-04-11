@@ -31,6 +31,8 @@ class User(UserMixin, db.Model):
         self.username = username
         self.set_password(password)
         self.email_consent = email_consent
+        self.reset_token = None
+        self.reset_token_expires = None
         if email_consent:
             self.consent_date = datetime.utcnow()
 
