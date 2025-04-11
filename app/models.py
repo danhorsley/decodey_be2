@@ -205,7 +205,7 @@ class Quote(db.Model):
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(db.Float, default=0.0)
-    _daily_date = db.Column(db.Date, unique=True, nullable=True)
+    daily_date = db.Column(db.Date, unique=True, nullable=True)
     times_used = db.Column(db.Integer, default=0)
     unique_letters = db.Column(db.Integer)
     active = db.Column(db.Boolean, default=True)
