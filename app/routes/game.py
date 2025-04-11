@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, Response, stream_with_context
+from flask import Blueprint, jsonify, request, Response, stream_with_context, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token
 from app.services.game_logic import start_game
 from app.services.game_state import (get_unified_game_state,
@@ -10,6 +10,8 @@ from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserS
 from datetime import datetime, date
 import logging
 import uuid
+import json
+import time
 
 # Set up logging
 logger = logging.getLogger(__name__)
