@@ -836,12 +836,12 @@ def populate_daily_dates(current_admin):
         Quote.query.update({Quote.daily_date: None})
 
         # Get quotes that meet criteria (<=65 chars and <=18 unique letters)
-        eligible_quotes = Quote.query.filter(
-            Quote.active == True,
-            Quote.unique_letters <= 18
-        ).filter(
-            func.length(Quote.text) <= 65
-        ).all()
+        from sqlalchemy import and_
+        length_filter = and_(func.length(Quote.text) <= 65, Quote.unique_letters <= 18)
+        
+        eligible_quotes = Quote.query.filter_by(active=True)\
+                                   .filter(length_filter)\
+                                   .all()
 
         # Get tomorrow's date as starting point
         tomorrow = datetime.utcnow().date() + timedelta(days=1)
