@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from sqlalchemy.ext.hybrid import hybrid_property
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 
@@ -217,8 +218,14 @@ class Quote(db.Model):
             return datetime.strptime(value, '%Y-%m-%d').date()
         return value
 
-    def _set_daily_date(self, value):
-        """Ensure daily_date is always stored as date"""
+    @hybrid_property
+    def daily_date(self):
+        """Get daily_date value"""
+        return self._daily_date
+
+    @daily_date.setter
+    def daily_date(self, value):
+        """Set daily_date value"""
         if value is not None:
             value = self._convert_to_date(value)
         self._daily_date = value
