@@ -591,9 +591,11 @@ def game_status():
                                     game_state,
                                     is_anonymous=is_anonymous)
 
-            # Get attribution data
-            attribution = get_attribution_from_quotes(
-                game_state['original_paragraph'])
+            # Use attribution from game state
+            attribution = {
+                'major_attribution': game_state.get('major_attribution', 'Unknown'),
+                'minor_attribution': game_state.get('minor_attribution', '')
+            }
 
             # Calculate time and score
             time_taken = int(
