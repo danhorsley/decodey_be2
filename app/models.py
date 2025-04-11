@@ -221,14 +221,14 @@ class Quote(db.Model):
 
     @property
     def daily_date(self):
-        return self._daily_date
+        return self.daily_date
 
     @daily_date.setter
     def daily_date(self, value):
         if isinstance(value, datetime):
-            self._daily_date = value.date()
+            self.daily_date = value.date()
         else:
-            self._daily_date = value
+            self.daily_date = value
 
 @event.listens_for(Quote, 'before_insert')
 @event.listens_for(Quote, 'before_update')
