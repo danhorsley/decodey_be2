@@ -401,37 +401,6 @@ def forgot_password():
                 "reply-to": f"support@{MAILGUN_DOMAIN}",
 
                 "text": f"""Hi {user.username if user.username else 'there'},
-
-
-@bp.route('/reset-password', methods=['GET', 'POST'])
-def reset_password():
-    token = request.args.get('token')
-    if not token:
-        return jsonify({"error": "Reset token is required"}), 400
-
-    user = User.query.filter_by(reset_token=token).first()
-    
-    if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow():
-        return jsonify({"error": "Invalid or expired reset token"}), 400
-
-    if request.method == 'POST':
-        data = request.get_json()
-        new_password = data.get('password')
-        
-        if not new_password:
-            return jsonify({"error": "New password is required"}), 400
-
-        user.set_password(new_password)
-        user.reset_token = None
-        user.reset_token_expires = None
-        db.session.commit()
-
-        return jsonify({"message": "Password reset successfully"}), 200
-
-    return jsonify({"message": "Token verified, ready for password reset"}), 200
-
-
-
             We received a request to reset your password for your Decodey account.
 
             To reset your password, please click the link below:
@@ -475,3 +444,31 @@ def reset_password():
         logging.error(f"Error in forgot password: {str(e)}")
         return jsonify({"error": "Failed to process password reset request"}), 500
 
+
+
+@bp.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    token = request.args.get('token')
+    if not token:
+        return jsonify({"error": "Reset token is required"}), 400
+
+    user = User.query.filter_by(reset_token=token).first()
+
+    if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow():
+        return jsonify({"error": "Invalid or expired reset token"}), 400
+
+    if request.method == 'POST':
+        data = request.get_json()
+        new_password = data.get('password')
+
+        if not new_password:
+            return jsonify({"error": "New password is required"}), 400
+
+        user.set_password(new_password)
+        user.reset_token = None
+        user.reset_token_expires = None
+        db.session.commit()
+
+        return jsonify({"message": "Password reset successfully"}), 200
+
+    return jsonify({"message": "Token verified, ready for password reset"}), 200
