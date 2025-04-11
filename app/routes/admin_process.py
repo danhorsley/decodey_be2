@@ -822,3 +822,30 @@ def register_admin_process_routes(app):
                           methods=['POST'])
 
     logger.info("Admin process routes registered successfully")
+@admin_process_bp.route('/users/delete/<user_id>', methods=['GET'])
+@admin_required
+def delete_user(current_admin, user_id):
+    """Delete a user account"""
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            logger.warning(f"Admin {current_admin.username} attempted to delete non-existent user {user_id}")
+            return redirect(url_for('admin.users', error="User not found"))
+
+        # Delete user's related data
+        GameScore.query.filter_by(user_id=user_id).delete()
+        UserStats.query.filter_by(user_id=user_id).delete()
+        ActiveGameState.query.filter_by(user_id=user_id).delete()
+        DailyCompletion.query.filter_by(user_id=user_id).delete()
+        
+        # Delete the user
+        db.session.delete(user)
+        db.session.commit()
+
+        logger.info(f"Admin {current_admin.username} deleted user {user.username}")
+        return redirect(url_for('admin.users', success="User deleted successfully"))
+
+    except Exception as e:
+        logger.error(f"Error deleting user: {str(e)}")
+        db.session.rollback()
+        return redirect(url_for('admin.users', error=f"Error deleting user: {str(e)}"))

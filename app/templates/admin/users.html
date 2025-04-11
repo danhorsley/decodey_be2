@@ -66,6 +66,7 @@
                                     {% else %}
                                     <a href="{{ url_for('admin_process.suspend_user', user_id=user.user_id) }}" class="btn btn-sm btn-outline-danger">Suspend</a>
                                     {% endif %}
+                                    <a href="{{ url_for('admin_process.delete_user', user_id=user.user_id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Are you sure you want to permanently delete this user? This action cannot be undone.')">Delete</a>
                                 </div>
                             </td>
                         </tr>
