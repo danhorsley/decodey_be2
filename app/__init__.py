@@ -130,7 +130,7 @@ def create_app(config_class=Config):
         raise
 
     # Setup admin user in production
-    if app.config['FLASK_ENV'] == 'production':
+    if app.config['FLASK_ENV'] != 'development':
         try:
             admin_user = os.environ.get('ADMIN_USER')
             admin_pass = os.environ.get('ADMIN_PASSWORD_1')
