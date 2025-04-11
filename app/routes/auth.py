@@ -6,7 +6,7 @@ import secrets
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import jwt_blocklist
-from app.models import db, User, ActiveGameState, UserStats, GameScore
+from app.models import db, User, ActiveGameState, UserStats, GameScore, DailyCompletion
 import logging
 
 bp = Blueprint('auth', __name__)
