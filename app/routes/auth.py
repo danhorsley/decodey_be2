@@ -341,6 +341,10 @@ def delete_account():
         if not user:
             return jsonify({"msg": "User not found"}), 404
 
+        # Get the JWT token before deleting the user
+        token = get_jwt()
+        jti = token["jti"]
+
         # Delete ALL user related data in correct order to handle foreign key constraints
         DailyCompletion.query.filter_by(user_id=user_id).delete()
         GameScore.query.filter_by(user_id=user_id).delete()
@@ -351,12 +355,13 @@ def delete_account():
         db.session.delete(user)
         db.session.commit()
 
-        # Add the JWT to blocklist to force logout
-        token = get_jwt()
-        jti = token["jti"]
+        # Add token to blocklist after successful deletion
         jwt_blocklist.add(jti)
 
-        return jsonify({"msg": "Account deleted successfully"}), 200
+        return jsonify({
+            "msg": "Account deleted successfully",
+            "token_revoked": True
+        }), 200
 
     except Exception as e:
         db.session.rollback()
