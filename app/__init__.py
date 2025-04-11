@@ -58,9 +58,12 @@ def create_app(config_class=Config):
         app.config['JWT_COOKIE_SAMESITE'] = 'None'
         app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
     # JWT Configuration
-    app.config['JWT_TOKEN_LOCATION'] = ['headers']
+    app.config['JWT_TOKEN_LOCATION'] = ['headers', 'cookies']
     app.config['JWT_HEADER_NAME'] = 'Authorization'
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
+    app.config['JWT_ACCESS_COOKIE_NAME'] = 'access_token_cookie'
+    app.config['JWT_REFRESH_COOKIE_NAME'] = 'refresh_token_cookie'
+    app.config['JWT_COOKIE_DOMAIN'] = '.replit.dev' if app.config['FLASK_ENV'] != 'development' else None
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):
