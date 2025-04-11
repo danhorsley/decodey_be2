@@ -207,8 +207,26 @@ class Quote(db.Model):
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(db.Float, default=0.0)
-    daily_date = db.Column('daily_date', db.Date().with_variant(postgresql.DATE(), 'postgresql'), unique=True, nullable=True)
+    _daily_date = db.Column('daily_date', db.Date().with_variant(postgresql.DATE(), 'postgresql'), unique=True, nullable=True)
     times_used = db.Column(db.Integer, default=0)
+    
+    @property
+    def daily_date(self):
+        return self._daily_date
+
+    @daily_date.setter
+    def daily_date(self, value):
+        if value is None:
+            self._daily_date = None
+        elif isinstance(value, datetime):
+            self._daily_date = value.date()
+        elif isinstance(value, date):
+            self._daily_date = value
+        else:
+            try:
+                self._daily_date = datetime.strptime(str(value).split()[0], '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                self._daily_date = None
     unique_letters = db.Column(db.Integer)
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
