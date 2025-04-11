@@ -6,6 +6,7 @@ import json
 # Set up logging
 logger = logging.getLogger(__name__)
 
+
 def get_unified_game_state(identifier, is_anonymous=False):
     """
     Get game state from the appropriate model based on user type.
@@ -33,13 +34,15 @@ def get_unified_game_state(identifier, is_anonymous=False):
                 'encrypted_paragraph': game.encrypted_paragraph,
                 'mapping': game.mapping,
                 'reverse_mapping': game.reverse_mapping,
-                'correctly_guessed': game.correctly_guessed or [],  # Handle None case
+                'correctly_guessed': game.correctly_guessed
+                or [],  # Handle None case
                 'mistakes': game.mistakes,
                 'max_mistakes': get_max_mistakes_from_game_id(game.game_id),
                 'major_attribution': game.major_attribution,
                 'minor_attribution': game.minor_attribution,
                 'start_time': game.created_at,
-                'difficulty': game.game_id.split('-')[0] if game.game_id else 'medium',
+                'difficulty':
+                game.game_id.split('-')[0] if game.game_id else 'medium',
                 'game_complete': game.completed,
                 'has_won': game.won
             }
@@ -53,20 +56,32 @@ def get_unified_game_state(identifier, is_anonymous=False):
 
             # Convert database model to standardized game state dict
             game_state = {
-                'game_id': game.game_id,
-                'original_paragraph': game.original_paragraph,
-                'encrypted_paragraph': game.encrypted_paragraph,
-                'mapping': game.mapping,
-                'reverse_mapping': game.reverse_mapping,
-                'correctly_guessed': game.correctly_guessed or [],  # Handle None case
-                'mistakes': game.mistakes,
-                'max_mistakes': get_max_mistakes_from_game_id(game.game_id),
-                'major_attribution': game.major_attribution,
-                'minor_attribution': game.minor_attribution,
-                'start_time': game.created_at,
-                'difficulty': game.game_id.split('-')[0] if game.game_id else 'medium'
+                'game_id':
+                game.game_id,
+                'original_paragraph':
+                game.original_paragraph,
+                'encrypted_paragraph':
+                game.encrypted_paragraph,
+                'mapping':
+                game.mapping,
+                'reverse_mapping':
+                game.reverse_mapping,
+                'correctly_guessed':
+                game.correctly_guessed or [],  # Handle None case
+                'mistakes':
+                game.mistakes,
+                'max_mistakes':
+                get_max_mistakes_from_game_id(game.game_id),
+                'major_attribution':
+                game.major_attribution,
+                'minor_attribution':
+                game.minor_attribution,
+                'start_time':
+                game.created_at,
+                'difficulty':
+                game.game_id.split('-')[0] if game.game_id else 'medium'
             }
-
+            # print(game_state)
             # Check game status dynamically
             status = check_game_status(game_state)
             game_state['game_complete'] = status['game_complete']
@@ -76,6 +91,7 @@ def get_unified_game_state(identifier, is_anonymous=False):
     except Exception as e:
         logger.error(f"Error getting game state: {str(e)}", exc_info=True)
         return None
+
 
 def save_unified_game_state(identifier, game_state, is_anonymous=False):
     """
@@ -93,13 +109,16 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
         if is_anonymous:
             # For anonymous users, save to AnonymousGameState
             anon_id = identifier
-            anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
+            anon_game = AnonymousGameState.query.filter_by(
+                anon_id=anon_id).first()
 
             if anon_game:
                 # Update existing anonymous game
                 anon_game.mapping = game_state.get('mapping', {})
-                anon_game.reverse_mapping = game_state.get('reverse_mapping', {})
-                anon_game.correctly_guessed = game_state.get('correctly_guessed', [])
+                anon_game.reverse_mapping = game_state.get(
+                    'reverse_mapping', {})
+                anon_game.correctly_guessed = game_state.get(
+                    'correctly_guessed', [])
                 anon_game.mistakes = game_state.get('mistakes', 0)
                 anon_game.last_updated = datetime.utcnow()
 
@@ -112,47 +131,53 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
                 anon_game = AnonymousGameState(
                     anon_id=anon_id,
                     game_id=game_state.get('game_id', ''),
-                    original_paragraph=game_state.get('original_paragraph', ''),
-                    encrypted_paragraph=game_state.get('encrypted_paragraph', ''),
+                    original_paragraph=game_state.get('original_paragraph',
+                                                      ''),
+                    encrypted_paragraph=game_state.get('encrypted_paragraph',
+                                                       ''),
                     mapping=game_state.get('mapping', {}),
                     reverse_mapping=game_state.get('reverse_mapping', {}),
                     correctly_guessed=game_state.get('correctly_guessed', []),
                     mistakes=game_state.get('mistakes', 0),
                     major_attribution=game_state.get('major_attribution', ''),
-                    minor_attribution=game_state.get('minor_attribution', '')
-                )
+                    minor_attribution=game_state.get('minor_attribution', ''))
                 db.session.add(anon_game)
         else:
             # For authenticated users, save to ActiveGameState
             user_id = identifier
 
-            # For completed games, we need to keep the ActiveGameState until 
+            # For completed games, we need to keep the ActiveGameState until
             # the win is acknowledged through the game-status endpoint
-            active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
+            active_game = ActiveGameState.query.filter_by(
+                user_id=user_id).first()
 
             if active_game:
                 # Update existing game state
                 active_game.mapping = game_state.get('mapping', {})
-                active_game.reverse_mapping = game_state.get('reverse_mapping', {})
-                active_game.correctly_guessed = game_state.get('correctly_guessed', [])
+                active_game.reverse_mapping = game_state.get(
+                    'reverse_mapping', {})
+                active_game.correctly_guessed = game_state.get(
+                    'correctly_guessed', [])
                 active_game.mistakes = game_state.get('mistakes', 0)
                 active_game.last_updated = datetime.utcnow()
 
                 # Check if this is a win that's been acknowledged
-                if game_state.get('game_complete', False) and game_state.get('has_won', False) and game_state.get('win_notified', False):
+                if game_state.get('game_complete', False) and game_state.get(
+                        'has_won', False) and game_state.get(
+                            'win_notified', False):
                     # Once the win has been acknowledged, record the score and delete the active game
-                    time_taken = int((datetime.utcnow() - active_game.created_at).total_seconds())
+                    time_taken = int((datetime.utcnow() -
+                                      active_game.created_at).total_seconds())
 
                     # Record score
                     if not game_state.get('is_abandoned', False):
-                        record_game_score(
-                            user_id=user_id,
-                            game_id=active_game.game_id,
-                            score=calculate_game_score(game_state, time_taken),
-                            mistakes=active_game.mistakes,
-                            time_taken=time_taken,
-                            completed=True
-                        )
+                        record_game_score(user_id=user_id,
+                                          game_id=active_game.game_id,
+                                          score=calculate_game_score(
+                                              game_state, time_taken),
+                                          mistakes=active_game.mistakes,
+                                          time_taken=time_taken,
+                                          completed=True)
 
                     # Now delete the active game
                     db.session.delete(active_game)
@@ -161,8 +186,10 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
                 active_game = ActiveGameState(
                     user_id=user_id,
                     game_id=game_state.get('game_id', ''),
-                    original_paragraph=game_state.get('original_paragraph', ''),
-                    encrypted_paragraph=game_state.get('encrypted_paragraph', ''),
+                    original_paragraph=game_state.get('original_paragraph',
+                                                      ''),
+                    encrypted_paragraph=game_state.get('encrypted_paragraph',
+                                                       ''),
                     mapping=game_state.get('mapping', {}),
                     reverse_mapping=game_state.get('reverse_mapping', {}),
                     correctly_guessed=game_state.get('correctly_guessed', []),
@@ -170,18 +197,20 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
                     major_attribution=game_state.get('major_attribution', ''),
                     minor_attribution=game_state.get('minor_attribution', ''),
                     created_at=game_state.get('start_time', datetime.utcnow()),
-                    last_updated=datetime.utcnow()
-                )
+                    last_updated=datetime.utcnow())
                 db.session.add(active_game)
 
         # Commit changes
         db.session.commit()
-        logger.debug(f"Game state saved successfully for {'anonymous' if is_anonymous else 'user'} {identifier}")
+        logger.debug(
+            f"Game state saved successfully for {'anonymous' if is_anonymous else 'user'} {identifier}"
+        )
         return True
     except Exception as e:
         logger.error(f"Error saving game state: {str(e)}", exc_info=True)
         db.session.rollback()
         return False
+
 
 def abandon_game(user_id):
     """
@@ -198,7 +227,8 @@ def abandon_game(user_id):
         active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
 
         if not active_game:
-            logger.warning(f"No active game found to abandon for user {user_id}")
+            logger.warning(
+                f"No active game found to abandon for user {user_id}")
             return True  # Nothing to abandon is still a success
 
         # Record the abandoned game
@@ -207,12 +237,12 @@ def abandon_game(user_id):
             game_id=active_game.game_id,
             score=0,  # Zero score for abandoned games
             mistakes=active_game.mistakes,
-            time_taken=int((datetime.utcnow() - active_game.created_at).total_seconds()),
+            time_taken=int(
+                (datetime.utcnow() - active_game.created_at).total_seconds()),
             game_type='regular',
             challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
             completed=False,  # Mark as incomplete
-            created_at=datetime.utcnow()
-        )
+            created_at=datetime.utcnow())
 
         # Delete the active game
         db.session.add(game_score)
@@ -229,6 +259,7 @@ def abandon_game(user_id):
         logger.error(f"Error abandoning game: {str(e)}", exc_info=True)
         db.session.rollback()
         return False
+
 
 def get_max_mistakes_from_game_id(game_id):
     """
@@ -250,13 +281,10 @@ def get_max_mistakes_from_game_id(game_id):
             difficulty = parts[0]
 
     # Difficulty settings
-    difficulty_settings = {
-        'easy': 8,
-        'medium': 5,
-        'hard': 3
-    }
+    difficulty_settings = {'easy': 8, 'medium': 5, 'hard': 3}
 
     return difficulty_settings.get(difficulty, 5)  # Default to medium (6)
+
 
 def calculate_game_score(game_state, time_taken):
     """
@@ -270,7 +298,8 @@ def calculate_game_score(game_state, time_taken):
         int: Calculated score
     """
     # Only calculate score for completed games that were won
-    if not game_state.get('game_complete', False) or not game_state.get('has_won', False):
+    if not game_state.get('game_complete', False) or not game_state.get(
+            'has_won', False):
         return 0
 
     # Import scoring function from utils
@@ -297,18 +326,15 @@ def get_attribution_from_quotes(original_paragraph):
         from app.models import Quote
 
         # Default values in case we can't find a match
-        attribution = {
-            'major_attribution': 'Unknown',
-            'minor_attribution': ''
-        }
+        attribution = {'major_attribution': 'Unknown', 'minor_attribution': ''}
 
         # Normalize the paragraph for matching (remove extra whitespace, lowercase)
-        normalized_paragraph = ' '.join(original_paragraph.strip().split()).lower()
+        normalized_paragraph = ' '.join(
+            original_paragraph.strip().split()).lower()
 
         # Look up quote in database
         quote = Quote.query.filter(
-            func.lower(Quote.text) == normalized_paragraph
-        ).first()
+            func.lower(Quote.text) == normalized_paragraph).first()
 
         if quote:
             attribution = {
@@ -319,17 +345,22 @@ def get_attribution_from_quotes(original_paragraph):
             return attribution
 
         # If we get here, no match was found
-        logger.warning(f"No attribution found for paragraph: {normalized_paragraph[:50]}...")
+        logger.warning(
+            f"No attribution found for paragraph: {normalized_paragraph[:50]}..."
+        )
         return attribution
 
     except Exception as e:
         logger.error(f"Error getting attribution: {str(e)}", exc_info=True)
-        return {
-            'major_attribution': 'Unknown',
-            'minor_attribution': ''
-        }
+        return {'major_attribution': 'Unknown', 'minor_attribution': ''}
 
-def record_game_score(user_id, game_id, score, mistakes, time_taken, completed=True):
+
+def record_game_score(user_id,
+                      game_id,
+                      score,
+                      mistakes,
+                      time_taken,
+                      completed=True):
     """
     Record a game score in the database.
 
@@ -351,17 +382,15 @@ def record_game_score(user_id, game_id, score, mistakes, time_taken, completed=T
 
         # Create GameScore record
         from app.models import db, GameScore
-        game_score = GameScore(
-            user_id=user_id,
-            game_id=game_id,
-            score=score,
-            mistakes=mistakes,
-            time_taken=time_taken,
-            game_type='regular',
-            challenge_date=challenge_date,
-            completed=completed,
-            created_at=datetime.utcnow()
-        )
+        game_score = GameScore(user_id=user_id,
+                               game_id=game_id,
+                               score=score,
+                               mistakes=mistakes,
+                               time_taken=time_taken,
+                               game_type='regular',
+                               challenge_date=challenge_date,
+                               completed=completed,
+                               created_at=datetime.utcnow())
 
         # Add and commit
         db.session.add(game_score)
@@ -374,7 +403,8 @@ def record_game_score(user_id, game_id, score, mistakes, time_taken, completed=T
         # Check if this is a daily challenge and record completion
         if 'daily' in game_id and completed:
             print("***daily win detected***")
-            record_daily_completion(user_id, game_id, score, mistakes, time_taken)
+            record_daily_completion(user_id, game_id, score, mistakes,
+                                    time_taken)
 
         return True
     except Exception as e:
@@ -385,6 +415,7 @@ def record_game_score(user_id, game_id, score, mistakes, time_taken, completed=T
         from app.models import db
         db.session.rollback()
         return False
+
 
 def check_game_status(game_state):
     """
@@ -398,14 +429,17 @@ def check_game_status(game_state):
     """
     # Get difficulty and max mistakes
     difficulty = game_state.get('difficulty', 'medium')
-    max_mistakes = get_max_mistakes_from_game_id(game_state.get('game_id', f"{difficulty}-default"))
+    max_mistakes = get_max_mistakes_from_game_id(
+        game_state.get('game_id', f"{difficulty}-default"))
 
     # Game is lost if mistakes exceed max allowed
     if game_state.get('mistakes', 0) >= max_mistakes:
         return {'game_complete': True, 'has_won': False}
 
     # Game is won if all letters are correctly guessed
-    encrypted_letters = set(c for c in game_state.get('encrypted_paragraph', '') if c.isalpha())
+    encrypted_letters = set(c
+                            for c in game_state.get('encrypted_paragraph', '')
+                            if c.isalpha())
     correctly_guessed = game_state.get('correctly_guessed', [])
 
     # Use set intersection to check if all letters are guessed
@@ -422,6 +456,7 @@ def check_game_status(game_state):
     # Game is still in progress
     return {'game_complete': False, 'has_won': False}
 
+
 def get_display(encrypted_paragraph, correctly_guessed, reverse_mapping):
     """
     Generate a display version of the encrypted paragraph with correctly guessed letters revealed.
@@ -434,12 +469,10 @@ def get_display(encrypted_paragraph, correctly_guessed, reverse_mapping):
     Returns:
         str: Display string with blocks for unguessed letters
     """
-    return ''.join(
-        reverse_mapping[char] if char in correctly_guessed 
-        else '█' if char.isalpha() 
-        else char
-        for char in encrypted_paragraph
-    )
+    return ''.join(reverse_mapping[char] if char in
+                   correctly_guessed else '█' if char.isalpha() else char
+                   for char in encrypted_paragraph)
+
 
 def process_guess(game_state, encrypted_letter, guessed_letter):
     """
@@ -458,10 +491,7 @@ def process_guess(game_state, encrypted_letter, guessed_letter):
 
     # Validate the guess
     if encrypted_letter not in reverse_mapping:
-        return {
-            'valid': False,
-            'message': 'Invalid encrypted letter'
-        }
+        return {'valid': False, 'message': 'Invalid encrypted letter'}
 
     # Check if guess is correct
     correct_letter = reverse_mapping.get(encrypted_letter, '')
@@ -480,14 +510,11 @@ def process_guess(game_state, encrypted_letter, guessed_letter):
     # Check if game is complete
     status = check_game_status(game_state)
     game_state['game_complete'] = status['game_complete']
-    game_state['has_won'] = status['has_won'] 
+    game_state['has_won'] = status['has_won']
 
     # Generate the display
-    display = get_display(
-        game_state.get('encrypted_paragraph', ''),
-        correctly_guessed,
-        reverse_mapping
-    )
+    display = get_display(game_state.get('encrypted_paragraph', ''),
+                          correctly_guessed, reverse_mapping)
 
     return {
         'valid': True,
@@ -495,8 +522,10 @@ def process_guess(game_state, encrypted_letter, guessed_letter):
         'display': display,
         'is_correct': is_correct,
         'complete': status['game_complete'],
-        'has_won': status['has_won']  # Make sure we're consistent with the key name
+        'has_won':
+        status['has_won']  # Make sure we're consistent with the key name
     }
+
 
 def process_hint(game_state):
     """
@@ -519,13 +548,12 @@ def process_hint(game_state):
     all_encrypted = list(set(c for c in encrypted_paragraph if c.isalpha()))
 
     # Filter out already guessed letters
-    unguessed = [letter for letter in all_encrypted if letter not in correctly_guessed]
+    unguessed = [
+        letter for letter in all_encrypted if letter not in correctly_guessed
+    ]
 
     if not unguessed:
-        return {
-            'valid': False,
-            'message': 'No more hints available'
-        }
+        return {'valid': False, 'message': 'No more hints available'}
 
     # Select a random unguessed letter
     hint_letter = random.choice(unguessed)
@@ -533,12 +561,9 @@ def process_hint(game_state):
 
     # Apply difficulty-specific hint penalty
     difficulty = game_state.get('difficulty', 'medium')
-    hint_penalties = {
-        'easy': 1,
-        'medium': 1,
-        'hard': 1
-    }
-    game_state['mistakes'] = game_state.get('mistakes', 0) + hint_penalties.get(difficulty, 1)
+    hint_penalties = {'easy': 1, 'medium': 1, 'hard': 1}
+    game_state['mistakes'] = game_state.get(
+        'mistakes', 0) + hint_penalties.get(difficulty, 1)
 
     # Update game state
     game_state['correctly_guessed'] = correctly_guessed
@@ -549,7 +574,8 @@ def process_hint(game_state):
     game_state['has_won'] = status['has_won']
 
     # Generate the display
-    display = get_display(encrypted_paragraph, correctly_guessed, reverse_mapping)
+    display = get_display(encrypted_paragraph, correctly_guessed,
+                          reverse_mapping)
 
     return {
         'valid': True,
@@ -561,17 +587,22 @@ def process_hint(game_state):
         'has_won': status['has_won']
     }
 
+
 def record_daily_completion(user_id, game_id, score, mistakes, time_taken):
     """
     Record a daily challenge completion in the DailyCompletion model with enhanced debugging.
     """
     logger = logging.getLogger(__name__)
 
-    logger.info(f"DAILY DEBUG: Starting daily completion recording for user={user_id}, game_id={game_id}")
+    logger.info(
+        f"DAILY DEBUG: Starting daily completion recording for user={user_id}, game_id={game_id}"
+    )
 
     # Only proceed if this is a daily challenge
     if 'daily' not in game_id:
-        logger.info(f"DAILY DEBUG: Not a daily challenge (no 'daily' in game_id): {game_id}")
+        logger.info(
+            f"DAILY DEBUG: Not a daily challenge (no 'daily' in game_id): {game_id}"
+        )
         return True  # Not a daily challenge, so no need to record
 
     logger.info(f"DAILY DEBUG: Confirmed this is a daily challenge")
@@ -581,68 +612,88 @@ def record_daily_completion(user_id, game_id, score, mistakes, time_taken):
         from datetime import datetime
 
         # Extract date from game_id (format: "difficulty-daily-YYYY-MM-DD-uuid")
-        logger.info(f"DAILY DEBUG: Attempting to extract date from game_id: {game_id}")
+        logger.info(
+            f"DAILY DEBUG: Attempting to extract date from game_id: {game_id}")
         date_parts = game_id.split('-')
         logger.info(f"DAILY DEBUG: Split game_id into parts: {date_parts}")
 
         if len(date_parts) < 5:
-            logger.warning(f"DAILY DEBUG: Invalid daily game_id format (not enough parts): {game_id}")
+            logger.warning(
+                f"DAILY DEBUG: Invalid daily game_id format (not enough parts): {game_id}"
+            )
             return False
 
         # Parse the date components
         try:
             challenge_date_str = f"{date_parts[2]}-{date_parts[3]}-{date_parts[4]}"
-            logger.info(f"DAILY DEBUG: Extracted date string: {challenge_date_str}")
-            challenge_date = datetime.strptime(challenge_date_str, '%Y-%m-%d').date()
+            logger.info(
+                f"DAILY DEBUG: Extracted date string: {challenge_date_str}")
+            challenge_date = datetime.strptime(challenge_date_str,
+                                               '%Y-%m-%d').date()
             logger.info(f"DAILY DEBUG: Parsed date object: {challenge_date}")
         except (ValueError, IndexError) as e:
-            logger.error(f"DAILY DEBUG: Error parsing date from game_id {game_id}: {str(e)}")
+            logger.error(
+                f"DAILY DEBUG: Error parsing date from game_id {game_id}: {str(e)}"
+            )
             return False
 
         # Find the quote for this date
-        logger.info(f"DAILY DEBUG: Looking up quote for date: {challenge_date}")
+        logger.info(
+            f"DAILY DEBUG: Looking up quote for date: {challenge_date}")
         daily_quote = Quote.query.filter_by(daily_date=challenge_date).first()
 
         if not daily_quote:
-            logger.warning(f"DAILY DEBUG: No daily quote found for date {challenge_date}")
+            logger.warning(
+                f"DAILY DEBUG: No daily quote found for date {challenge_date}")
 
             # Additional debugging for available quotes
             try:
-                all_daily_quotes = Quote.query.filter(Quote.daily_date is not None).all()
-                logger.info(f"DAILY DEBUG: Found {len(all_daily_quotes)} quotes with daily dates")
-                logger.info(f"DAILY DEBUG: Sample daily dates: {[q.daily_date for q in all_daily_quotes[:5]]}")
+                all_daily_quotes = Quote.query.filter(
+                    Quote.daily_date is not None).all()
+                logger.info(
+                    f"DAILY DEBUG: Found {len(all_daily_quotes)} quotes with daily dates"
+                )
+                logger.info(
+                    f"DAILY DEBUG: Sample daily dates: {[q.daily_date for q in all_daily_quotes[:5]]}"
+                )
             except Exception as quote_err:
-                logger.error(f"DAILY DEBUG: Error querying available quotes: {str(quote_err)}")
+                logger.error(
+                    f"DAILY DEBUG: Error querying available quotes: {str(quote_err)}"
+                )
 
             return False
 
-        logger.info(f"DAILY DEBUG: Found quote: id={daily_quote.id}, author={daily_quote.author}")
-
-        # Check if user already completed this daily challenge
-        logger.info(f"DAILY DEBUG: Checking for existing completion for user={user_id}, date={challenge_date}")
-        existing_completion = DailyCompletion.query.filter_by(
-            user_id=user_id, 
-            challenge_date=challenge_date
-        ).first()
-
-        if existing_completion:
-            logger.info(f"DAILY DEBUG: User {user_id} already completed daily challenge for {challenge_date}")
-            return True  # Already recorded
-
-        logger.info(f"DAILY DEBUG: No existing completion found, creating new record")
-
-        # Create new completion record
-        completion = DailyCompletion(
-            user_id=user_id,
-            quote_id=daily_quote.id,
-            challenge_date=challenge_date,
-            completed_at=datetime.utcnow(),
-            score=score,
-            mistakes=mistakes,
-            time_taken=time_taken
+        logger.info(
+            f"DAILY DEBUG: Found quote: id={daily_quote.id}, author={daily_quote.author}"
         )
 
-        logger.info(f"DAILY DEBUG: Created completion object, adding to session")
+        # Check if user already completed this daily challenge
+        logger.info(
+            f"DAILY DEBUG: Checking for existing completion for user={user_id}, date={challenge_date}"
+        )
+        existing_completion = DailyCompletion.query.filter_by(
+            user_id=user_id, challenge_date=challenge_date).first()
+
+        if existing_completion:
+            logger.info(
+                f"DAILY DEBUG: User {user_id} already completed daily challenge for {challenge_date}"
+            )
+            return True  # Already recorded
+
+        logger.info(
+            f"DAILY DEBUG: No existing completion found, creating new record")
+
+        # Create new completion record
+        completion = DailyCompletion(user_id=user_id,
+                                     quote_id=daily_quote.id,
+                                     challenge_date=challenge_date,
+                                     completed_at=datetime.utcnow(),
+                                     score=score,
+                                     mistakes=mistakes,
+                                     time_taken=time_taken)
+
+        logger.info(
+            f"DAILY DEBUG: Created completion object, adding to session")
         db.session.add(completion)
 
         # Update the user's daily streak
@@ -652,25 +703,34 @@ def record_daily_completion(user_id, game_id, score, mistakes, time_taken):
             update_daily_streak(user_id, challenge_date)
             logger.info(f"DAILY DEBUG: Daily streak updated successfully")
         except Exception as streak_err:
-            logger.error(f"DAILY DEBUG: Error updating daily streak: {str(streak_err)}", exc_info=True)
+            logger.error(
+                f"DAILY DEBUG: Error updating daily streak: {str(streak_err)}",
+                exc_info=True)
             # Continue despite streak update error
 
         logger.info(f"DAILY DEBUG: Committing transaction")
         db.session.commit()
-        logger.info(f"DAILY DEBUG: Successfully recorded daily completion for user {user_id} on {challenge_date}")
+        logger.info(
+            f"DAILY DEBUG: Successfully recorded daily completion for user {user_id} on {challenge_date}"
+        )
         return True
 
     except Exception as e:
         from app.models import db
-        logger.error(f"DAILY DEBUG: Error recording daily completion: {str(e)}", exc_info=True)
+        logger.error(
+            f"DAILY DEBUG: Error recording daily completion: {str(e)}",
+            exc_info=True)
 
         # Additional error context
-        logger.error(f"DAILY DEBUG: Error details - user_id: {user_id}, game_id: {game_id}")
+        logger.error(
+            f"DAILY DEBUG: Error details - user_id: {user_id}, game_id: {game_id}"
+        )
 
         try:
             db.session.rollback()
             logger.info("DAILY DEBUG: Session rolled back successfully")
         except Exception as rollback_err:
-            logger.error(f"DAILY DEBUG: Error during rollback: {str(rollback_err)}")
+            logger.error(
+                f"DAILY DEBUG: Error during rollback: {str(rollback_err)}")
 
         return False

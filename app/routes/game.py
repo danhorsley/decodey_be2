@@ -3,8 +3,9 @@ from flask_jwt_extended import jwt_required, get_jwt_identity, decode_token
 from app.services.game_logic import start_game
 from app.services.game_state import (get_unified_game_state,
                                      save_unified_game_state,
-                                     check_game_status, get_display,process_guess, process_hint, abandon_game,
-                                    get_attribution_from_quotes)
+                                     check_game_status, get_display,
+                                     process_guess, process_hint, abandon_game,
+                                     get_attribution_from_quotes)
 from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats
 from datetime import datetime, date
 import logging
@@ -488,10 +489,13 @@ def continue_game():
         display = get_display(game_state['encrypted_paragraph'],
                               game_state['correctly_guessed'],
                               game_state['reverse_mapping'])
-        
+
         # Map encrypted correctly guessed letters to original letters
-        display_guessed = [game_state['reverse_mapping'][letter] for letter in game_state['correctly_guessed']]
-        
+        display_guessed = [
+            game_state['reverse_mapping'][letter]
+            for letter in game_state['correctly_guessed']
+        ]
+
         # Generate letter frequency
         letter_frequency = {
             letter: game_state['encrypted_paragraph'].count(letter)
@@ -499,7 +503,7 @@ def continue_game():
             if letter.isalpha()
         }
 
-        ret =  {
+        ret = {
             "display": display,
             "encrypted_paragraph": game_state['encrypted_paragraph'],
             "game_id": game_state['game_id'],
@@ -593,10 +597,11 @@ def game_status():
 
             # Use attribution from game state
             attribution = {
-                'major_attribution': game_state.get('major_attribution', 'Unknown'),
+                'major_attribution': game_state.get('major_attribution',
+                                                    'Unknown'),
                 'minor_attribution': game_state.get('minor_attribution', '')
             }
-
+            print(attribution)
             # Calculate time and score
             time_taken = int(
                 (datetime.utcnow() - game_state['start_time']).total_seconds())
@@ -625,39 +630,43 @@ def game_status():
                     daily_date_str = game_state.get('daily_date')
                     if daily_date_str:
                         # Parse the daily date
-                        daily_date = datetime.strptime(daily_date_str, '%Y-%m-%d').date()
+                        daily_date = datetime.strptime(daily_date_str,
+                                                       '%Y-%m-%d').date()
 
                         # Find the quote based on the date
                         from app.models import Quote, DailyCompletion
-                        daily_quote = Quote.query.filter_by(daily_date=daily_date).first()
+                        daily_quote = Quote.query.filter_by(
+                            daily_date=daily_date).first()
 
                         if daily_quote:
                             # Check if already completed
                             existing_completion = DailyCompletion.query.filter_by(
-                                user_id=user_id, 
-                                challenge_date=daily_date
-                            ).first()
+                                user_id=user_id,
+                                challenge_date=daily_date).first()
 
                             if not existing_completion:
                                 # Create new completion record
                                 completion = DailyCompletion(
                                     user_id=user_id,
-                                    quote_id=daily_quote.id,  # Use the quote's ID
+                                    quote_id=daily_quote.
+                                    id,  # Use the quote's ID
                                     challenge_date=daily_date,
                                     completed_at=datetime.utcnow(),
                                     score=score,
                                     mistakes=game_state['mistakes'],
-                                    time_taken=time_taken
-                                )
+                                    time_taken=time_taken)
                                 db.session.add(completion)
 
                                 # Update user's daily streak
                                 update_daily_streak(user_id, daily_date)
 
                                 db.session.commit()
-                                logger.info(f"Recorded daily challenge completion for user {user_id}, date {daily_date}")
+                                logger.info(
+                                    f"Recorded daily challenge completion for user {user_id}, date {daily_date}"
+                                )
                 except Exception as e:
-                    logger.error(f"Error recording daily completion: {str(e)}", exc_info=True)
+                    logger.error(f"Error recording daily completion: {str(e)}",
+                                 exc_info=True)
                     db.session.rollback()
 
         response_data = {
@@ -674,6 +683,7 @@ def game_status():
     except Exception as e:
         logger.error(f"Error getting game status: {str(e)}", exc_info=True)
         return jsonify({"error": "Error getting game status"}), 500
+
 
 def get_rating_from_score(score):
     """Determine rating based on score"""
@@ -725,6 +735,7 @@ def convert_anonymous_game_route():
         logger.error(f"Error converting game: {str(e)}", exc_info=True)
         return jsonify({"error": "Error converting game"}), 500
 
+
 def update_daily_streak(user_id, completion_date):
     """Update user's daily challenge streak"""
     try:
@@ -766,7 +777,9 @@ def update_daily_streak(user_id, completion_date):
             user_stats.total_daily_completed += 1
             user_stats.last_daily_completed_date = completion_date
 
-        logger.info(f"Updated daily streak for user {user_id}: current streak = {user_stats.current_daily_streak}, max streak = {user_stats.max_daily_streak}")
+        logger.info(
+            f"Updated daily streak for user {user_id}: current streak = {user_stats.current_daily_streak}, max streak = {user_stats.max_daily_streak}"
+        )
         return True
 
     except Exception as e:
