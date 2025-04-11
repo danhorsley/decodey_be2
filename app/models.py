@@ -2,6 +2,7 @@ from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.dialects import postgresql
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 
@@ -206,7 +207,7 @@ class Quote(db.Model):
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(db.Float, default=0.0)
-    daily_date = db.Column('daily_date', db.Date, unique=True, nullable=True)
+    daily_date = db.Column('daily_date', db.Date().with_variant(postgresql.DATE(), 'postgresql'), unique=True, nullable=True)
     times_used = db.Column(db.Integer, default=0)
     unique_letters = db.Column(db.Integer)
     active = db.Column(db.Boolean, default=True)
