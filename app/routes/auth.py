@@ -457,6 +457,9 @@ def reset_password():
     if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow():
         return jsonify({"error": "Invalid or expired reset token"}), 400
 
+    if request.method == 'GET':
+        return render_template('reset_password.html')
+
     if request.method == 'POST':
         data = request.get_json()
         new_password = data.get('password')
