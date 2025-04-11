@@ -219,8 +219,6 @@ class Quote(db.Model):
     def _update_unique_letters(self):
         self.unique_letters = self._count_unique_letters(self.text)
 
-    daily_date = db.Column(db.Date, unique=True, nullable=True)
-
 @event.listens_for(Quote, 'before_insert')
 @event.listens_for(Quote, 'before_update')
 def set_unique_letters(mapper, connection, target):
