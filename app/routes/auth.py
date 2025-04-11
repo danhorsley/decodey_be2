@@ -411,12 +411,3 @@ def forgot_password():
         logging.error(f"Error in forgot password: {str(e)}")
         return jsonify({"error": "Failed to process password reset request"}), 500
 
-from flask_jwt_extended import JWTManager
-from flask_jwt_extended.exceptions import RevokedTokenError
-from flask import jsonify
-
-jwt = JWTManager(app)
-
-@jwt.revoked_token_loader
-def revoked_token_callback(jwt_header, jwt_payload):
-    return jsonify({"msg": "Token has been revoked"}), 401
