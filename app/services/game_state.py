@@ -285,7 +285,7 @@ def calculate_game_score(game_state, time_taken):
 
 def get_attribution_from_quotes(original_paragraph):
     """
-    Get attribution information from quotes.csv for a given paragraph.
+    Get attribution information from database for a given paragraph.
 
     Args:
         original_paragraph (str): The original paragraph text
@@ -294,8 +294,7 @@ def get_attribution_from_quotes(original_paragraph):
         dict: Attribution information with major_attribution (author) and minor_attribution
     """
     try:
-        import csv
-        from pathlib import Path
+        from app.models import Quote
 
         # Default values in case we can't find a match
         attribution = {
@@ -306,27 +305,18 @@ def get_attribution_from_quotes(original_paragraph):
         # Normalize the paragraph for matching (remove extra whitespace, lowercase)
         normalized_paragraph = ' '.join(original_paragraph.strip().split()).lower()
 
-        # Path to quotes.csv
-        quotes_file = Path('quotes.csv')
+        # Look up quote in database
+        quote = Quote.query.filter(
+            func.lower(Quote.text) == normalized_paragraph
+        ).first()
 
-        if not quotes_file.exists():
-            logger.warning("quotes.csv file not found")
+        if quote:
+            attribution = {
+                'major_attribution': quote.author,
+                'minor_attribution': quote.minor_attribution or ''
+            }
+            logger.debug(f"Found attribution: {attribution}")
             return attribution
-
-        with open(quotes_file, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                # Normalize the quote for matching
-                normalized_quote = ' '.join(row['quote'].replace('"', '').strip().split()).lower()
-
-                # Check if this is the quote we're looking for
-                if normalized_paragraph == normalized_quote:
-                    attribution = {
-                        'major_attribution': row['author'],
-                        'minor_attribution': row['minor_attribution']
-                    }
-                    logger.debug(f"Found attribution: {attribution}")
-                    return attribution
 
         # If we get here, no match was found
         logger.warning(f"No attribution found for paragraph: {normalized_paragraph[:50]}...")
