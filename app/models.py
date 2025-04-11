@@ -219,16 +219,7 @@ class Quote(db.Model):
     def _update_unique_letters(self):
         self.unique_letters = self._count_unique_letters(self.text)
 
-    @property
-    def daily_date(self):
-        return self.daily_date
-
-    @daily_date.setter
-    def daily_date(self, value):
-        if isinstance(value, datetime):
-            self.daily_date = value.date()
-        else:
-            self.daily_date = value
+    daily_date = db.Column(db.Date, unique=True, nullable=True)
 
 @event.listens_for(Quote, 'before_insert')
 @event.listens_for(Quote, 'before_update')
