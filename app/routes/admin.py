@@ -919,8 +919,18 @@ def edit_quote(current_admin):
         quote.text = quote_text
         quote.author = author
         quote.minor_attribution = attribution
+        
+        # Handle daily_date from form
+        daily_date = request.form.get('daily_date')
+        if daily_date:
+            try:
+                quote.daily_date = datetime.strptime(daily_date, '%Y-%m-%d').date()
+            except ValueError:
+                quote.daily_date = None
+        else:
+            quote.daily_date = None
+            
         quote.updated_at = datetime.utcnow()
-
         db.session.commit()
 
         logger.info(f"Admin {current_admin.username} edited quote #{quote_id}")
