@@ -822,6 +822,41 @@ def register_admin_process_routes(app):
                           methods=['POST'])
 
     logger.info("Admin process routes registered successfully")
+
+@admin_process_bp.route('/populate-daily-dates', methods=['GET'])
+@admin_required
+def populate_daily_dates(current_admin):
+    """Populate daily dates for appropriate quotes"""
+    try:
+        from datetime import datetime, timedelta
+        from app.models import Quote
+
+        # Clear existing daily dates
+        Quote.query.update({Quote.daily_date: None})
+        
+        # Get quotes that meet criteria (<=65 chars and <=18 unique letters)
+        eligible_quotes = Quote.query.filter(
+            Quote.active == True,
+            Quote.text.cast(db.String).length() <= 65,
+            Quote.unique_letters <= 18
+        ).all()
+
+        # Get tomorrow's date as starting point
+        tomorrow = datetime.utcnow().date() + timedelta(days=1)
+        
+        # Assign dates sequentially
+        for i, quote in enumerate(eligible_quotes):
+            quote.daily_date = tomorrow + timedelta(days=i)
+        
+        db.session.commit()
+        
+        logger.info(f"Admin {current_admin.username} populated {len(eligible_quotes)} daily dates")
+        return redirect(url_for('admin.quotes', success=f"Successfully populated {len(eligible_quotes)} daily dates"))
+
+    except Exception as e:
+        logger.error(f"Error populating daily dates: {str(e)}")
+        db.session.rollback()
+        return redirect(url_for('admin.quotes', error=f"Error populating daily dates: {str(e)}"))
 @admin_process_bp.route('/users/delete/<user_id>', methods=['GET'])
 @admin_required
 def delete_user(current_admin, user_id):

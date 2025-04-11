@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', function() {
             <a href="{{ url_for('admin.export_quotes') }}" class="btn btn-secondary">
                 <i class="fas fa-file-export"></i> Export Quotes
             </a>
+            <a href="{{ url_for('admin_process.populate_daily_dates') }}" class="btn btn-warning" onclick="return confirm('This will reassign all daily dates for appropriate quotes. Continue?')">
+                <i class="fas fa-calendar"></i> Populate Daily Dates
+            </a>
         </div>
     </div>
 
