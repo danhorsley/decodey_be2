@@ -920,13 +920,11 @@ def edit_quote(current_admin):
         quote.author = author
         quote.minor_attribution = attribution
         
-        # Handle daily_date from form - explicitly convert to date only
+        # Handle daily_date from form
         daily_date = request.form.get('daily_date')
-        if daily_date and daily_date.strip():
+        if daily_date:
             try:
-                # Split to handle any time component and take just the date part
-                date_part = daily_date.split('T')[0].split()[0]
-                quote.daily_date = datetime.strptime(date_part, '%Y-%m-%d').date()
+                quote.daily_date = datetime.strptime(daily_date, '%Y-%m-%d').date()
             except ValueError:
                 quote.daily_date = None
         else:
