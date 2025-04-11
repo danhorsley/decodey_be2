@@ -205,8 +205,9 @@ class Quote(db.Model):
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(db.Float, default=0.0)
-    daily_date = db.Column(db.Date, unique=True, nullable=True)
-    
+    _daily_date = db.Column('daily_date', db.Date, unique=True, nullable=True)
+    times_used = db.Column(db.Integer, default=0)
+
     @staticmethod
     def _convert_to_date(value):
         """Convert datetime or string to date"""
@@ -215,14 +216,12 @@ class Quote(db.Model):
         if isinstance(value, str):
             return datetime.strptime(value, '%Y-%m-%d').date()
         return value
-        
-    @daily_date.setter
-    def daily_date(self, value):
+
+    def _set_daily_date(self, value):
         """Ensure daily_date is always stored as date"""
         if value is not None:
             value = self._convert_to_date(value)
         self._daily_date = value
-    times_used = db.Column(db.Integer, default=0)
     unique_letters = db.Column(db.Integer)
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
