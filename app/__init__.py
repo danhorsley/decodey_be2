@@ -135,28 +135,28 @@ def create_app(config_class=Config):
     # Setup admin user in production
     # if app.config['FLASK_ENV'] != 'development':
     # try:
-    #     admin_user = os.environ.get('ADMIN_USER')
-    #     admin_pass = os.environ.get('ADMIN_PASSWORD_1')
-    #     admin_pass2 = os.environ.get('ADMIN_PASSWORD_2')
+    # admin_user = os.environ.get('ADMIN_USER')
+    # admin_pass = os.environ.get('ADMIN_PASSWORD_1')
+    # admin_pass2 = os.environ.get('ADMIN_PASSWORD_2')
 
-    #     if admin_user and admin_pass and admin_pass2:
-    #         logger.info("Setting up admin user in production")
-    #         with app.app_context():
-    #             user = User.query.filter_by(username=admin_user).first()
+    # if admin_user and admin_pass and admin_pass2:
+    #     logger.info("Setting up admin user in production")
+    #     with app.app_context():
+    #         user = User.query.filter_by(username=admin_user).first()
 
-    #             if not user:
-    #                 user = User(username=admin_user,
-    #                             email=f"{admin_user}@decodey.game",
-    #                             password=admin_pass)
-    #                 user.is_admin = True
-    #                 db.session.add(user)
-    #             else:
-    #                 user.set_password(admin_pass)
-    #                 user.is_admin = True
+    #         if not user:
+    #             user = User(username=admin_user,
+    #                         email=f"{admin_user}@decodey.game",
+    #                         password=admin_pass)
+    #             user.is_admin = True
+    #             db.session.add(user)
+    #         else:
+    #             user.set_password(admin_pass)
+    #             user.is_admin = True
 
-    #             user.set_admin_password(admin_pass2)
-    #             db.session.commit()
-    #             logger.info("Admin user setup completed")
+    #         user.set_admin_password(admin_pass2)
+    #         db.session.commit()
+    #         logger.info("Admin user setup completed")
     # except Exception as e:
     #     logger.error(f"Failed to setup admin user: {str(e)}")
 
