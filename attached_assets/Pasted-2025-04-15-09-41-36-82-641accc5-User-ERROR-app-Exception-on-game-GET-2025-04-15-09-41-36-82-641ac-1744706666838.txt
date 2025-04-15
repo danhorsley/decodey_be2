@@ -1,0 +1,96 @@
+2025-04-15 09:41:36.82
+641accc5
+User
+ERROR:app:Exception on /game [GET]
+2025-04-15 09:41:36.82
+641accc5
+User
+Traceback (most recent call last):
+2025-04-15 09:41:36.82
+641accc5
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 1511, in wsgi_app
+2025-04-15 09:41:36.82
+641accc5
+User
+response = self.full_dispatch_request()
+2025-04-15 09:41:36.82
+641accc5
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-04-15 09:41:36.82
+641accc5
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 919, in full_dispatch_request
+2025-04-15 09:41:36.82
+641accc5
+User
+rv = self.handle_user_exception(e)
+2025-04-15 09:41:36.82
+641accc5
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-04-15 09:41:36.82
+641accc5
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask_cors/extension.py", line 176, in wrapped_function
+2025-04-15 09:41:36.82
+641accc5
+User
+return cors_after_request(app.make_response(f(*args, **kwargs)))
+2025-04-15 09:41:36.82
+641accc5
+User
+^^^^^^^^^^^^^^^^^^
+2025-04-15 09:41:36.82
+641accc5
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 917, in full_dispatch_request
+2025-04-15 09:41:36.82
+641accc5
+User
+rv = self.dispatch_request()
+2025-04-15 09:41:36.82
+641accc5
+User
+^^^^^^^^^^^^^^^^^^^^^^^
+2025-04-15 09:41:36.82
+641accc5
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 902, in dispatch_request
+2025-04-15 09:41:36.82
+641accc5
+User
+return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args) # type: ignore[no-any-return]
+2025-04-15 09:41:36.82
+641accc5
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-04-15 09:41:36.82
+641accc5
+User
+File "/home/runner/workspace/app/routes/main.py", line 31, in game
+2025-04-15 09:41:36.82
+641accc5
+User
+return render_template('game.html')
+2025-04-15 09:41:36.82
+641accc5
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-04-15 09:41:36.82
+641accc5
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/templating.py", line 150, in render_template
+2025-04-15 09:41:36.82
+641accc5
+User
+return _render(app, template, context)
+2025-04-15 09:41:36.82
+641accc5
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-04-15 09:41:36.82
+641accc5
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/templating.py", line 131, in _render
