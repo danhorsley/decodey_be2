@@ -845,8 +845,15 @@ def populate_daily_dates(current_admin):
         from datetime import datetime, timedelta
         from app.models import Quote
 
-        # Clear existing daily dates
-        Quote.query.update({Quote.daily_date: None})
+        # Clear existing daily dates in batches
+        batch_size = 100
+        while True:
+            quotes_to_clear = Quote.query.filter(Quote.daily_date.isnot(None)).limit(batch_size).all()
+            if not quotes_to_clear:
+                break
+            for quote in quotes_to_clear:
+                quote.daily_date = None
+            db.session.commit()
 
         # Get quotes that meet criteria (<=65 chars and <=18 unique letters)
         from sqlalchemy import and_
@@ -859,17 +866,20 @@ def populate_daily_dates(current_admin):
         # Get tomorrow's date as starting point
         tomorrow = datetime.utcnow().date() + timedelta(days=1)
 
-        # Assign dates sequentially
-        for i, quote in enumerate(eligible_quotes):
-            quote.daily_date = tomorrow + timedelta(days=i)
+        # Process quotes in batches
+        total_processed = 0
+        for i in range(0, len(eligible_quotes), batch_size):
+            batch = eligible_quotes[i:i + batch_size]
+            for j, quote in enumerate(batch):
+                quote.daily_date = tomorrow + timedelta(days=i + j)
+            db.session.commit()
+            total_processed += len(batch)
 
-        db.session.commit()
-
-        logger.info(f"Admin {current_admin.username} populated {len(eligible_quotes)} daily dates")
-        return redirect(url_for('admin.quotes', success=f"Successfully populated {len(eligible_quotes)} daily dates"))
+        logger.info(f"Admin {current_admin.username} populated {total_processed} daily dates")
+        return redirect(url_for('admin.quotes', success=f"Successfully populated {total_processed} daily dates"))
 
     except Exception as e:
-        logger.error(f"Error populating daily dates: {str(e)}")
+        logger.error(f"Error populating daily dates: {str(e)}", exc_info=True)
         db.session.rollback()
         return redirect(url_for('admin.quotes', error=f"Error populating daily dates: {str(e)}"))
 @admin_process_bp.route('/users/delete/<user_id>', methods=['GET'])
