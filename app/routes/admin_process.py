@@ -72,7 +72,9 @@ def recalculate_weekly_winners(current_admin):
             return redirect(url_for('admin.dashboard', error="No games found"))
 
         # Start from the beginning of the week of the first game
+        # Start from the first Monday at 00:01 after the first game
         start_date = first_game.created_at.date() - timedelta(days=first_game.created_at.weekday())
+        start_date = datetime.combine(start_date, datetime.min.time()) + timedelta(minutes=1)
         end_date = datetime.utcnow().date()
 
         # Delete all existing weekly leaderboard entries
@@ -81,6 +83,7 @@ def recalculate_weekly_winners(current_admin):
         # Process each week
         current_start = start_date
         while current_start <= end_date:
+            # End at 00:01 next Monday
             current_end = current_start + timedelta(days=7)
 
             # Get weekly scores and stats
