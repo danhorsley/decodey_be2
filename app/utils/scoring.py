@@ -7,9 +7,9 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-def score_game(difficulty, mistakes, time_taken, hardcore_mode=False):
+def score_game(difficulty, mistakes, time_taken, hardcore_mode=False, current_daily_streak=0):
     """
-    Calculate game score based on difficulty, mistakes, time taken, and hardcore mode.
+    Calculate game score based on difficulty, mistakes, time taken, hardcore mode, and daily streak.
     Uses an improved mathematical model to better reflect the actual difficulty differences.
 
     Args:
@@ -17,6 +17,7 @@ def score_game(difficulty, mistakes, time_taken, hardcore_mode=False):
         mistakes (int): Number of wrong guesses
         time_taken (int): Time taken in seconds
         hardcore_mode (bool): Whether the game was played in hardcore mode (no spaces/punctuation)
+        current_daily_streak (int): User's current daily challenge streak
 
     Returns:
         int: The calculated score
@@ -36,6 +37,9 @@ def score_game(difficulty, mistakes, time_taken, hardcore_mode=False):
     # Removing spaces increases cognitive difficulty by ~80%
     hardcore_multiplier = 1.8 if hardcore_mode else 1.0
 
+    # Daily streak bonus multiplier (up to 2x at 20-day streak)
+    streak_multiplier = 1 + (min(current_daily_streak, 20) * 0.05)
+
     # Get the appropriate difficulty multiplier (default to medium if not found)
     difficulty_multiplier = difficulty_multipliers.get(difficulty, 2.5)
 
@@ -46,8 +50,9 @@ def score_game(difficulty, mistakes, time_taken, hardcore_mode=False):
     time_factor = math.exp(-0.0008 * time_taken)
 
     # Calculate final score with all factors
-    final_score = int(base_score * difficulty_multiplier *
-                      hardcore_multiplier * mistake_factor * time_factor)
+    final_score = int(base_score * difficulty_multiplier * 
+                      hardcore_multiplier * mistake_factor * 
+                      time_factor * streak_multiplier)  # Add streak multiplier
 
     # Ensure minimum score of 1
     return max(final_score, 1)

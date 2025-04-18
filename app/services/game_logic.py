@@ -17,12 +17,14 @@ from collections import Counter
 #             })
 #     return quotes
 
+
 def generate_mapping():
     # Create a substitution mapping for uppercase letters only
     alphabet = string.ascii_uppercase
     shuffled = list(alphabet)
     random.shuffle(shuffled)
     return dict(zip(alphabet, shuffled))
+
 
 def encrypt_paragraph(text, mapping):
     encrypted = ''
@@ -33,6 +35,7 @@ def encrypt_paragraph(text, mapping):
             encrypted += char
     return encrypted
 
+
 def get_letter_frequency(text):
     # Initialize frequency counter for all letters
     frequency = {letter: 0 for letter in string.ascii_uppercase}
@@ -40,9 +43,11 @@ def get_letter_frequency(text):
     frequency.update(Counter(c for c in text if c in string.ascii_uppercase))
     return frequency
 
+
 def get_unique_letters(text):
     # Get unique uppercase letters
     return sorted(set(c for c in text.upper() if c in string.ascii_uppercase))
+
 
 def generate_display_blocks(text):
     display = ''
@@ -53,63 +58,74 @@ def generate_display_blocks(text):
             display += char
     return display
 
+
 def start_game(long_text=False):
     """
     Start a new game by selecting a random quote and creating the game state
-
-    Args:
-        long_text (bool): If True, select quotes longer than 65 characters.
-                         If False, select quotes of 65 characters or shorter.
     """
-    from app.models import Quote
+    from app.models import Quote, db
     from sqlalchemy.sql import func
 
-    # Initialize these variables with defaults - this prevents the UnboundLocalError
+    # Initialize with defaults
     paragraph = "The database appears to be empty. Please add quotes."
     author = "System"
     minor_attribution = "Error"
 
-    # Only apply length filtering for short quotes
-    if long_text:
-        length_filter = True  # No length restriction for long quotes
-    else:
-        # For short quotes, ensure both total length <= 65 and unique chars <= 18
-        from sqlalchemy import and_
-        length_filter = and_(func.length(Quote.text) <= 65, Quote.unique_letters <= 15)
+    try:
+        # Only apply length filtering for short quotes
+        if long_text:
+            length_filter = True  # No length restriction for long quotes
+        else:
+            # For short quotes, ensure both total length <= 65 and unique chars <= 18
+            from sqlalchemy import and_
+            length_filter = and_(
+                func.length(Quote.text) <= 65, Quote.unique_letters <= 15)
 
-    # Get a random quote directly from the database with length constraint
-    random_quote = Quote.query.filter_by(active=True)\
-                             .filter(length_filter)\
-                             .order_by(func.random())\
-                             .first()
-
-    # If no quotes found with the length criteria, try without length filtering
-    if not random_quote:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"No quotes found matching length criteria (long_text={long_text}). Trying without length filter.")
-
+        # Get a random quote directly from the database with length constraint
         random_quote = Quote.query.filter_by(active=True)\
-                                 .filter(Quote.daily_date.is_(None))\
+                                 .filter(length_filter)\
                                  .order_by(func.random())\
                                  .first()
 
-    # Handle case where a quote was found
-    if random_quote:
-        print("length filter : ", length_filter)
-        paragraph = random_quote.text
-        author = random_quote.author
-        minor_attribution = random_quote.minor_attribution
+        # If no quotes found with the length criteria, try without length filtering
+        if not random_quote:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"No quotes found matching length criteria (long_text={long_text}). Trying without length filter."
+            )
 
-        # Update usage count for this quote
-        random_quote.times_used += 1
-        from app.models import db
-        db.session.commit()
-    else:
-        # Log the error - we'll use the default values set earlier
+            # Make sure to roll back any failed transaction
+            db.session.rollback()
+
+            random_quote = Quote.query.filter_by(active=True)\
+                                     .filter(Quote.daily_date.is_(None))\
+                                     .order_by(func.random())\
+                                     .first()
+
+        # Handle case where a quote was found
+        if random_quote:
+            paragraph = random_quote.text
+            author = random_quote.author
+            minor_attribution = random_quote.minor_attribution
+
+            # Update usage count for this quote
+            random_quote.times_used += 1
+            db.session.commit()
+        else:
+            # Log the error - we'll use the default values set earlier
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(
+                "No quotes found in database. Make sure quotes are loaded and active."
+            )
+            db.session.rollback()  # Roll back any failed transaction
+
+    except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        logger.error("No quotes found in database. Make sure quotes are loaded and active.")
+        logger.error(f"Error getting quote: {str(e)}")
+        db.session.rollback()  # Roll back the transaction on any error
 
     mapping = generate_mapping()
     reverse_mapping = {v: k for k, v in mapping.items()}
@@ -124,6 +140,7 @@ def start_game(long_text=False):
         'mapping': mapping,
         'reverse_mapping': reverse_mapping,
         'correctly_guessed': [],
+        'incorrect_guesses': {},  # Add the empty incorrect_guesses dictionary
         'mistakes': 0,
         'author': author,
         'max_mistakes': 5,  # Allow 5 mistakes
@@ -142,6 +159,7 @@ def start_game(long_text=False):
         'minor_attribution': minor_attribution
     }
 
+
 def make_guess(game_state, encrypted_letter, guessed_letter):
     if encrypted_letter not in game_state['reverse_mapping']:
         return {'valid': False, 'message': 'Invalid encrypted letter'}
@@ -155,19 +173,25 @@ def make_guess(game_state, encrypted_letter, guessed_letter):
     else:
         game_state['mistakes'] += 1
 
-    game_complete = (
-        len(game_state['correctly_guessed']) == len(set(game_state['mapping'].values())) or 
-        game_state['mistakes'] >= game_state['max_mistakes']
-    )
+    game_complete = (len(game_state['correctly_guessed']) == len(
+        set(game_state['mapping'].values()))
+                     or game_state['mistakes'] >= game_state['max_mistakes'])
 
     return {
-        'valid': True,
-        'correct': is_correct,
-        'complete': game_complete,
-        'mistakes': game_state['mistakes'],
-        'max_mistakes': game_state['max_mistakes'],
-        'revealed_pairs': [(l, game_state['reverse_mapping'][l]) for l in game_state['correctly_guessed']]
+        'valid':
+        True,
+        'correct':
+        is_correct,
+        'complete':
+        game_complete,
+        'mistakes':
+        game_state['mistakes'],
+        'max_mistakes':
+        game_state['max_mistakes'],
+        'revealed_pairs': [(l, game_state['reverse_mapping'][l])
+                           for l in game_state['correctly_guessed']]
     }
+
 
 def get_hint(game_state):
     # Get an unguessed letter pair
@@ -183,7 +207,4 @@ def get_hint(game_state):
     hint_original = game_state['reverse_mapping'][hint_encrypted]
     game_state['correctly_guessed'].append(hint_encrypted)
 
-    return {
-        'encrypted': hint_encrypted,
-        'original': hint_original
-    }
+    return {'encrypted': hint_encrypted, 'original': hint_original}

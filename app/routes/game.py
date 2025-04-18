@@ -6,7 +6,7 @@ from app.services.game_state import (get_unified_game_state,
                                      check_game_status, get_display,
                                      process_guess, process_hint, abandon_game,
                                      get_attribution_from_quotes)
-from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats
+from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats, DailyCompletion
 from datetime import datetime, date
 import logging
 import uuid
@@ -239,20 +239,14 @@ def guess():
 
         # Return result to client
         return jsonify({
-            'display':
-            result['display'],
-            'mistakes':
-            result['game_state']['mistakes'],
-            'correctly_guessed':
-            result['game_state']['correctly_guessed'],
-            'game_complete':
-            result['complete'],
-            'hasWon':
-            result['has_won'],  # Use the front-end expected key
-            'is_correct':
-            result['is_correct'],
-            'max_mistakes':
-            result['game_state']['max_mistakes']
+            'display': result['display'],
+            'mistakes': result['game_state']['mistakes'],
+            'correctly_guessed': result['game_state']['correctly_guessed'],
+            'incorrect_guesses': result['game_state']['incorrect_guesses'],  # Add this line
+            'game_complete': result['complete'],
+            'hasWon': result['has_won'],
+            'is_correct': result['is_correct'],
+            'max_mistakes': result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing guess: {str(e)}", exc_info=True)
@@ -307,22 +301,15 @@ def hint():
 
         # Return result to client
         return jsonify({
-            'display':
-            result['display'],
-            'mistakes':
-            result['game_state']['mistakes'],
-            'correctly_guessed':
-            result['game_state']['correctly_guessed'],
-            'game_complete':
-            result['complete'],
-            'hasWon':
-            result['has_won'],  # Use the front-end expected key
-            'hint_letter':
-            result['hint_letter'],
-            'hint_value':
-            result['hint_value'],
-            'max_mistakes':
-            result['game_state']['max_mistakes']
+            'display': result['display'],
+            'mistakes': result['game_state']['mistakes'],
+            'correctly_guessed': result['game_state']['correctly_guessed'],
+            'incorrect_guesses': result['game_state'].get('incorrect_guesses', {}),  # Add this line
+            'game_complete': result['complete'],
+            'hasWon': result['has_won'],  # Use the front-end expected key
+            'hint_letter': result['hint_letter'],
+            'hint_value': result['hint_value'],
+            'max_mistakes': result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing hint: {str(e)}", exc_info=True)
@@ -512,6 +499,7 @@ def continue_game():
             "letter_frequency": letter_frequency,
             "mistakes": game_state['mistakes'],
             "correctly_guessed": game_state['correctly_guessed'],
+            "incorrect_guesses": game_state.get('incorrect_guesses', {}),  # Add this line
             "game_complete": game_state['game_complete'],
             "hasWon": game_state['has_won'],
             "max_mistakes": game_state['max_mistakes'],
@@ -587,31 +575,32 @@ def game_status():
 
         # Check if the game is won
         if game_state['has_won']:
-            logger.info(
-                f"Win detected for {'anonymous' if is_anonymous else user_id} - preparing win data"
-            )
+            logger.info(f"Win detected for {'anonymous' if is_anonymous else user_id} - preparing win data")
 
             # Mark as notified to prevent duplicate notifications
             game_state['win_notified'] = True
-            save_unified_game_state(identifier,
-                                    game_state,
-                                    is_anonymous=is_anonymous)
+            save_unified_game_state(identifier, game_state, is_anonymous=is_anonymous)
 
             # Use attribution from game state
             attribution = {
-                'major_attribution': game_state.get('major_attribution',
-                                                    'Unknown'),
+                'major_attribution': game_state.get('major_attribution', 'Unknown'),
                 'minor_attribution': game_state.get('minor_attribution', '')
             }
-            print(attribution)
+
             # Calculate time and score
-            time_taken = int(
-                (datetime.utcnow() - game_state['start_time']).total_seconds())
+            time_taken = int((datetime.utcnow() - game_state['start_time']).total_seconds())
 
             # Import the scoring function
             from app.utils.scoring import score_game
-            score = score_game(game_state['difficulty'],
-                               game_state['mistakes'], time_taken)
+
+            # Add this block to get current_daily_streak
+            current_daily_streak = 0
+            if not is_anonymous:
+                user_stats = UserStats.query.filter_by(user_id=user_id).first()
+                if user_stats:
+                    current_daily_streak = user_stats.current_daily_streak or 0
+
+            score = score_game(game_state['difficulty'], game_state['mistakes'], time_taken)
 
             # Determine rating
             rating = get_rating_from_score(score)
@@ -622,7 +611,8 @@ def game_status():
                 'maxMistakes': game_state['max_mistakes'],
                 'gameTimeSeconds': time_taken,
                 'rating': rating,
-                'attribution': attribution
+                'attribution': attribution,
+                'current_daily_streak': current_daily_streak  # Add this line
             }
 
             # Record daily challenge completion if this is a daily challenge and user is authenticated

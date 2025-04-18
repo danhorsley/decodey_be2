@@ -98,6 +98,7 @@ class ActiveGameState(db.Model):
     mapping = db.Column(db.JSON)
     reverse_mapping = db.Column(db.JSON)
     correctly_guessed = db.Column(db.JSON, default=lambda: [])
+    incorrect_guesses = db.Column(db.JSON, default=lambda: {})
     mistakes = db.Column(db.Integer, default=0)
     major_attribution = db.Column(db.String)
     minor_attribution = db.Column(db.String)
@@ -116,6 +117,7 @@ class AnonymousGameState(db.Model):
     mapping = db.Column(db.JSON)
     reverse_mapping = db.Column(db.JSON)
     correctly_guessed = db.Column(db.JSON, default=lambda: [])
+    incorrect_guesses = db.Column(db.JSON, default=lambda: {})
     mistakes = db.Column(db.Integer, default=0)
     major_attribution = db.Column(db.String)
     minor_attribution = db.Column(db.String)
@@ -201,18 +203,24 @@ class BackupSettings(db.Model):
 
 from sqlalchemy import event
 
+
 class Quote(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     text = db.Column(db.Text, nullable=False)
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(db.Float, default=0.0)
-    daily_date = db.Column(db.Date().with_variant(postgresql.DATE(), 'postgresql'), unique=True, nullable=True)
+    daily_date = db.Column(db.Date().with_variant(postgresql.DATE(),
+                                                  'postgresql'),
+                           unique=True,
+                           nullable=True)
     times_used = db.Column(db.Integer, default=0)
     unique_letters = db.Column(db.Integer)
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime,
+                           default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
 
     @staticmethod
     def _count_unique_letters(text):
@@ -221,11 +229,11 @@ class Quote(db.Model):
     def _update_unique_letters(self):
         self.unique_letters = self._count_unique_letters(self.text)
 
+
 @event.listens_for(Quote, 'before_insert')
 @event.listens_for(Quote, 'before_update')
 def set_unique_letters(mapper, connection, target):
     target._update_unique_letters()
-
 
 
 class DailyCompletion(db.Model):
@@ -250,3 +258,25 @@ class DailyCompletion(db.Model):
                            backref=db.backref('daily_completions', lazy=True))
     quote = db.relationship('Quote',
                             backref=db.backref('completions', lazy=True))
+
+
+class LeaderboardEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String,
+                        db.ForeignKey('user.user_id'),
+                        nullable=False)
+    username = db.Column(db.String)  # Denormalized for historical accuracy
+    period_type = db.Column(db.String, nullable=False)  # 'weekly' or 'yearly'
+    period_start = db.Column(db.DateTime, nullable=False)
+    period_end = db.Column(db.DateTime, nullable=False)
+    rank = db.Column(db.Integer, nullable=False)
+    score = db.Column(db.Integer, default=0)
+    games_played = db.Column(db.Integer, default=0)
+    games_won = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Define unique constraint
+    __table_args__ = (db.UniqueConstraint('user_id',
+                                          'period_type',
+                                          'period_start',
+                                          name='unique_user_period'), )

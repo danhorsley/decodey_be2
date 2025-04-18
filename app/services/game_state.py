@@ -36,6 +36,8 @@ def get_unified_game_state(identifier, is_anonymous=False):
                 'reverse_mapping': game.reverse_mapping,
                 'correctly_guessed': game.correctly_guessed
                 or [],  # Handle None case
+                'incorrect_guesses': game.incorrect_guesses
+                or {},  # Add this line
                 'mistakes': game.mistakes,
                 'max_mistakes': get_max_mistakes_from_game_id(game.game_id),
                 'major_attribution': game.major_attribution,
@@ -68,6 +70,8 @@ def get_unified_game_state(identifier, is_anonymous=False):
                 game.reverse_mapping,
                 'correctly_guessed':
                 game.correctly_guessed or [],  # Handle None case
+                'incorrect_guesses':
+                game.incorrect_guesses or {},  # Add this line
                 'mistakes':
                 game.mistakes,
                 'max_mistakes':
@@ -119,6 +123,8 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
                     'reverse_mapping', {})
                 anon_game.correctly_guessed = game_state.get(
                     'correctly_guessed', [])
+                anon_game.incorrect_guesses = game_state.get(
+                    'incorrect_guesses', {})  # Add this line
                 anon_game.mistakes = game_state.get('mistakes', 0)
                 anon_game.last_updated = datetime.utcnow()
 
@@ -138,6 +144,8 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
                     mapping=game_state.get('mapping', {}),
                     reverse_mapping=game_state.get('reverse_mapping', {}),
                     correctly_guessed=game_state.get('correctly_guessed', []),
+                    incorrect_guesses=game_state.get('incorrect_guesses',
+                                                     {}),  # Add this line
                     mistakes=game_state.get('mistakes', 0),
                     major_attribution=game_state.get('major_attribution', ''),
                     minor_attribution=game_state.get('minor_attribution', ''))
@@ -158,6 +166,8 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
                     'reverse_mapping', {})
                 active_game.correctly_guessed = game_state.get(
                     'correctly_guessed', [])
+                active_game.incorrect_guesses = game_state.get(
+                    'incorrect_guesses', {})
                 active_game.mistakes = game_state.get('mistakes', 0)
                 active_game.last_updated = datetime.utcnow()
 
@@ -193,6 +203,8 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
                     mapping=game_state.get('mapping', {}),
                     reverse_mapping=game_state.get('reverse_mapping', {}),
                     correctly_guessed=game_state.get('correctly_guessed', []),
+                    incorrect_guesses=game_state.get('incorrect_guesses',
+                                                     {}),  # Add this line
                     mistakes=game_state.get('mistakes', 0),
                     major_attribution=game_state.get('major_attribution', ''),
                     minor_attribution=game_state.get('minor_attribution', ''),
@@ -488,6 +500,7 @@ def process_guess(game_state, encrypted_letter, guessed_letter):
     """
     reverse_mapping = game_state.get('reverse_mapping', {})
     correctly_guessed = game_state.get('correctly_guessed', [])
+    incorrect_guesses = game_state.get('incorrect_guesses', {})
 
     # Validate the guess
     if encrypted_letter not in reverse_mapping:
@@ -504,8 +517,17 @@ def process_guess(game_state, encrypted_letter, guessed_letter):
     else:
         game_state['mistakes'] = game_state.get('mistakes', 0) + 1
 
-    # Update correctly_guessed in the game state
+        # Add incorrect guess to tracking
+        if encrypted_letter not in incorrect_guesses:
+            incorrect_guesses[encrypted_letter] = []
+
+        # Only add if this specific guess hasn't been tried before
+        if guessed_letter.upper() not in incorrect_guesses[encrypted_letter]:
+            incorrect_guesses[encrypted_letter].append(guessed_letter.upper())
+
+    # Update correctly_guessed and incorrect_guesses in the game state
     game_state['correctly_guessed'] = correctly_guessed
+    game_state['incorrect_guesses'] = incorrect_guesses
 
     # Check if game is complete
     status = check_game_status(game_state)
@@ -522,8 +544,8 @@ def process_guess(game_state, encrypted_letter, guessed_letter):
         'display': display,
         'is_correct': is_correct,
         'complete': status['game_complete'],
-        'has_won':
-        status['has_won']  # Make sure we're consistent with the key name
+        'has_won': status['has_won'],
+        'incorrect_guesses': incorrect_guesses  # Add this line
     }
 
 
@@ -584,7 +606,8 @@ def process_hint(game_state):
         'hint_letter': hint_letter,
         'hint_value': reverse_mapping.get(hint_letter, ''),
         'complete': status['game_complete'],
-        'has_won': status['has_won']
+        'has_won': status['has_won'],
+        'incorrect_guesses': game_state.get('incorrect_guesses', {})
     }
 
 
