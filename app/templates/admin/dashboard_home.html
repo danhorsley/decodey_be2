@@ -2,10 +2,25 @@
 {% extends "admin/dashboard.html" %}
 
 {% block admin_content %}
-<!-- Dashboard Section -->
-<section class="mb-5">
-    <h2 class="section-header">Dashboard</h2>
+<div class="container">
+    <!-- Stats cards here -->
 
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title">Admin Actions</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('admin_process.recalculate_weekly_winners') }}" method="POST" class="d-inline">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sync-alt me-2"></i> Recalculate Weekly Winners
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- System Status -->
     <div class="alert alert-success" role="alert">
         <i class="fas fa-check-circle me-2"></i> All systems operational
@@ -104,5 +119,5 @@
             </div>
         </div>
     </div>
-</section>
+</div>
 {% endblock %}

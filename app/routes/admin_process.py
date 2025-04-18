@@ -47,6 +47,22 @@ def admin_required(f):
 
         if not user or not user.is_admin:
             # Clear session and redirect
+
+@admin_process_bp.route('/recalculate-weekly-winners', methods=['POST'])
+@admin_required
+def recalculate_weekly_winners(current_admin):
+    """Manually recalculate weekly winners"""
+    try:
+        from app.tasks.leaderboard import reset_weekly_leaderboard
+        reset_weekly_leaderboard()
+        
+        logger.info(f"Admin {current_admin.username} manually recalculated weekly winners")
+        return redirect(url_for('admin.dashboard', success="Weekly winners recalculated successfully"))
+        
+    except Exception as e:
+        logger.error(f"Error recalculating weekly winners: {str(e)}")
+        return redirect(url_for('admin.dashboard', error=f"Error recalculating weekly winners: {str(e)}"))
+
             session.pop('admin_id', None)
             return redirect(
                 url_for('admin.admin_login_page',
