@@ -71,14 +71,6 @@ def recalculate_weekly_winners(current_admin):
     except Exception as e:
         logger.error(f"Error recalculating weekly winners: {str(e)}")
         return redirect(url_for('admin.dashboard', error=f"Error recalculating weekly winners: {str(e)}"))
-                        error="Invalid admin credentials"))
-
-        # Pass the admin user to the view
-        kwargs['current_admin'] = user
-        return f(*args, **kwargs)
-
-    return decorated_function
-
 
 #
 # User Management Routes
