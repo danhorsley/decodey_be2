@@ -47,6 +47,15 @@ def admin_required(f):
 
         if not user or not user.is_admin:
             # Clear session and redirect
+            session.pop('admin_id', None)
+            return redirect(url_for('admin.admin_login_page'))
+        
+        # Pass the admin user to the view
+        kwargs['current_admin'] = user
+        return f(*args, **kwargs)
+    
+    return decorated_function
+
 
 @admin_process_bp.route('/recalculate-weekly-winners', methods=['POST'])
 @admin_required
@@ -62,10 +71,6 @@ def recalculate_weekly_winners(current_admin):
     except Exception as e:
         logger.error(f"Error recalculating weekly winners: {str(e)}")
         return redirect(url_for('admin.dashboard', error=f"Error recalculating weekly winners: {str(e)}"))
-
-            session.pop('admin_id', None)
-            return redirect(
-                url_for('admin.admin_login_page',
                         error="Invalid admin credentials"))
 
         # Pass the admin user to the view
