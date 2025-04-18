@@ -85,8 +85,14 @@ def get_size_format(b, factor=1024, suffix="B"):
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def admin_login_page():
     """Admin login page and form processing"""
+    # Check if already logged in
+    admin_id = session.get('admin_id')
+    if admin_id:
+        user = User.query.get(admin_id)
+        if user and user.is_admin:
+            return redirect(url_for('admin.dashboard'))
+            
     error = request.args.get('error')
-
     if request.method == 'GET':
         return render_template('admin/login.html', error=error)
 
