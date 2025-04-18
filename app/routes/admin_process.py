@@ -60,13 +60,64 @@ def admin_required(f):
 @admin_process_bp.route('/recalculate-weekly-winners', methods=['POST'])
 @admin_required
 def recalculate_weekly_winners(current_admin):
-    """Manually recalculate weekly winners"""
+    """Manually recalculate weekly winners for all weeks since inception"""
     try:
-        from app.tasks.leaderboard import reset_weekly_leaderboard
-        reset_weekly_leaderboard()
+        from datetime import datetime, timedelta
+        from app.models import LeaderboardEntry, GameScore, User
+        from sqlalchemy import func
 
+        # Get the date of the first game ever played
+        first_game = GameScore.query.order_by(GameScore.created_at.asc()).first()
+        if not first_game:
+            return redirect(url_for('admin.dashboard', error="No games found"))
+
+        # Start from the beginning of the week of the first game
+        start_date = first_game.created_at.date() - timedelta(days=first_game.created_at.weekday())
+        end_date = datetime.utcnow().date()
+
+        # Delete all existing weekly leaderboard entries
+        LeaderboardEntry.query.filter_by(period_type='weekly').delete()
+
+        # Process each week
+        current_start = start_date
+        while current_start <= end_date:
+            current_end = current_start + timedelta(days=7)
+
+            # Get weekly scores and stats
+            weekly_stats = db.session.query(
+                GameScore.user_id,
+                User.username,
+                db.func.sum(GameScore.score).label('total_score'),
+                db.func.count(GameScore.id).label('games_played'),
+                db.func.sum(db.case((GameScore.mistakes < 5, 1), else_=0)).label('games_won')
+            ).join(User).filter(
+                GameScore.created_at >= current_start,
+                GameScore.created_at < current_end,
+                GameScore.completed == True
+            ).group_by(GameScore.user_id, User.username).order_by(
+                db.desc('total_score')
+            ).all()
+
+            # Create leaderboard entries for this week
+            for rank, stats in enumerate(weekly_stats, 1):
+                entry = LeaderboardEntry(
+                    user_id=stats.user_id,
+                    username=stats.username,
+                    period_type='weekly',
+                    period_start=current_start,
+                    period_end=current_end,
+                    rank=rank,
+                    score=stats.total_score,
+                    games_played=stats.games_played,
+                    games_won=stats.games_won
+                )
+                db.session.add(entry)
+
+            current_start = current_end
+
+        db.session.commit()
         logger.info(
-            f"Admin {current_admin.username} manually recalculated weekly winners"
+            f"Admin {current_admin.username} recalculated all weekly winners since inception"
         )
         return redirect(
             url_for('admin.dashboard',
