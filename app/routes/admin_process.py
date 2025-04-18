@@ -851,53 +851,57 @@ def populate_daily_dates(current_admin):
         db.session.commit()
 
         # Get quotes that meet criteria using raw SQL to avoid encoding issues
-        sql = text("""
-            SELECT id 
-            FROM quote q
-            WHERE active = true 
-            AND length(text) <= 65 
-            AND (
-                SELECT count(DISTINCT letter)
-                FROM (
-                    SELECT lower(unnest(string_to_array(text, ''))) as letter
-                    FROM quote q2
-                    WHERE q2.id = q.id
-                ) letters
-            ) <= 18
-            ORDER BY id
-        """)
-        
-        result = db.session.execute(sql)
-        eligible_quote_ids = [row[0] for row in result]
-
         # Get tomorrow's date
         tomorrow = datetime.utcnow().date() + timedelta(days=1)
 
-        # Update in smaller batches
-        batch_size = 50
+        # Process quotes in batches
+        batch_size = 100
+        offset = 0
         total_processed = 0
-        
-        for i in range(0, len(eligible_quote_ids), batch_size):
-            batch_ids = eligible_quote_ids[i:i + batch_size]
+
+        while True:
+            # Get batch of eligible quotes
+            sql = text("""
+                WITH eligible AS (
+                    SELECT id
+                    FROM quote q
+                    WHERE active = true 
+                    AND length(text) <= 65 
+                    AND (
+                        SELECT count(DISTINCT letter)
+                        FROM (
+                            SELECT lower(unnest(string_to_array(text, ''))) as letter
+                        ) letters
+                    ) <= 18
+                    ORDER BY id
+                    LIMIT :batch_size
+                    OFFSET :offset
+                )
+                UPDATE quote q
+                SET daily_date = :base_date + (row_number() OVER (ORDER BY id))::integer
+                FROM eligible e
+                WHERE q.id = e.id
+                RETURNING q.id
+            """)
+
+            result = db.session.execute(sql, {
+                'batch_size': batch_size,
+                'offset': offset,
+                'base_date': tomorrow
+            })
             
-            # Process each quote in batch
-            for j, quote_id in enumerate(batch_ids):
-                target_date = tomorrow + timedelta(days=i + j)
-                
-                # Update using SQL to avoid encoding issues
-                update_sql = text("""
-                    UPDATE quote 
-                    SET daily_date = :target_date 
-                    WHERE id = :quote_id
-                """)
-                
-                db.session.execute(update_sql, {
-                    'target_date': target_date,
-                    'quote_id': quote_id
-                })
-            
+            processed_ids = result.fetchall()
+            if not processed_ids:
+                break
+
             db.session.commit()
-            total_processed += len(batch_ids)
+            
+            batch_count = len(processed_ids)
+            total_processed += batch_count
+            offset += batch_size
+
+            if batch_count < batch_size:
+                break
 
         logger.info(f"Admin {current_admin.username} populated {total_processed} daily dates")
         return redirect(url_for('admin.quotes', success=f"Successfully populated {total_processed} daily dates"))
