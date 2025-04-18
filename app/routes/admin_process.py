@@ -844,36 +844,57 @@ def populate_daily_dates(current_admin):
     try:
         from datetime import datetime, timedelta
         from app.models import Quote
+        from sqlalchemy import text
 
-        # Clear existing daily dates in batches
-        batch_size = 100
-        while True:
-            quotes_to_clear = Quote.query.filter(Quote.daily_date.isnot(None)).limit(batch_size).all()
-            if not quotes_to_clear:
-                break
-            for quote in quotes_to_clear:
-                quote.daily_date = None
-            db.session.commit()
+        # First clear all daily dates with a direct SQL update
+        db.session.execute(text("UPDATE quote SET daily_date = NULL"))
+        db.session.commit()
 
-        # Get quotes that meet criteria (<=65 chars and <=18 unique letters)
-        from sqlalchemy import and_
-        length_filter = and_(func.length(Quote.text) <= 65, Quote.unique_letters <= 18)
+        # Get quotes that meet criteria using raw SQL to avoid encoding issues
+        sql = text("""
+            SELECT id 
+            FROM quote 
+            WHERE active = true 
+            AND length(text) <= 65 
+            AND (
+                SELECT count(DISTINCT lower(regexp_split_to_table(text, ''))) 
+                FROM quote q2 
+                WHERE q2.id = quote.id
+            ) <= 18
+            ORDER BY id
+        """)
         
-        eligible_quotes = Quote.query.filter_by(active=True)\
-                                   .filter(length_filter)\
-                                   .all()
+        result = db.session.execute(sql)
+        eligible_quote_ids = [row[0] for row in result]
 
-        # Get tomorrow's date as starting point
+        # Get tomorrow's date
         tomorrow = datetime.utcnow().date() + timedelta(days=1)
 
-        # Process quotes in batches
+        # Update in smaller batches
+        batch_size = 50
         total_processed = 0
-        for i in range(0, len(eligible_quotes), batch_size):
-            batch = eligible_quotes[i:i + batch_size]
-            for j, quote in enumerate(batch):
-                quote.daily_date = tomorrow + timedelta(days=i + j)
+        
+        for i in range(0, len(eligible_quote_ids), batch_size):
+            batch_ids = eligible_quote_ids[i:i + batch_size]
+            
+            # Process each quote in batch
+            for j, quote_id in enumerate(batch_ids):
+                target_date = tomorrow + timedelta(days=i + j)
+                
+                # Update using SQL to avoid encoding issues
+                update_sql = text("""
+                    UPDATE quote 
+                    SET daily_date = :target_date 
+                    WHERE id = :quote_id
+                """)
+                
+                db.session.execute(update_sql, {
+                    'target_date': target_date,
+                    'quote_id': quote_id
+                })
+            
             db.session.commit()
-            total_processed += len(batch)
+            total_processed += len(batch_ids)
 
         logger.info(f"Admin {current_admin.username} populated {total_processed} daily dates")
         return redirect(url_for('admin.quotes', success=f"Successfully populated {total_processed} daily dates"))
