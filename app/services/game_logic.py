@@ -75,7 +75,7 @@ def start_game(long_text=False):
     else:
         # For short quotes, ensure both total length <= 65 and unique chars <= 18
         from sqlalchemy import and_
-        length_filter = and_(func.length(Quote.text) <= 65, Quote.unique_letters <= 18)
+        length_filter = and_(func.length(Quote.text) <= 65, Quote.unique_letters <= 15)
 
     # Get a random quote directly from the database with length constraint
     random_quote = Quote.query.filter_by(active=True)\
