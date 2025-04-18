@@ -848,25 +848,37 @@ def register_admin_process_routes(app):
 @admin_process_bp.route('/populate-daily-dates', methods=['GET'])
 @admin_required
 def populate_daily_dates(current_admin):
-    """Populate daily dates for quotes that meet criteria"""
+    """Populate daily dates for quotes that meet criteria while preserving today's quote"""
     try:
         from datetime import datetime, timedelta
         from app.models import Quote
         from sqlalchemy import func, text
         import random
 
-        # Step 1: Clear all existing daily dates
-        db.session.execute(text("UPDATE quote SET daily_date = NULL"))
+        # Get today's date
+        today = datetime.utcnow().date()
+
+        # Find and preserve today's quote
+        todays_quote = Quote.query.filter(Quote.daily_date == today).first()
+        todays_quote_id = todays_quote.id if todays_quote else None
+
+        # Clear all other daily dates
+        if todays_quote_id:
+            db.session.execute(
+                text("UPDATE quote SET daily_date = NULL WHERE id != :id"),
+                {"id": todays_quote_id})
+        else:
+            db.session.execute(text("UPDATE quote SET daily_date = NULL"))
+
         db.session.commit()
 
-        # Step 2: Get tomorrow's date as starting point
-        tomorrow = datetime.utcnow().date() + timedelta(days=1)
+        # Start from tomorrow
+        tomorrow = today + timedelta(days=1)
         current_date = tomorrow
 
-        # Step 3: Process quotes by usage count (least used first)
+        # Process quotes by usage count (least used first)
         total_assigned = 0
 
-        # Get quotes in batches by times_used (0, 1-5, 6+)
         usage_ranges = [
             (0, 0),  # Never used
             (1, 5),  # Used 1-5 times
@@ -874,33 +886,31 @@ def populate_daily_dates(current_admin):
         ]
 
         for min_used, max_used in usage_ranges:
-            # Get eligible quotes
             eligible_quotes = Quote.query.filter(
                 Quote.active == True,
                 func.length(Quote.text) <= 65, Quote.unique_letters <= 15,
                 Quote.daily_date.is_(None),
                 Quote.times_used.between(min_used, max_used)).all()
 
-            # Randomize order within each usage group
             random.shuffle(eligible_quotes)
 
-            # Assign dates
             for quote in eligible_quotes:
                 quote.daily_date = current_date
                 current_date += timedelta(days=1)
                 total_assigned += 1
 
-            # Commit after each group
             db.session.commit()
 
+        preserved_msg = " (preserved today's quote)" if todays_quote_id else ""
         logger.info(
-            f"Admin {current_admin.username} populated {total_assigned} daily dates"
+            f"Admin {current_admin.username} populated {total_assigned} daily dates{preserved_msg}"
         )
         return redirect(
             url_for(
                 'admin.quotes',
-                success=f"Successfully populated {total_assigned} daily dates")
-        )
+                success=
+                f"Successfully populated {total_assigned} daily dates{preserved_msg}"
+            ))
 
     except Exception as e:
         logger.error(f"Error populating daily dates: {str(e)}", exc_info=True)
