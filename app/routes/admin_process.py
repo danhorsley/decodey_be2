@@ -65,12 +65,19 @@ def recalculate_weekly_winners(current_admin):
         from app.tasks.leaderboard import reset_weekly_leaderboard
         reset_weekly_leaderboard()
 
-        logger.info(f"Admin {current_admin.username} manually recalculated weekly winners")
-        return redirect(url_for('admin.dashboard', success="Weekly winners recalculated successfully"))
+        logger.info(
+            f"Admin {current_admin.username} manually recalculated weekly winners"
+        )
+        return redirect(
+            url_for('admin.dashboard',
+                    success="Weekly winners recalculated successfully"))
 
     except Exception as e:
         logger.error(f"Error recalculating weekly winners: {str(e)}")
-        return redirect(url_for('admin.dashboard', error=f"Error recalculating weekly winners: {str(e)}"))
+        return redirect(
+            url_for('admin.dashboard',
+                    error=f"Error recalculating weekly winners: {str(e)}"))
+
 
 #
 # User Management Routes
@@ -837,79 +844,72 @@ def register_admin_process_routes(app):
 
     logger.info("Admin process routes registered successfully")
 
+
 @admin_process_bp.route('/populate-daily-dates', methods=['GET'])
 @admin_required
 def populate_daily_dates(current_admin):
-    """Populate daily dates for appropriate quotes"""
+    """Populate daily dates for quotes that meet criteria"""
     try:
         from datetime import datetime, timedelta
         from app.models import Quote
-        from sqlalchemy import text
+        from sqlalchemy import func, text
+        import random
 
-        # First clear all daily dates with a direct SQL update
+        # Step 1: Clear all existing daily dates
         db.session.execute(text("UPDATE quote SET daily_date = NULL"))
         db.session.commit()
 
-        # Get quotes that meet criteria using raw SQL to avoid encoding issues
-        # Get tomorrow's date
+        # Step 2: Get tomorrow's date as starting point
         tomorrow = datetime.utcnow().date() + timedelta(days=1)
+        current_date = tomorrow
 
-        # Process quotes in batches
-        batch_size = 100
-        offset = 0
-        total_processed = 0
+        # Step 3: Process quotes by usage count (least used first)
+        total_assigned = 0
 
-        while True:
-            # Get batch of eligible quotes with row numbers
-            sql = text("""
-                WITH eligible AS (
-                    SELECT id, 
-                           ROW_NUMBER() OVER (ORDER BY id) + :offset as row_num
-                    FROM quote q
-                    WHERE active = true 
-                    AND length(text) <= 65 
-                    AND (
-                        SELECT count(DISTINCT letter)
-                        FROM (
-                            SELECT lower(unnest(string_to_array(text, ''))) as letter
-                        ) letters
-                    ) <= 18
-                    ORDER BY id
-                    LIMIT :batch_size
-                )
-                UPDATE quote q
-                SET daily_date = :base_date + ((e.row_num - 1) * interval '1 day')
-                FROM eligible e
-                WHERE q.id = e.id
-                RETURNING q.id
-            """)
+        # Get quotes in batches by times_used (0, 1-5, 6+)
+        usage_ranges = [
+            (0, 0),  # Never used
+            (1, 5),  # Used 1-5 times
+            (6, 1000)  # Used 6+ times
+        ]
 
-            result = db.session.execute(sql, {
-                'batch_size': batch_size,
-                'offset': offset,
-                'base_date': tomorrow
-            })
+        for min_used, max_used in usage_ranges:
+            # Get eligible quotes
+            eligible_quotes = Quote.query.filter(
+                Quote.active == True,
+                func.length(Quote.text) <= 65, Quote.unique_letters <= 15,
+                Quote.daily_date.is_(None),
+                Quote.times_used.between(min_used, max_used)).all()
 
-            processed_ids = result.fetchall()
-            if not processed_ids:
-                break
+            # Randomize order within each usage group
+            random.shuffle(eligible_quotes)
 
+            # Assign dates
+            for quote in eligible_quotes:
+                quote.daily_date = current_date
+                current_date += timedelta(days=1)
+                total_assigned += 1
+
+            # Commit after each group
             db.session.commit()
 
-            batch_count = len(processed_ids)
-            total_processed += batch_count
-            offset += batch_size
-
-            if batch_count < batch_size:
-                break
-
-        logger.info(f"Admin {current_admin.username} populated {total_processed} daily dates")
-        return redirect(url_for('admin.quotes', success=f"Successfully populated {total_processed} daily dates"))
+        logger.info(
+            f"Admin {current_admin.username} populated {total_assigned} daily dates"
+        )
+        return redirect(
+            url_for(
+                'admin.quotes',
+                success=f"Successfully populated {total_assigned} daily dates")
+        )
 
     except Exception as e:
         logger.error(f"Error populating daily dates: {str(e)}", exc_info=True)
         db.session.rollback()
-        return redirect(url_for('admin.quotes', error=f"Error populating daily dates: {str(e)}"))
+        return redirect(
+            url_for('admin.quotes',
+                    error=f"Error populating daily dates: {str(e)}"))
+
+
 @admin_process_bp.route('/users/delete/<user_id>', methods=['GET'])
 @admin_required
 def delete_user(current_admin, user_id):
@@ -917,7 +917,9 @@ def delete_user(current_admin, user_id):
     try:
         user = User.query.get(user_id)
         if not user:
-            logger.warning(f"Admin {current_admin.username} attempted to delete non-existent user {user_id}")
+            logger.warning(
+                f"Admin {current_admin.username} attempted to delete non-existent user {user_id}"
+            )
             return redirect(url_for('admin.users', error="User not found"))
 
         # Delete user's related data
@@ -930,10 +932,13 @@ def delete_user(current_admin, user_id):
         db.session.delete(user)
         db.session.commit()
 
-        logger.info(f"Admin {current_admin.username} deleted user {user.username}")
-        return redirect(url_for('admin.users', success="User deleted successfully"))
+        logger.info(
+            f"Admin {current_admin.username} deleted user {user.username}")
+        return redirect(
+            url_for('admin.users', success="User deleted successfully"))
 
     except Exception as e:
         logger.error(f"Error deleting user: {str(e)}")
         db.session.rollback()
-        return redirect(url_for('admin.users', error=f"Error deleting user: {str(e)}"))
+        return redirect(
+            url_for('admin.users', error=f"Error deleting user: {str(e)}"))
