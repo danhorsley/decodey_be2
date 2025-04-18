@@ -49,11 +49,11 @@ def admin_required(f):
             # Clear session and redirect
             session.pop('admin_id', None)
             return redirect(url_for('admin.admin_login_page'))
-        
+
         # Pass the admin user to the view
         kwargs['current_admin'] = user
         return f(*args, **kwargs)
-    
+
     return decorated_function
 
 
@@ -64,10 +64,10 @@ def recalculate_weekly_winners(current_admin):
     try:
         from app.tasks.leaderboard import reset_weekly_leaderboard
         reset_weekly_leaderboard()
-        
+
         logger.info(f"Admin {current_admin.username} manually recalculated weekly winners")
         return redirect(url_for('admin.dashboard', success="Weekly winners recalculated successfully"))
-        
+
     except Exception as e:
         logger.error(f"Error recalculating weekly winners: {str(e)}")
         return redirect(url_for('admin.dashboard', error=f"Error recalculating weekly winners: {str(e)}"))
@@ -878,7 +878,7 @@ def populate_daily_dates(current_admin):
                     LIMIT :batch_size
                 )
                 UPDATE quote q
-                SET daily_date = :base_date + (e.row_num - 1)
+                SET daily_date = :base_date + ((e.row_num - 1) * interval '1 day')
                 FROM eligible e
                 WHERE q.id = e.id
                 RETURNING q.id
@@ -889,13 +889,13 @@ def populate_daily_dates(current_admin):
                 'offset': offset,
                 'base_date': tomorrow
             })
-            
+
             processed_ids = result.fetchall()
             if not processed_ids:
                 break
 
             db.session.commit()
-            
+
             batch_count = len(processed_ids)
             total_processed += batch_count
             offset += batch_size
