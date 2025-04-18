@@ -24,6 +24,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if active_tab == 'analytics' %}active{% endif %}" href="{{ url_for('admin.analytics') }}">
+                            <i class="fas fa-chart-line me-2"></i> Analytics
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if active_tab == 'backup' %}active{% endif %}" href="{{ url_for('admin.backup') }}">
                             <i class="fas fa-database me-2"></i> Database Backup
                         </a>
