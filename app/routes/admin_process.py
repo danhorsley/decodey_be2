@@ -853,13 +853,16 @@ def populate_daily_dates(current_admin):
         # Get quotes that meet criteria using raw SQL to avoid encoding issues
         sql = text("""
             SELECT id 
-            FROM quote 
+            FROM quote q
             WHERE active = true 
             AND length(text) <= 65 
             AND (
-                SELECT count(DISTINCT lower(regexp_split_to_table(text, ''))) 
-                FROM quote q2 
-                WHERE q2.id = quote.id
+                SELECT count(DISTINCT letter)
+                FROM (
+                    SELECT lower(unnest(string_to_array(text, ''))) as letter
+                    FROM quote q2
+                    WHERE q2.id = q.id
+                ) letters
             ) <= 18
             ORDER BY id
         """)
