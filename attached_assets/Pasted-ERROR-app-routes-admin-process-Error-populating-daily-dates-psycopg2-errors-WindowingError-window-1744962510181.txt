@@ -1,0 +1,101 @@
+ERROR:app.routes.admin_process:Error populating daily dates: (psycopg2.errors.WindowingError) window functions are not allowed in UPDATE
+LINE 18: ...           SET daily_date = '2025-04-19'::date + (row_number...
+                                                              ^
+
+[SQL: 
+                WITH eligible AS (
+                    SELECT id
+                    FROM quote q
+                    WHERE active = true 
+                    AND length(text) <= 65 
+                    AND (
+                        SELECT count(DISTINCT letter)
+                        FROM (
+                            SELECT lower(unnest(string_to_array(text, ''))) as letter
+                        ) letters
+                    ) <= 18
+                    ORDER BY id
+                    LIMIT %(batch_size)s
+                    OFFSET %(offset)s
+                )
+                UPDATE quote q
+                SET daily_date = %(base_date)s + (row_number() OVER (ORDER BY id))::integer
+                FROM eligible e
+                WHERE q.id = e.id
+                RETURNING q.id
+            ]
+[parameters: {'batch_size': 100, 'offset': 0, 'base_date': datetime.date(2025, 4, 19)}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 942, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.WindowingError: window functions are not allowed in UPDATE
+LINE 18: ...           SET daily_date = '2025-04-19'::date + (row_number...
+                                                              ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/app/routes/admin_process.py", line 887, in populate_daily_dates
+    result = db.session.execute(sql, {
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/scoping.py", line 779, in execute
+    return self._proxied.execute(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2365, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/orm/session.py", line 2260, in _execute_internal
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1416, in execute
+    return meth(
+           ^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 523, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1638, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1843, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1983, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2352, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1964, in _exec_single_context
+    self.dialect.do_execute(
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 942, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.ProgrammingError: (psycopg2.errors.WindowingError) window functions are not allowed in UPDATE
+LINE 18: ...           SET daily_date = '2025-04-19'::date + (row_number...
+                                                              ^
+
+[SQL: 
+                WITH eligible AS (
+                    SELECT id
+                    FROM quote q
+                    WHERE active = true 
+                    AND length(text) <= 65 
+                    AND (
+                        SELECT count(DISTINCT letter)
+                        FROM (
+                            SELECT lower(unnest(string_to_array(text, ''))) as letter
+                        ) letters
+                    ) <= 18
+                    ORDER BY id
+                    LIMIT %(batch_size)s
+                    OFFSET %(offset)s
+                )
+                UPDATE quote q
+                SET daily_date = %(base_date)s + (row_number() OVER (ORDER BY id))::integer
+                FROM eligible e
+                WHERE q.id = e.id
+                RETURNING q.id
+            ]
+[parameters: {'batch_size': 100, 'offset': 0, 'base_date': datetime.date(2025, 4, 19)}]
+(Background on this error at: https://sqlalche.me/e/20/f405)
