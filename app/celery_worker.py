@@ -1,5 +1,7 @@
 # app/celery_worker.py
 from celery import Celery
+from celery.schedules import crontab
+from sqlalchemy import case, func
 from flask import Flask
 import os
 import subprocess
@@ -7,11 +9,13 @@ import logging
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, timedelta
+from app.models import db
 import shutil
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def make_celery(app=None):
     """Create a Celery instance with Flask app context"""
@@ -19,12 +23,10 @@ def make_celery(app=None):
     # For production, use a real Redis server
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
-    celery = Celery(
-        'app',
-        broker=redis_url,
-        backend=redis_url,
-        include=['app.celery_worker']
-    )
+    celery = Celery('app',
+                    broker=redis_url,
+                    backend=redis_url,
+                    include=['app.celery_worker'])
 
     # Configure Celery
     celery.conf.update(
@@ -35,11 +37,12 @@ def make_celery(app=None):
         enable_utc=True,
         task_always_eager=False,  # Set to True for development/debugging
         worker_hijack_root_logger=False,
-        broker_connection_retry_on_startup=True
-    )
+        broker_connection_retry_on_startup=True)
 
     if app:
+
         class ContextTask(celery.Task):
+
             def __call__(self, *args, **kwargs):
                 with app.app_context():
                     return self.run(*args, **kwargs)
@@ -48,33 +51,30 @@ def make_celery(app=None):
 
     return celery
 
+
 # Create Celery instance
 celery = make_celery()
+
 
 # Set up scheduled tasks
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     """Set up scheduled backup tasks"""
     # Daily backup at 2:00 AM UTC
-    sender.add_periodic_task(
-        crontab(hour=2, minute=0),
-        backup_database.s(backup_type='daily'),
-        name='daily-backup'
-    )
+    sender.add_periodic_task(crontab(hour=2, minute=0),
+                             backup_database.s(backup_type='daily'),
+                             name='daily-backup')
 
     # Weekly backup on Sunday at 3:00 AM UTC
-    sender.add_periodic_task(
-        crontab(hour=3, minute=0, day_of_week=0),
-        backup_database.s(backup_type='weekly'),
-        name='weekly-backup'
-    )
+    sender.add_periodic_task(crontab(hour=3, minute=0, day_of_week=0),
+                             backup_database.s(backup_type='weekly'),
+                             name='weekly-backup')
 
     # Cleanup old backups daily at 4:00 AM UTC
-    sender.add_periodic_task(
-        crontab(hour=4, minute=0),
-        cleanup_old_backups.s(),
-        name='cleanup-backups'
-    )
+    sender.add_periodic_task(crontab(hour=4, minute=0),
+                             cleanup_old_backups.s(),
+                             name='cleanup-backups')
+
 
 @celery.task(bind=True, max_retries=3)
 def backup_database(self, backup_type='manual'):
@@ -105,8 +105,7 @@ def backup_database(self, backup_type='manual'):
                     f"sqlite3 {db_path} .dump > {backup_file}",
                     shell=True,
                     capture_output=True,
-                    text=True
-                )
+                    text=True)
 
                 if result.returncode != 0:
                     raise Exception(f"SQLite backup failed: {result.stderr}")
@@ -126,26 +125,30 @@ def backup_database(self, backup_type='manual'):
 
                 # Create pg_dump command
                 cmd = [
-                    "pg_dump", 
-                    "-h", host, 
-                    "-p", str(port), 
-                    "-U", user, 
-                    "-F", "c",  # Custom format
+                    "pg_dump",
+                    "-h",
+                    host,
+                    "-p",
+                    str(port),
+                    "-U",
+                    user,
+                    "-F",
+                    "c",  # Custom format
                     "-b",  # Include blobs
                     "-v",  # Verbose
-                    "-f", str(backup_file),
+                    "-f",
+                    str(backup_file),
                     dbname
                 ]
 
-                result = subprocess.run(
-                    cmd,
-                    env=env,
-                    capture_output=True,
-                    text=True
-                )
+                result = subprocess.run(cmd,
+                                        env=env,
+                                        capture_output=True,
+                                        text=True)
 
                 if result.returncode != 0:
-                    raise Exception(f"PostgreSQL backup failed: {result.stderr}")
+                    raise Exception(
+                        f"PostgreSQL backup failed: {result.stderr}")
 
             # Create a record in the database (optional)
             # You could add a BackupRecord model to track backups
@@ -162,8 +165,9 @@ def backup_database(self, backup_type='manual'):
         logger.error(f"Backup failed: {str(e)}")
         # Retry the task with exponential backoff
         # This is useful for temporary network issues with PostgreSQL
-        retry_in = 60 * (2 ** self.request.retries)  # 60s, 120s, 240s
+        retry_in = 60 * (2**self.request.retries)  # 60s, 120s, 240s
         raise self.retry(exc=e, countdown=retry_in)
+
 
 @celery.task
 def cleanup_old_backups():
@@ -201,7 +205,8 @@ def cleanup_old_backups():
                     timestamp_str = "_".join(name_parts[2:])
 
                     try:
-                        file_date = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
+                        file_date = datetime.strptime(timestamp_str,
+                                                      "%Y%m%d_%H%M%S")
                     except ValueError:
                         # Skip files with invalid timestamp format
                         continue
@@ -219,17 +224,14 @@ def cleanup_old_backups():
                         logger.info(f"Deleted old backup: {backup_file.name}")
 
                 except Exception as file_err:
-                    logger.error(f"Error processing backup file {backup_file}: {str(file_err)}")
+                    logger.error(
+                        f"Error processing backup file {backup_file}: {str(file_err)}"
+                    )
 
-            logger.info(f"Backup cleanup completed: {deleted_count} files deleted")
-            return {
-                "status": "success",
-                "deleted_count": deleted_count
-            }
+            logger.info(
+                f"Backup cleanup completed: {deleted_count} files deleted")
+            return {"status": "success", "deleted_count": deleted_count}
 
     except Exception as e:
         logger.error(f"Backup cleanup failed: {str(e)}")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        return {"status": "error", "message": str(e)}
