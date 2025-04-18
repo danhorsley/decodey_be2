@@ -75,7 +75,7 @@ def recalculate_weekly_winners(current_admin):
         # Start from the first Monday at 00:01 after the first game
         start_date = first_game.created_at.date() - timedelta(days=first_game.created_at.weekday())
         start_date = datetime.combine(start_date, datetime.min.time()) + timedelta(minutes=1)
-        end_date = datetime.utcnow().date()
+        end_date = datetime.utcnow()
 
         # Delete all existing weekly leaderboard entries
         LeaderboardEntry.query.filter_by(period_type='weekly').delete()
