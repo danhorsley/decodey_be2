@@ -91,7 +91,7 @@ def admin_login_page():
         user = User.query.get(admin_id)
         if user and user.is_admin:
             return redirect(url_for('admin.dashboard'))
-            
+
     error = request.args.get('error')
     if request.method == 'GET':
         return render_template('admin/login.html', error=error)
@@ -392,8 +392,8 @@ def quotes(current_admin):
 
         # Apply search filter
         if search_query:
-            query = query.filter((Quote.text.ilike(f'%{search_query}%')) |
-                               (Quote.author.ilike(f'%{search_query}%')))
+            query = query.filter((Quote.text.ilike(f'%{search_query}%'))
+                                 | (Quote.author.ilike(f'%{search_query}%')))
 
         # Apply author filter
         if author_filter:
@@ -408,20 +408,20 @@ def quotes(current_admin):
         quotes_list = pagination.items
 
         return render_template('admin/quotes.html',
-                             active_tab='quotes',
-                             quotes=quotes_list,
-                             authors=sorted(authors),
-                             pagination=pagination,
-                             search_query=search_query,
-                             author_filter=author_filter)
+                               active_tab='quotes',
+                               quotes=quotes_list,
+                               authors=sorted(authors),
+                               pagination=pagination,
+                               search_query=search_query,
+                               author_filter=author_filter)
 
     except Exception as e:
         logger.error(f"Error loading quotes: {str(e)}")
         return render_template('admin/quotes.html',
-                             active_tab='quotes',
-                             quotes=[],
-                             authors=[],
-                             error=f"Error loading quotes: {str(e)}")
+                               active_tab='quotes',
+                               quotes=[],
+                               authors=[],
+                               error=f"Error loading quotes: {str(e)}")
 
 
 # Add quote
@@ -438,17 +438,17 @@ def add_quote(current_admin):
             url_for('admin.quotes', error="Quote and author are required"))
 
     try:
-        quote = Quote(
-            text=quote_text,
-            author=author,
-            minor_attribution=attribution,
-            active=True
-        )
+        quote = Quote(text=quote_text,
+                      author=author,
+                      minor_attribution=attribution,
+                      active=True)
         db.session.add(quote)
         db.session.commit()
-        
-        logger.info(f"Admin {current_admin.username} added new quote by {author}")
-        return redirect(url_for('admin.quotes', success="Quote added successfully"))
+
+        logger.info(
+            f"Admin {current_admin.username} added new quote by {author}")
+        return redirect(
+            url_for('admin.quotes', success="Quote added successfully"))
 
         logger.info(
             f"Admin {current_admin.username} created a database backup: {backup_file.name}"
@@ -925,17 +925,18 @@ def edit_quote(current_admin):
         quote.text = quote_text
         quote.author = author
         quote.minor_attribution = attribution
-        
+
         # Handle daily_date from form
         daily_date = request.form.get('daily_date')
         if daily_date:
             try:
-                quote.daily_date = datetime.strptime(daily_date, '%Y-%m-%d').date()
+                quote.daily_date = datetime.strptime(daily_date,
+                                                     '%Y-%m-%d').date()
             except ValueError:
                 quote.daily_date = None
         else:
             quote.daily_date = None
-            
+
         quote.updated_at = datetime.utcnow()
         db.session.commit()
 
@@ -943,8 +944,9 @@ def edit_quote(current_admin):
         return redirect(
             url_for('admin.quotes', success="Quote updated successfully"))
     except Exception as e:
-            logger.error(f"Error editing quotes: {str(e)}")
-            return redirect(url_for('admin.quotes', error=f"Error editing quotes: {str(e)}"))
+        logger.error(f"Error editing quotes: {str(e)}")
+        return redirect(
+            url_for('admin.quotes', error=f"Error editing quotes: {str(e)}"))
 
 
 @admin_bp.route('/quotes/export', methods=['GET'])
@@ -955,33 +957,33 @@ def export_quotes(current_admin):
         # Create CSV in memory
         output = io.StringIO()
         writer = csv.writer(output)
-        
+
         # Write header
-        writer.writerow(['text', 'author', 'minor_attribution', 'daily_date', 'times_used'])
-        
+        writer.writerow([
+            'text', 'author', 'minor_attribution', 'daily_date', 'times_used'
+        ])
+
         # Write quotes
         quotes = Quote.query.all()
         for quote in quotes:
             writer.writerow([
-                quote.text,
-                quote.author,
-                quote.minor_attribution,
+                quote.text, quote.author, quote.minor_attribution,
                 quote.daily_date.isoformat() if quote.daily_date else '',
                 quote.times_used
             ])
-        
+
         # Prepare response
         output.seek(0)
-        return send_file(
-            io.BytesIO(output.getvalue().encode('utf-8')),
-            mimetype='text/csv',
-            as_attachment=True,
-            download_name='quotes.csv'
-        )
+        return send_file(io.BytesIO(output.getvalue().encode('utf-8')),
+                         mimetype='text/csv',
+                         as_attachment=True,
+                         download_name='quotes.csv')
 
     except Exception as e:
         logger.error(f"Error exporting quotes: {str(e)}")
-        return redirect(url_for('admin.quotes', error=f"Error exporting quotes: {str(e)}"))
+        return redirect(
+            url_for('admin.quotes', error=f"Error exporting quotes: {str(e)}"))
+
 
 @admin_bp.route('/quotes/import', methods=['POST'])
 @admin_required
@@ -1005,7 +1007,9 @@ def import_quotes(current_admin):
         required_fields = ['text', 'author']
         for field in required_fields:
             if field not in reader.fieldnames:
-                return redirect(url_for('admin.quotes', error=f"Missing required field: {field}"))
+                return redirect(
+                    url_for('admin.quotes',
+                            error=f"Missing required field: {field}"))
 
         if replace_existing:
             # Delete existing quotes
@@ -1013,21 +1017,21 @@ def import_quotes(current_admin):
 
         # Import quotes
         for row in reader:
-            quote = Quote(
-                text=row['text'],
-                author=row['author'],
-                minor_attribution=row.get('minor_attribution', ''),
-                active=True
-            )
+            quote = Quote(text=row['text'],
+                          author=row['author'],
+                          minor_attribution=row.get('minor_attribution', ''),
+                          active=True)
             db.session.add(quote)
 
         db.session.commit()
         logger.info(f"Admin {current_admin.username} imported quotes from CSV")
-        return redirect(url_for('admin.quotes', success="Quotes imported successfully"))
+        return redirect(
+            url_for('admin.quotes', success="Quotes imported successfully"))
 
     except Exception as e:
         logger.error(f"Error importing quotes: {str(e)}")
-        return redirect(url_for('admin.quotes', error=f"Error importing quotes: {str(e)}"))
+        return redirect(
+            url_for('admin.quotes', error=f"Error importing quotes: {str(e)}"))
 
     except Exception as e:
         logger.error(f"Error editing quote: {str(e)}")
@@ -1049,8 +1053,7 @@ def delete_quote(current_admin, quote_id):
         db.session.commit()
 
         logger.info(
-            f"Admin {current_admin.username} deleted quote by {quote.author}"
-        )
+            f"Admin {current_admin.username} deleted quote by {quote.author}")
         return redirect(
             url_for('admin.quotes', success="Quote deleted successfully"))
 
@@ -1062,9 +1065,7 @@ def delete_quote(current_admin, quote_id):
 
 # This section intentionally removed to fix duplicate route
 
-
 # Import quotes route moved to top of file
-
 
 #
 # Database Backup Routes
@@ -1257,3 +1258,8 @@ def create_backup(current_admin):
         logger.error(f"Backup creation failed: {str(e)}")
         return redirect(
             url_for('admin.backup', error=f"Backup failed: {str(e)}"))
+
+
+# @admin_bp.route('/login-test')
+# def admin_login_test():
+#     return "Admin login test page"
