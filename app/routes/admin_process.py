@@ -860,10 +860,11 @@ def populate_daily_dates(current_admin):
         total_processed = 0
 
         while True:
-            # Get batch of eligible quotes
+            # Get batch of eligible quotes with row numbers
             sql = text("""
                 WITH eligible AS (
-                    SELECT id
+                    SELECT id, 
+                           ROW_NUMBER() OVER (ORDER BY id) + :offset as row_num
                     FROM quote q
                     WHERE active = true 
                     AND length(text) <= 65 
@@ -875,10 +876,9 @@ def populate_daily_dates(current_admin):
                     ) <= 18
                     ORDER BY id
                     LIMIT :batch_size
-                    OFFSET :offset
                 )
                 UPDATE quote q
-                SET daily_date = :base_date + (row_number() OVER (ORDER BY id))::integer
+                SET daily_date = :base_date + (e.row_num - 1)
                 FROM eligible e
                 WHERE q.id = e.id
                 RETURNING q.id
