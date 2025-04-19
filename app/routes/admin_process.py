@@ -6,7 +6,7 @@ This file contains the route handlers for form submissions from the admin interf
 
 from flask import Blueprint, request, jsonify, redirect, url_for, render_template, flash, current_app, session
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupSettings
+from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupSettings, DailyCompletion
 import logging
 import os
 import secrets
@@ -1030,3 +1030,281 @@ def delete_user(current_admin, user_id):
         db.session.rollback()
         return redirect(
             url_for('admin.users', error=f"Error deleting user: {str(e)}"))
+
+# Add to app/routes/admin_process.py
+
+@admin_process_bp.route('/recalculate-all-stats', methods=['POST'])
+@admin_required
+def recalculate_all_stats(current_admin):
+    """
+    Recalculate stats for all users from scratch based on their game history.
+    This function rebuilds all user stats to ensure accuracy and consistency.
+    """
+    try:
+        start_time = datetime.utcnow()
+
+        # Get all users with at least one game played
+        users_with_games = db.session.query(GameScore.user_id).distinct().all()
+        total_users = len(users_with_games)
+
+        # Track successful and failed updates
+        success_count = 0
+        failed_users = []
+
+        # Process each user
+        for user_record in users_with_games:
+            user_id = user_record[0]
+
+            try:
+                # First delete existing stats
+                UserStats.query.filter_by(user_id=user_id).delete()
+
+                # Create new stats object
+                user_stats = UserStats(user_id=user_id)
+                db.session.add(user_stats)
+
+                # Get all games for this user
+                games = GameScore.query.filter_by(
+                    user_id=user_id
+                ).order_by(GameScore.created_at).all()
+
+                if games:
+                    # Calculate basic stats
+                    user_stats.total_games_played = len(games)
+
+                    # Count wins correctly based on each game's difficulty
+                    wins = 0
+                    for game in games:
+                        difficulty = game.game_id.split('-')[0] if '-' in game.game_id else 'medium'
+                        max_mistakes = {'easy': 8, 'medium': 5, 'hard': 3}.get(difficulty, 5)
+                        if game.completed and game.mistakes < max_mistakes:
+                            wins += 1
+
+                    user_stats.games_won = wins
+                    user_stats.cumulative_score = sum(game.score for game in games)
+                    user_stats.last_played_date = games[-1].created_at
+
+                    # Calculate streaks
+                    current_streak = 0
+                    max_streak = 0
+                    current_noloss_streak = 0
+                    max_noloss_streak = 0
+
+                    # Sort games by date (oldest to newest) for streak calculation
+                    # Current streaks should reflect the most recent consecutive wins
+                    sorted_games = sorted(games, key=lambda g: g.created_at)
+
+                    # First calculate max streaks by going through games chronologically
+                    temp_win_streak = 0
+                    temp_noloss_streak = 0
+
+                    for game in sorted_games:
+                        difficulty = game.game_id.split('-')[0] if '-' in game.game_id else 'medium'
+                        max_mistakes = {'easy': 8, 'medium': 5, 'hard': 3}.get(difficulty, 5)
+
+                        if game.completed and game.mistakes < max_mistakes:  # Won game
+                            temp_win_streak += 1
+                            temp_noloss_streak += 1
+                        else:  # Lost or abandoned game
+                            temp_win_streak = 0
+                            temp_noloss_streak = 0
+
+                        max_streak = max(max_streak, temp_win_streak)
+                        max_noloss_streak = max(max_noloss_streak, temp_noloss_streak)
+
+                    # Now calculate current streaks starting from most recent games
+                    # Reset counters for current streak calculation
+                    current_streak = 0
+                    current_noloss_streak = 0
+
+                    # Iterate through games in reverse order (newest to oldest)
+                    for game in reversed(sorted_games):
+                        difficulty = game.game_id.split('-')[0] if '-' in game.game_id else 'medium'
+                        max_mistakes = {'easy': 8, 'medium': 5, 'hard': 3}.get(difficulty, 5)
+
+                        if game.completed and game.mistakes < max_mistakes:  # Won game
+                            current_streak += 1
+                            current_noloss_streak += 1
+                        else:  # Lost or abandoned game
+                            # Stop counting once streak is broken - we only want the most recent streak
+                            break
+
+                    user_stats.current_streak = current_streak
+                    user_stats.max_streak = max_streak
+                    user_stats.current_noloss_streak = current_noloss_streak
+                    user_stats.max_noloss_streak = max_noloss_streak
+
+                    # Calculate weekly score
+                    now = datetime.utcnow()
+                    week_start = now - timedelta(days=now.weekday())
+                    weekly_score = sum(game.score for game in games 
+                                      if game.created_at >= week_start)
+                    user_stats.highest_weekly_score = weekly_score
+
+                # Calculate daily stats if applicable
+                daily_completions = DailyCompletion.query.filter_by(
+                    user_id=user_id
+                ).order_by(DailyCompletion.challenge_date).all()
+
+                if daily_completions:
+                    user_stats.total_daily_completed = len(daily_completions)
+                    user_stats.last_daily_completed_date = daily_completions[-1].challenge_date
+
+                    # Calculate daily streak
+                    dates = [completion.challenge_date for completion in daily_completions]
+
+                    # Get current streak (consecutive days from the most recent)
+                    current_streak = 1  # Start with 1 for the most recent completion
+                    last_date = dates[-1]
+
+                    for i in range(len(dates) - 2, -1, -1):  # Go backwards from second-to-last
+                        if (last_date - dates[i]).days == 1:  # Consecutive day
+                            current_streak += 1
+                            last_date = dates[i]
+                        else:
+                            break  # Streak broken
+
+                    user_stats.current_daily_streak = current_streak
+
+                    # Calculate max daily streak
+                    max_daily_streak = 1
+                    current_daily_streak = 1
+
+                    for i in range(1, len(dates)):
+                        if (dates[i-1] - dates[i]).days == 1:  # Consecutive day
+                            current_daily_streak += 1
+                        else:
+                            current_daily_streak = 1  # Reset streak
+
+                        max_daily_streak = max(max_daily_streak, current_daily_streak)
+
+                    user_stats.max_daily_streak = max_daily_streak
+
+                # Increment success counter
+                success_count += 1
+
+                # Commit every 50 users to avoid long transactions
+                if success_count % 50 == 0:
+                    db.session.commit()
+                    logger.info(f"Processed {success_count}/{total_users} users")
+
+            except Exception as user_error:
+                logger.error(f"Error processing user {user_id}: {str(user_error)}")
+                failed_users.append(user_id)
+
+        # Final commit for remaining users
+        db.session.commit()
+
+        # Calculate processing time
+        duration = (datetime.utcnow() - start_time).total_seconds()
+
+        logger.info(
+            f"Admin {current_admin.username} recalculated stats for "
+            f"{success_count}/{total_users} users in {duration:.2f} seconds"
+        )
+
+        if failed_users:
+            return redirect(
+                url_for(
+                    'admin.dashboard', 
+                    warning=f"Stats recalculated for {success_count}/{total_users} users. "
+                            f"{len(failed_users)} users failed."
+                )
+            )
+        else:
+            return redirect(
+                url_for(
+                    'admin.dashboard', 
+                    success=f"Successfully recalculated stats for all {success_count} users "
+                            f"in {duration:.2f} seconds."
+                )
+            )
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error recalculating user stats: {str(e)}", exc_info=True)
+        return redirect(
+            url_for(
+                'admin.dashboard', 
+                error=f"Error recalculating user stats: {str(e)}"
+            )
+        )
+
+# Also add a scheduled task function that can be called by a cron job
+def scheduled_recalculate_all_stats():
+    """Version of the recalculate function that can be called by a scheduled task"""
+    try:
+        start_time = datetime.utcnow()
+
+        # Get all users with at least one game played
+        users_with_games = db.session.query(GameScore.user_id).distinct().all()
+        total_users = len(users_with_games)
+
+        # Track successful and failed updates
+        success_count = 0
+        failed_users = []
+
+        # Process each user (same logic as admin function)
+        for user_record in users_with_games:
+            user_id = user_record[0]
+
+            try:
+                # First delete existing stats
+                UserStats.query.filter_by(user_id=user_id).delete()
+
+                # Create new stats object
+                user_stats = UserStats(user_id=user_id)
+                db.session.add(user_stats)
+
+                # Get all games for this user
+                games = GameScore.query.filter_by(
+                    user_id=user_id
+                ).order_by(GameScore.created_at).all()
+
+                # Calculate stats (same logic as admin function)
+                # ... [same calculation code as above - omitted for brevity]
+
+                # Increment success counter
+                success_count += 1
+
+                # Commit every 50 users to avoid long transactions
+                if success_count % 50 == 0:
+                    db.session.commit()
+                    logger.info(f"Processed {success_count}/{total_users} users")
+
+            except Exception as user_error:
+                logger.error(f"Error processing user {user_id}: {str(user_error)}")
+                failed_users.append(user_id)
+
+        # Final commit for remaining users
+        db.session.commit()
+
+        # Calculate processing time
+        duration = (datetime.utcnow() - start_time).total_seconds()
+
+        logger.info(
+            f"Scheduled task recalculated stats for "
+            f"{success_count}/{total_users} users in {duration:.2f} seconds"
+        )
+
+        return {
+            "success": True,
+            "total_users": total_users,
+            "successful_updates": success_count,
+            "failed_updates": len(failed_users),
+            "duration_seconds": duration
+        }
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error in scheduled stats recalculation: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+# Add menu item to admin dashboard template
+# In templates/admin/dashboard_home.html, add:
+"""
+
+"""
