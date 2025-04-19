@@ -551,23 +551,17 @@ def game_status():
         game_id = request.args.get('game_id')
 
         if is_anonymous and not game_id:
-            return jsonify({"error":
-                            "Game ID required for anonymous users"}), 400
+            return jsonify({"error": "Game ID required for anonymous users"}), 400
 
         # Get identifier based on user type
         identifier = f"{game_id}_anon" if is_anonymous else user_id
 
-        game_state = get_unified_game_state(identifier,
-                                            is_anonymous=is_anonymous)
+        game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
 
-        logger.debug(
-            f"Game status check for {'anonymous' if is_anonymous else user_id}"
-        )
+        logger.debug(f"Game status check for {'anonymous' if is_anonymous else user_id}")
 
         if not game_state:
-            logger.debug(
-                f"No active game found for {'anonymous' if is_anonymous else user_id}"
-            )
+            logger.debug(f"No active game found for {'anonymous' if is_anonymous else user_id}")
             return jsonify({"hasActiveGame": False}), 200
 
         # If game is won but not yet notified, prepare win data
@@ -593,12 +587,52 @@ def game_status():
             # Import the scoring function
             from app.utils.scoring import score_game
 
-            # Add this block to get current_daily_streak
+            # Record daily challenge completion if this is a daily challenge and user is authenticated
+            if not is_anonymous and game_state.get('is_daily', False):
+                try:
+                    # Get the daily date from game state
+                    daily_date_str = game_state.get('daily_date')
+                    if daily_date_str:
+                        # Parse the daily date
+                        daily_date = datetime.strptime(daily_date_str, '%Y-%m-%d').date()
+
+                        # Find the quote based on the date
+                        from app.models import Quote, DailyCompletion
+                        daily_quote = Quote.query.filter_by(daily_date=daily_date).first()
+
+                        if daily_quote:
+                            # Check if already completed
+                            existing_completion = DailyCompletion.query.filter_by(
+                                user_id=user_id, challenge_date=daily_date).first()
+
+                            if not existing_completion:
+                                # Create new completion record
+                                completion = DailyCompletion(
+                                    user_id=user_id,
+                                    quote_id=daily_quote.id,  # Use the quote's ID
+                                    challenge_date=daily_date,
+                                    completed_at=datetime.utcnow(),
+                                    score=score,
+                                    mistakes=game_state['mistakes'],
+                                    time_taken=time_taken)
+                                db.session.add(completion)
+
+                                # Update user's daily streak
+                                update_daily_streak(user_id, daily_date)
+
+                                db.session.commit()
+                                logger.info(f"Recorded daily challenge completion for user {user_id}, date {daily_date}")
+                except Exception as e:
+                    logger.error(f"Error recording daily completion: {str(e)}", exc_info=True)
+                    db.session.rollback()
+
+            # Get current_daily_streak AFTER potential daily challenge update
             current_daily_streak = 0
             if not is_anonymous:
-                user_stats = UserStats.query.filter_by(user_id=user_id).first()
-                if user_stats:
-                    current_daily_streak = user_stats.current_daily_streak or 0
+                # Fast query - just select the single field we need using the primary key
+                streak_value = db.session.query(UserStats.current_daily_streak).filter_by(user_id=user_id).scalar()
+                if streak_value is not None:
+                    current_daily_streak = streak_value
 
             score = score_game(game_state['difficulty'], game_state['mistakes'], time_taken)
 
@@ -612,54 +646,8 @@ def game_status():
                 'gameTimeSeconds': time_taken,
                 'rating': rating,
                 'attribution': attribution,
-                'current_daily_streak': current_daily_streak  # Add this line
+                'current_daily_streak': current_daily_streak  # Updated streak value
             }
-
-            # Record daily challenge completion if this is a daily challenge and user is authenticated
-            if not is_anonymous and game_state.get('is_daily', False):
-                try:
-                    # Get the daily date from game state
-                    daily_date_str = game_state.get('daily_date')
-                    if daily_date_str:
-                        # Parse the daily date
-                        daily_date = datetime.strptime(daily_date_str,
-                                                       '%Y-%m-%d').date()
-
-                        # Find the quote based on the date
-                        from app.models import Quote, DailyCompletion
-                        daily_quote = Quote.query.filter_by(
-                            daily_date=daily_date).first()
-
-                        if daily_quote:
-                            # Check if already completed
-                            existing_completion = DailyCompletion.query.filter_by(
-                                user_id=user_id,
-                                challenge_date=daily_date).first()
-
-                            if not existing_completion:
-                                # Create new completion record
-                                completion = DailyCompletion(
-                                    user_id=user_id,
-                                    quote_id=daily_quote.
-                                    id,  # Use the quote's ID
-                                    challenge_date=daily_date,
-                                    completed_at=datetime.utcnow(),
-                                    score=score,
-                                    mistakes=game_state['mistakes'],
-                                    time_taken=time_taken)
-                                db.session.add(completion)
-
-                                # Update user's daily streak
-                                update_daily_streak(user_id, daily_date)
-
-                                db.session.commit()
-                                logger.info(
-                                    f"Recorded daily challenge completion for user {user_id}, date {daily_date}"
-                                )
-                except Exception as e:
-                    logger.error(f"Error recording daily completion: {str(e)}",
-                                 exc_info=True)
-                    db.session.rollback()
 
         response_data = {
             "hasActiveGame": True,
