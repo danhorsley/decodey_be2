@@ -263,7 +263,7 @@ def abandon_game(user_id):
 
         # Update user stats to reflect the broken streak
         from app.utils.stats import initialize_or_update_user_stats
-        initialize_or_update_user_stats(user_id)
+        initialize_or_update_user_stats(user_id, game_score)
 
         logger.info(f"Game abandoned successfully for user {user_id}")
         return True
@@ -410,7 +410,7 @@ def record_game_score(user_id,
 
         # Update user stats
         from app.utils.stats import initialize_or_update_user_stats
-        initialize_or_update_user_stats(user_id)
+        initialize_or_update_user_stats(user_id, game_score)
         print("pre- daily win detector")
         # Check if this is a daily challenge and record completion
         if 'daily' in game_id and completed:

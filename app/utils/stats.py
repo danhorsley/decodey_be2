@@ -1,6 +1,19 @@
+from sqlalchemy import func
 from datetime import datetime, timedelta
 from app.models import db, UserStats, GameScore
 import logging
+
+
+def get_max_mistakes_for_game(game):
+    """Get the maximum mistakes allowed for a game based on its difficulty"""
+    difficulty = game.game_id.split(
+        '-')[0] if '-' in game.game_id else 'medium'
+    max_mistakes = {
+        'easy': 8,
+        'medium': 5,
+        'hard': 3
+    }.get(difficulty, 5)  # Default to medium if unknown
+    return max_mistakes
 
 
 def initialize_or_update_user_stats(user_id, game=None):
@@ -21,15 +34,21 @@ def initialize_or_update_user_stats(user_id, game=None):
 
             # For new users, we need to initialize from all games
             # This only happens once per user
-            games = GameScore.query.filter_by(
-                user_id=user_id, 
-                completed=True
-            ).order_by(GameScore.created_at).all()
+            games = GameScore.query.filter_by(user_id=user_id).order_by(
+                GameScore.created_at).all()
 
             if games:
                 # Calculate initial stats
                 user_stats.total_games_played = len(games)
-                user_stats.games_won = sum(1 for game in games if game.mistakes < 5)
+
+                # Count wins correctly based on each game's difficulty
+                wins = 0
+                for g in games:
+                    max_mistakes = get_max_mistakes_for_game(g)
+                    if g.completed and g.mistakes < max_mistakes:
+                        wins += 1
+                user_stats.games_won = wins
+
                 user_stats.cumulative_score = sum(game.score for game in games)
                 user_stats.last_played_date = games[-1].created_at
 
@@ -40,16 +59,18 @@ def initialize_or_update_user_stats(user_id, game=None):
                 max_noloss_streak = 0
 
                 # Sort games by date (most recent first) for streak calculation
-                for game in reversed(games):
-                    if game.mistakes < 5:  # Won game
+                for g in reversed(games):
+                    max_mistakes = get_max_mistakes_for_game(g)
+                    if g.completed and g.mistakes < max_mistakes:  # Won game
                         current_streak += 1
                         current_noloss_streak += 1
-                    else:  # Lost game
+                    else:  # Lost or abandoned game
                         current_streak = 0
                         current_noloss_streak = 0
 
                     max_streak = max(max_streak, current_streak)
-                    max_noloss_streak = max(max_noloss_streak, current_noloss_streak)
+                    max_noloss_streak = max(max_noloss_streak,
+                                            current_noloss_streak)
 
                 user_stats.current_streak = current_streak
                 user_stats.max_streak = max_streak
@@ -59,7 +80,8 @@ def initialize_or_update_user_stats(user_id, game=None):
                 # Calculate weekly score
                 now = datetime.utcnow()
                 week_start = now - timedelta(days=now.weekday())
-                weekly_score = sum(game.score for game in games if game.created_at >= week_start)
+                weekly_score = sum(g.score for g in games
+                                   if g.created_at >= week_start)
                 user_stats.highest_weekly_score = weekly_score
 
             db.session.commit()
@@ -71,8 +93,9 @@ def initialize_or_update_user_stats(user_id, game=None):
             # Update basic counters
             user_stats.total_games_played += 1
 
-            # Is the game won?
-            game_won = game.mistakes < 5  # Consider games with < 5 mistakes as won
+            # Is the game won? Use correct max mistakes for this game's difficulty
+            max_mistakes = get_max_mistakes_for_game(game)
+            game_won = game.completed and game.mistakes < max_mistakes
 
             if game_won:
                 user_stats.games_won += 1
@@ -89,12 +112,10 @@ def initialize_or_update_user_stats(user_id, game=None):
             week_start = now - timedelta(days=now.weekday())
             if game.created_at >= week_start:
                 # Update highest weekly score if current week's total is now higher
-                current_week_total = db.session.query(
-                    func.sum(GameScore.score)
-                ).filter(
-                    GameScore.user_id == user_id,
-                    GameScore.created_at >= week_start
-                ).scalar() or 0
+                current_week_total = db.session.query(func.sum(
+                    GameScore.score)).filter(
+                        GameScore.user_id == user_id, GameScore.created_at
+                        >= week_start).scalar() or 0
 
                 if current_week_total > (user_stats.highest_weekly_score or 0):
                     user_stats.highest_weekly_score = current_week_total
@@ -102,9 +123,8 @@ def initialize_or_update_user_stats(user_id, game=None):
             # Update streaks based on win/loss and chronological order
             # Get most recent game before this one
             most_recent_game = GameScore.query.filter(
-                GameScore.user_id == user_id, 
-                GameScore.id != game.id,  # Exclude current game
-                GameScore.completed == True
+                GameScore.user_id == user_id,
+                GameScore.id != game.id  # Exclude current game
             ).order_by(GameScore.created_at.desc()).first()
 
             # Only update streaks if this is the most recent game
