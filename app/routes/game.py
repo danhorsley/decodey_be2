@@ -566,6 +566,8 @@ def game_status():
 
         # If game is won but not yet notified, prepare win data
         win_data = None
+        db_operations_needed = False
+        completion_record = None
 
         # Check if the game is won
         if game_state['has_won']:
@@ -573,7 +575,9 @@ def game_status():
 
             # Mark as notified to prevent duplicate notifications
             game_state['win_notified'] = True
-            save_unified_game_state(identifier, game_state, is_anonymous=is_anonymous)
+
+            # Flag that we need to save the game state
+            db_operations_needed = True
 
             # Use attribution from game state
             attribution = {
@@ -586,8 +590,10 @@ def game_status():
 
             # Import the scoring function
             from app.utils.scoring import score_game
+            score = score_game(game_state['difficulty'], game_state['mistakes'], time_taken)
 
             # Record daily challenge completion if this is a daily challenge and user is authenticated
+            daily_date = None
             if not is_anonymous and game_state.get('is_daily', False):
                 try:
                     # Get the daily date from game state
@@ -606,8 +612,8 @@ def game_status():
                                 user_id=user_id, challenge_date=daily_date).first()
 
                             if not existing_completion:
-                                # Create new completion record
-                                completion = DailyCompletion(
+                                # Create new completion record (but don't add to session yet)
+                                completion_record = DailyCompletion(
                                     user_id=user_id,
                                     quote_id=daily_quote.id,  # Use the quote's ID
                                     challenge_date=daily_date,
@@ -615,16 +621,9 @@ def game_status():
                                     score=score,
                                     mistakes=game_state['mistakes'],
                                     time_taken=time_taken)
-                                db.session.add(completion)
-
-                                # Update user's daily streak
-                                update_daily_streak(user_id, daily_date)
-
-                                db.session.commit()
-                                logger.info(f"Recorded daily challenge completion for user {user_id}, date {daily_date}")
                 except Exception as e:
-                    logger.error(f"Error recording daily completion: {str(e)}", exc_info=True)
-                    db.session.rollback()
+                    logger.error(f"Error preparing daily completion: {str(e)}", exc_info=True)
+                    # No need for rollback since we haven't modified the session yet
 
             # Get current_daily_streak AFTER potential daily challenge update
             current_daily_streak = 0
@@ -634,20 +633,36 @@ def game_status():
                 if streak_value is not None:
                     current_daily_streak = streak_value
 
-            score = score_game(game_state['difficulty'], game_state['mistakes'], time_taken)
-
-            # Determine rating
-            rating = get_rating_from_score(score)
-
             win_data = {
                 'score': score,
                 'mistakes': game_state['mistakes'],
                 'maxMistakes': game_state['max_mistakes'],
                 'gameTimeSeconds': time_taken,
-                'rating': rating,
                 'attribution': attribution,
                 'current_daily_streak': current_daily_streak  # Updated streak value
             }
+
+        # Now perform all database operations in a single transaction if needed
+        if db_operations_needed:
+            try:
+                # Save the updated game state
+                save_unified_game_state(identifier, game_state, is_anonymous=is_anonymous)
+
+                # Add completion record if we created one
+                if completion_record:
+                    db.session.add(completion_record)
+
+                    # Update user's daily streak if we have a daily date
+                    if daily_date:
+                        update_daily_streak(user_id, daily_date)
+
+                # Single commit for all operations
+                db.session.commit()
+
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Error updating database in game status: {str(e)}", exc_info=True)
+                # Continue execution to at least return the game status
 
         response_data = {
             "hasActiveGame": True,
@@ -664,19 +679,6 @@ def game_status():
         logger.error(f"Error getting game status: {str(e)}", exc_info=True)
         return jsonify({"error": "Error getting game status"}), 500
 
-
-def get_rating_from_score(score):
-    """Determine rating based on score"""
-    if score >= 900:
-        return "Perfect"
-    elif score >= 800:
-        return "Ace of Spies"
-    elif score >= 700:
-        return "Bletchley Park"
-    elif score >= 500:
-        return "Cabinet Noir"
-    else:
-        return "Cryptanalyst"
 
 
 @bp.route('/convert-game', methods=['POST', 'OPTIONS'])

@@ -905,7 +905,7 @@ def populate_daily_dates(current_admin):
     """Populate daily dates for quotes that meet criteria while preserving today's quote"""
     try:
         from datetime import datetime, timedelta
-        from app.models import Quote
+        from app.models import Quote, DailyCompletion
         from sqlalchemy import func, text
         import random
 
@@ -930,30 +930,54 @@ def populate_daily_dates(current_admin):
         tomorrow = today + timedelta(days=1)
         current_date = tomorrow
 
-        # Process quotes by usage count (least used first)
+        # Get counts of each quote's usage as a daily challenge (by UNIQUE DATES)
+        daily_usage_counts = db.session.query(
+            DailyCompletion.quote_id,
+            func.count(func.distinct(DailyCompletion.challenge_date)).label('daily_usage_count')
+        ).group_by(DailyCompletion.quote_id).all()
+
+        # Convert to dict for easy lookup
+        daily_usage_dict = {q_id: count for q_id, count in daily_usage_counts}
+
+        # Get eligible quotes (length ≤ 65, unique letters ≤ 15, active)
+        eligible_quotes = Quote.query.filter(
+            Quote.active == True,
+            func.length(Quote.text) <= 65, 
+            Quote.unique_letters <= 15,
+            Quote.daily_date.is_(None)
+        ).all()
+
+        # Group quotes by daily usage
+        never_used = []
+        used_once = []
+        used_multiple = []
+
+        for quote in eligible_quotes:
+            daily_count = daily_usage_dict.get(quote.id, 0)
+
+            if daily_count == 0:
+                never_used.append(quote)
+            elif daily_count == 1:
+                used_once.append(quote)
+            else:
+                used_multiple.append(quote)
+
+        # Randomize each group
+        random.shuffle(never_used)
+        random.shuffle(used_once)
+        random.shuffle(used_multiple)
+
+        # Combine in priority order
+        prioritized_quotes = never_used + used_once + used_multiple
+
+        # Assign dates
         total_assigned = 0
+        for quote in prioritized_quotes:
+            quote.daily_date = current_date
+            current_date += timedelta(days=1)
+            total_assigned += 1
 
-        usage_ranges = [
-            (0, 0),  # Never used
-            (1, 5),  # Used 1-5 times
-            (6, 1000)  # Used 6+ times
-        ]
-
-        for min_used, max_used in usage_ranges:
-            eligible_quotes = Quote.query.filter(
-                Quote.active == True,
-                func.length(Quote.text) <= 65, Quote.unique_letters <= 15,
-                Quote.daily_date.is_(None),
-                Quote.times_used.between(min_used, max_used)).all()
-
-            random.shuffle(eligible_quotes)
-
-            for quote in eligible_quotes:
-                quote.daily_date = current_date
-                current_date += timedelta(days=1)
-                total_assigned += 1
-
-            db.session.commit()
+        db.session.commit()
 
         preserved_msg = " (preserved today's quote)" if todays_quote_id else ""
         logger.info(
