@@ -28,13 +28,19 @@ def create_app(config_class=Config):
             logging.FileHandler('app.log', mode='a')
         ]
     )
-    # Enable all relevant loggers
-    for logger_name in ['app.routes.game', 'app.services.game_logic', 'app.services.game_state', 'app.utils.stats']:
-        logging.getLogger(logger_name).setLevel(logging.DEBUG)
-    # Set Werkzeug logging
+    
+    # Enable detailed logging for all app components
+    logging.getLogger('app').setLevel(logging.DEBUG)
+    logging.getLogger('app.routes').setLevel(logging.DEBUG)
+    logging.getLogger('app.services').setLevel(logging.DEBUG)
+    logging.getLogger('app.utils').setLevel(logging.DEBUG)
+    logging.getLogger('gunicorn').setLevel(logging.INFO)
     logging.getLogger('werkzeug').setLevel(logging.DEBUG)
-    # Enable SQL query logging
-    logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+    
+    # Ensure log handlers propagate
+    for logger_name in logging.root.manager.loggerDict:
+        logging.getLogger(logger_name).propagate = True
     logger = logging.getLogger(__name__)
     logger.info("Starting application initialization")
 
