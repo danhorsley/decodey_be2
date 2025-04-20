@@ -1018,27 +1018,23 @@ def populate_daily_dates(current_admin):
         # Combine in priority order
         prioritized_quotes = never_used + used_once + used_multiple
 
-        # Assign dates in smaller batches with sleep between
-        total_assigned = 0
-        batch_size = 10
+        # Update all quotes in a single SQL transaction
+        update_values = []
+        for i, quote in enumerate(prioritized_quotes):
+            update_values.append(f"({quote.id}, '{(current_date + timedelta(days=i)).isoformat()}')")
         
-        for i in range(0, len(prioritized_quotes), batch_size):
-            batch = prioritized_quotes[i:i + batch_size]
-            
-            # Prepare bulk update data
-            bulk_data = []
-            for quote in batch:
-                bulk_data.append({
-                    'id': quote.id,
-                    'daily_date': current_date
-                })
-                current_date += timedelta(days=1)
-                total_assigned += 1
-            
-            # Bulk update the batch
-            db.session.bulk_update_mappings(Quote, bulk_data)
+        if update_values:
+            # Build and execute update SQL
+            sql = f"""
+                UPDATE quote SET daily_date = dates.daily_date::date
+                FROM (VALUES {','.join(update_values)}) 
+                AS dates(id, daily_date)
+                WHERE quote.id = dates.id::integer
+            """
+            db.session.execute(text(sql))
             db.session.commit()
-            logger.info(f"Assigned {total_assigned} daily dates so far")
+            total_assigned = len(update_values)
+            logger.info(f"Assigned {total_assigned} daily dates in single transaction")
 
         # Prepare result message
         preserved_msg = " (preserved today's quote)" if today_id else ""
