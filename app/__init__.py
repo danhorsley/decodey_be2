@@ -17,15 +17,21 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Set up logging
+    # Set up detailed logging
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        level=logging.DEBUG,
+        format='%(asctime)s.%(msecs)03d [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler('app.log')
+            logging.FileHandler('debug.log', mode='w'),
+            logging.FileHandler('app.log', mode='a')
         ]
     )
+    # Enable SQL query logging
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
+    # Enable detailed HTTP request logging
+    logging.getLogger('werkzeug').setLevel(logging.DEBUG)
     logger = logging.getLogger(__name__)
     logger.info("Starting application initialization")
 
