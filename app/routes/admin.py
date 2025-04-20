@@ -1000,43 +1000,64 @@ def import_quotes(current_admin):
 
     try:
         # Read CSV file
-        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        file_content = file.stream.read().decode(
+            "UTF-8-sig")  # Use UTF-8-sig to handle BOM
+        stream = io.StringIO(file_content, newline=None)
         reader = csv.DictReader(stream)
 
+        # Store all rows in memory
+        rows = list(reader)
+
         # Validate CSV structure
-        required_fields = ['text', 'author']
-        for field in required_fields:
-            if field not in reader.fieldnames:
-                return redirect(
-                    url_for('admin.quotes',
-                            error=f"Missing required field: {field}"))
+        if not rows:
+            return redirect(url_for('admin.quotes', error="CSV file is empty"))
+
+        # Check if required fields exist (handle BOM in field names)
+        fieldnames = reader.fieldnames
+        has_text = any(field.endswith('text') for field in fieldnames)
+        has_author = 'author' in fieldnames
+
+        if not has_text or not has_author:
+            missing = []
+            if not has_text:
+                missing.append("text")
+            if not has_author:
+                missing.append("author")
+            return redirect(
+                url_for(
+                    'admin.quotes',
+                    error=f"Missing required fields: {', '.join(missing)}"))
 
         if replace_existing:
             # Delete existing quotes
             Quote.query.delete()
 
         # Import quotes
-        for row in reader:
-            quote = Quote(text=row['text'],
-                          author=row['author'],
-                          minor_attribution=row.get('minor_attribution', ''),
-                          active=True)
+        text_field = next(field for field in fieldnames
+                          if field.endswith('text'))
+        count = 0
+
+        for row in rows:
+            quote = Quote(
+                text=row[text_field],  # Use the detected text field name
+                author=row['author'],
+                minor_attribution=row.get('minor_attribution', ''),
+                active=True)
             db.session.add(quote)
+            count += 1
 
         db.session.commit()
-        logger.info(f"Admin {current_admin.username} imported quotes from CSV")
+        logger.info(
+            f"Admin {current_admin.username} imported {count} quotes from CSV")
         return redirect(
-            url_for('admin.quotes', success="Quotes imported successfully"))
+            url_for('admin.quotes',
+                    success=f"Successfully imported {count} quotes"))
 
     except Exception as e:
         logger.error(f"Error importing quotes: {str(e)}")
+        db.session.rollback()  # Ensure we rollback on error
         return redirect(
             url_for('admin.quotes', error=f"Error importing quotes: {str(e)}"))
-
-    except Exception as e:
-        logger.error(f"Error editing quote: {str(e)}")
-        return redirect(
-            url_for('admin.quotes', error=f"Error editing quote: {str(e)}"))
 
 
 # Delete quote

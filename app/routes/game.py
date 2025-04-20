@@ -33,25 +33,25 @@ def start():
         # Get user identification
         user_id = get_jwt_identity()
         is_anonymous = user_id is None
-
+        
         # For anonymous users, use IP address as identifier
         identifier = user_id if not is_anonymous else request.remote_addr
-
+        
         # Check if we're creating games too quickly
         current_time = time.time()
         last_creation_time = game_creation_timestamps.get(identifier, 0)
         time_since_last_creation = current_time - last_creation_time
-
+        
         if time_since_last_creation < GAME_CREATION_COOLDOWN:
             logger.warning(f"Game creation request rejected - cooldown period not elapsed for {'anonymous' if is_anonymous else user_id}")
             return jsonify({
                 "error": "Please wait a moment before starting a new game",
                 "cooldown_remaining": round(GAME_CREATION_COOLDOWN - time_since_last_creation, 1)
             }), 429  # 429 Too Many Requests
-
+        
         # Update the timestamp before proceeding
         game_creation_timestamps[identifier] = current_time
-
+        
         # Extract longText parameter
         long_text = request.args.get('longText', 'false').lower() == 'true'
 
@@ -155,11 +155,7 @@ def start():
                 }
 
         logger.debug(
-            f"Starting new game for {'anonymous' if is_anonymous else user_id}:\n"
-            f"  Difficulty: {backend_difficulty}\n"
-            f"  Hardcore mode: {hardcore_mode}\n"
-            f"  Game ID: {game_id}\n"
-            f"  Long text: {long_text}"
+            f"Starting new game for {'anonymous' if is_anonymous else user_id} with difficulty: {backend_difficulty}"
         )
 
         # Start a new game and get game data
@@ -335,106 +331,6 @@ def hint():
             'hint_letter': result['hint_letter'],
             'hint_value': result['hint_value'],
             'max_mistakes': result['game_state']['max_mistakes']
-        }), 200
-    except Exception as e:
-        logger.error(f"Error processing hint: {str(e)}", exc_info=True)
-        return jsonify({"error": "Error processing hint"}), 500
-
-        # Get identifier based on user type
-        identifier = f"{game_id}_anon" if is_anonymous else user_id
-
-        # Get current game state
-        game_state = get_unified_game_state(identifier,
-                                            is_anonymous=is_anonymous)
-        if not game_state:
-            logger.error(
-                f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}"
-            )
-            return jsonify({"error": "No active game"}), 400
-
-        # Process the hint
-        result = process_hint(game_state)
-        if not result['valid']:
-            return jsonify({"error": result['message']}), 400
-
-        # Save updated game state
-        save_unified_game_state(identifier,
-                                result['game_state'],
-                                is_anonymous=is_anonymous)
-
-        # For debugging
-        logger.debug(
-            f"Game complete: {result['complete']}, HasWon: {result['has_won']}"
-        )
-
-        # Return result to client
-        return jsonify({
-            'display':
-            result['display'],
-            'mistakes':
-            result['game_state']['mistakes'],
-            'correctly_guessed':
-            result['game_state']['correctly_guessed'],
-            'game_complete':
-            result['complete'],
-            'hasWon':
-            result['has_won'],  # Use the front-end expected key
-            'hint_letter':
-            result['hint_letter'],
-            'hint_value':
-            result['hint_value'],
-            'max_mistakes':
-            result['game_state']['max_mistakes']
-        }), 200
-    except Exception as e:
-        logger.error(f"Error processing hint: {str(e)}", exc_info=True)
-        return jsonify({"error": "Error processing hint"}), 500
-
-        # Get identifier based on user type
-        identifier = f"{game_id}_anon" if is_anonymous else user_id
-
-        # Get current game state
-        game_state = get_unified_game_state(identifier,
-                                            is_anonymous=is_anonymous)
-        if not game_state:
-            logger.error(
-                f"No active game found for {'anonymous' if is_anonymous else 'user'}: {identifier}"
-            )
-            return jsonify({"error": "No active game"}), 400
-
-        # Process the hint
-        result = process_hint(game_state)
-        if not result['valid']:
-            return jsonify({"error": result['message']}), 400
-
-        # Save updated game state
-        save_unified_game_state(identifier,
-                                result['game_state'],
-                                is_anonymous=is_anonymous)
-
-        # For debugging
-        logger.debug(
-            f"Game complete: {result['complete']}, HasWon: {result['has_won']}"
-        )
-
-        # Return result to client
-        return jsonify({
-            'display':
-            result['display'],
-            'mistakes':
-            result['game_state']['mistakes'],
-            'correctly_guessed':
-            result['game_state']['correctly_guessed'],
-            'game_complete':
-            result['complete'],
-            'hasWon':
-            result['has_won'],  # Use the front-end expected key
-            'hint_letter':
-            result['hint_letter'],
-            'hint_value':
-            result['hint_value'],
-            'max_mistakes':
-            result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing hint: {str(e)}", exc_info=True)

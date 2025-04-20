@@ -17,30 +17,8 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Set up detailed logging
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s.%(msecs)03d [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('debug.log', mode='w'),
-            logging.FileHandler('app.log', mode='a')
-        ]
-    )
-    
-    # Enable detailed logging for all app components
-    logging.getLogger('app').setLevel(logging.DEBUG)
-    logging.getLogger('app.routes').setLevel(logging.DEBUG)
-    logging.getLogger('app.services').setLevel(logging.DEBUG)
-    logging.getLogger('app.utils').setLevel(logging.DEBUG)
-    logging.getLogger('gunicorn').setLevel(logging.INFO)
-    logging.getLogger('werkzeug').setLevel(logging.DEBUG)
-    logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
-    
-    # Ensure log handlers propagate
-    for logger_name in logging.root.manager.loggerDict:
-        logging.getLogger(logger_name).propagate = True
+    # Set up logging
+    logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
     logger.info("Starting application initialization")
 
@@ -126,12 +104,10 @@ def create_app(config_class=Config):
             jti = jwt_payload["jti"]
             return jti in jwt_blocklist
 
-        # Run migrations and create any missing tables
+        # Create database tables
         with app.app_context():
-            from flask_migrate import upgrade
-            upgrade()
             db.create_all()
-            logger.info("Database migrations and tables created successfully")
+            logger.info("Database tables created successfully")
 
         # Register blueprints without API prefixes
         from app.routes import auth, game, stats, main, dev, daily
@@ -155,6 +131,34 @@ def create_app(config_class=Config):
     except Exception as e:
         logger.error(f"Error during application initialization: {str(e)}")
         raise
+
+    # Setup admin user in production
+    # if app.config['FLASK_ENV'] != 'development':
+    # try:
+    # admin_user = os.environ.get('ADMIN_USER')
+    # admin_pass = os.environ.get('ADMIN_PASSWORD_1')
+    # admin_pass2 = os.environ.get('ADMIN_PASSWORD_2')
+
+    # if admin_user and admin_pass and admin_pass2:
+    #     logger.info("Setting up admin user in production")
+    #     with app.app_context():
+    #         user = User.query.filter_by(username=admin_user).first()
+
+    #         if not user:
+    #             user = User(username=admin_user,
+    #                         email=f"{admin_user}@decodey.game",
+    #                         password=admin_pass)
+    #             user.is_admin = True
+    #             db.session.add(user)
+    #         else:
+    #             user.set_password(admin_pass)
+    #             user.is_admin = True
+
+    #         user.set_admin_password(admin_pass2)
+    #         db.session.commit()
+    #         logger.info("Admin user setup completed")
+    # except Exception as e:
+    #     logger.error(f"Failed to setup admin user: {str(e)}")
 
     logger.info("Application initialization completed successfully")
     return app
