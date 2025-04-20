@@ -1024,22 +1024,21 @@ def populate_daily_dates(current_admin):
         
         for i in range(0, len(prioritized_quotes), batch_size):
             batch = prioritized_quotes[i:i + batch_size]
-
+            
+            # Prepare bulk update data
+            bulk_data = []
             for quote in batch:
-                print(f"\nProcessing quote: ID={quote.id}")
-                print(f"Text: {quote.text}")
-                print(f"Author: {quote.author}")
-                print(f"Minor Attribution: {quote.minor_attribution}")
-                quote.daily_date = current_date
+                bulk_data.append({
+                    'id': quote.id,
+                    'daily_date': current_date
+                })
                 current_date += timedelta(days=1)
                 total_assigned += 1
-
-            # Commit each batch
+            
+            # Bulk update the batch
+            db.session.bulk_update_mappings(Quote, bulk_data)
             db.session.commit()
             logger.info(f"Assigned {total_assigned} daily dates so far")
-            
-            # Commit batch and continue
-            db.session.commit()
 
         # Prepare result message
         preserved_msg = " (preserved today's quote)" if today_id else ""
