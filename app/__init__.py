@@ -104,10 +104,12 @@ def create_app(config_class=Config):
             jti = jwt_payload["jti"]
             return jti in jwt_blocklist
 
-        # Create database tables
+        # Run migrations and create any missing tables
         with app.app_context():
+            from flask_migrate import upgrade
+            upgrade()
             db.create_all()
-            logger.info("Database tables created successfully")
+            logger.info("Database migrations and tables created successfully")
 
         # Register blueprints without API prefixes
         from app.routes import auth, game, stats, main, dev, daily
