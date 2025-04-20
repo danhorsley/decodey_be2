@@ -1013,10 +1013,10 @@ def populate_daily_dates(current_admin):
         # Combine in priority order
         prioritized_quotes = never_used + used_once + used_multiple
 
-        # Assign dates in batches of 20 to avoid timeouts
+        # Assign dates in smaller batches with sleep between
         total_assigned = 0
-        batch_size = 20
-
+        batch_size = 10
+        
         for i in range(0, len(prioritized_quotes), batch_size):
             batch = prioritized_quotes[i:i + batch_size]
 
@@ -1028,6 +1028,10 @@ def populate_daily_dates(current_admin):
             # Commit each batch
             db.session.commit()
             logger.info(f"Assigned {total_assigned} daily dates so far")
+            
+            # Sleep briefly between batches
+            from time import sleep
+            sleep(0.1)
 
         # Prepare result message
         preserved_msg = " (preserved today's quote)" if today_id else ""
