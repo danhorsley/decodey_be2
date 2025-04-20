@@ -967,10 +967,15 @@ def populate_daily_dates(current_admin):
                 # Add to problematic quotes with details
                 problematic_quotes.append({
                     'id': quote_id,
+                    'text': quote_text,
+                    'author': quote_author,
                     'error': str(encode_error),
                 })
                 logger.warning(
-                    f"Encoding issue with quote ID {quote_id}: {str(encode_error)}"
+                    f"Encoding issue with quote ID {quote_id}:\n"
+                    f"Text: {quote_text}\n"
+                    f"Author: {quote_author}\n"
+                    f"Error: {str(encode_error)}"
                 )
 
         # Log problematic quotes
