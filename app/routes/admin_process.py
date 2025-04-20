@@ -883,8 +883,7 @@ def register_admin_process_routes(app):
                           methods=['POST'])
 
     admin_bp.add_url_rule('/rotate-jwt-key',
-                          endpoint='rotate_jwt_key',
-                          view_func=rotate_jwt_key,
+                          endpoint='rotate_jwt_key',                          view_func=rotate_jwt_key,
                           methods=['POST'])
 
     admin_bp.add_url_rule('/update-email-settings',
@@ -893,7 +892,7 @@ def register_admin_process_routes(app):
                           methods=['POST'])
 
     admin_bp.add_url_rule('/test-email',
-                          endpoint='test_email',
+                          endpoint='test-email',
                           view_func=test_email,
                           methods=['POST'])
 
@@ -1023,16 +1022,27 @@ def populate_daily_dates(current_admin):
         for i in range(0, len(prioritized_quotes), batch_size):
             batch = prioritized_quotes[i:i + batch_size]
 
-            # Prepare bulk update data
-            bulk_data = []
-            for quote in batch:
-                bulk_data.append({'id': quote.id, 'daily_date': current_date})
-                current_date += timedelta(days=1)
-                total_assigned += 1
+            # Use raw SQL for bulk update
+            quote_ids = [quote.id for quote in batch]
+            dates = [(quote.id, current_date + timedelta(days=i))
+                     for i, quote in enumerate(batch)]
 
-            # Bulk update the batch
-            db.session.bulk_update_mappings(Quote, bulk_data)
+            # Build SQL parameters
+            params = ','.join([f'({id}, %s)' for id, _ in dates])
+            date_values = [d.isoformat() for _, d in dates]
+
+            # Execute direct SQL update
+            sql = f"""
+                UPDATE quote 
+                SET daily_date = v.date
+                FROM (VALUES {params}) AS v(id, date) 
+                WHERE quote.id = v.id::integer
+            """
+            db.session.execute(text(sql), date_values)
             db.session.commit()
+
+            total_assigned += len(batch)
+            current_date += timedelta(days=len(batch))
             logger.info(f"Assigned {total_assigned} daily dates so far")
 
         # Prepare result message
@@ -1414,7 +1424,7 @@ def fix_quote_encoding(current_admin):
             '”': '"',  # Right double quote''
             'É': 'E',  # Capital E with acute accent
             "é": 'e',  # lower case E with acute accent
-            '�': "'",  # Unknown character
+            '': "'",  # Unknown character
             '‚Äô': "'",  # Smart single quote
             '‚Äù': '"',  # Smart double quote open
             '‚Äú': '"',  # Smart double quote close
