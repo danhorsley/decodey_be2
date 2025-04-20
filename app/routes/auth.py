@@ -60,8 +60,10 @@ def login():
         data = request.get_json()
         identifier = data.get('username')  # Can be username or email
         password = data.get('password')
-        remember = data.get('remember', False)
-
+        remember = data.get('rememberMe',
+                            False)  # Changed from 'remember' to 'rememberMe'
+        logging.info(
+            f"Login request for user {identifier}, rememberMe: {remember}")
         # Try to find user by username or email
         user = User.query.filter((User.username == identifier)
                                  | (User.email == identifier)).first()
@@ -363,6 +365,8 @@ def delete_account():
         db.session.rollback()
         logging.error(f"Error deleting account: {str(e)}")
         return jsonify({"msg": "An error occurred deleting your account"}), 500
+
+
 @bp.route('/forgot-password', methods=['POST'])
 def forgot_password():
     try:
@@ -376,7 +380,10 @@ def forgot_password():
         user = User.query.filter_by(email=email).first()
         if not user:
             # For security, still return success even if email not found
-            return jsonify({"message": "If an account exists with this email, a reset link will be sent"}), 200
+            return jsonify({
+                "message":
+                "If an account exists with this email, a reset link will be sent"
+            }), 200
 
         # Generate reset token
         reset_token = secrets.token_urlsafe(32)
@@ -394,12 +401,11 @@ def forgot_password():
         response = requests.post(
             f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
             auth=("api", MAILGUN_API_KEY),
-            data = {
+            data={
                 "from": f"Daniel from Decodey <support@{MAILGUN_DOMAIN}>",
                 "to": email,
                 "subject": "Reset your Decodey password",
                 "reply-to": f"support@{MAILGUN_DOMAIN}",
-
                 "text": f"""Hi {user.username if user.username else 'there'},
             We received a request to reset your password for your Decodey account.
 
@@ -411,7 +417,6 @@ def forgot_password():
             — The Decodey Team
             https://decodey.game
             """,
-
                 "html": f"""<html>
               <body style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
                 <p>Hi {user.username if user.username else 'there'},</p>
@@ -427,23 +432,24 @@ def forgot_password():
                 <a href="https://decodey.game">decodey.game</a></p>
               </body>
             </html>""",
-
                 "headers": {
                     "List-Unsubscribe": f"<mailto:support@{MAILGUN_DOMAIN}>"
                 }
-            }
-
-        )
+            })
 
         if response.status_code != 200:
-            raise Exception(f"Mailgun error: {response.status_code} - {response.text}")
+            raise Exception(
+                f"Mailgun error: {response.status_code} - {response.text}")
 
-        return jsonify({"message": "If an account exists with this email, a reset link will be sent"}), 200
+        return jsonify({
+            "message":
+            "If an account exists with this email, a reset link will be sent"
+        }), 200
 
     except Exception as e:
         logging.error(f"Error in forgot password: {str(e)}")
-        return jsonify({"error": "Failed to process password reset request"}), 500
-
+        return jsonify({"error":
+                        "Failed to process password reset request"}), 500
 
 
 @bp.route('/reset-password', methods=['GET', 'POST'])
@@ -454,7 +460,8 @@ def reset_password():
 
     user = User.query.filter_by(reset_token=token).first()
 
-    if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow():
+    if not user or not user.reset_token_expires or user.reset_token_expires < datetime.utcnow(
+    ):
         return jsonify({"error": "Invalid or expired reset token"}), 400
 
     if request.method == 'GET':
@@ -474,4 +481,5 @@ def reset_password():
 
         return jsonify({"message": "Password reset successfully"}), 200
 
-    return jsonify({"message": "Token verified, ready for password reset"}), 200
+    return jsonify({"message":
+                    "Token verified, ready for password reset"}), 200
