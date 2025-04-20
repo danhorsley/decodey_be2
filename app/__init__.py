@@ -18,7 +18,14 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     # Set up logging
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler('app.log')
+        ]
+    )
     logger = logging.getLogger(__name__)
     logger.info("Starting application initialization")
 
