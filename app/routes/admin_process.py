@@ -1026,6 +1026,10 @@ def populate_daily_dates(current_admin):
             batch = prioritized_quotes[i:i + batch_size]
 
             for quote in batch:
+                print(f"\nProcessing quote: ID={quote.id}")
+                print(f"Text: {quote.text}")
+                print(f"Author: {quote.author}")
+                print(f"Minor Attribution: {quote.minor_attribution}")
                 quote.daily_date = current_date
                 current_date += timedelta(days=1)
                 total_assigned += 1
