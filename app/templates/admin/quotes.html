@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <!-- Quote Actions -->
     <div class="mb-4">
         <div class="d-flex gap-2">
+            <!-- Existing buttons here -->
             <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addQuoteModal">
                 <i class="fas fa-plus"></i> Add Quote
             </button>
@@ -62,6 +63,10 @@ document.addEventListener('DOMContentLoaded', function() {
             </button>
             <a href="{{ url_for('admin.export_quotes') }}" class="btn btn-secondary">
                 <i class="fas fa-file-export"></i> Export Quotes
+            </a>
+            <!-- Add the new button here -->
+            <a href="{{ url_for('admin_process.fix_quote_encoding') }}" class="btn btn-warning" onclick="return confirm('This will fix encoding issues in all quotes. Continue?')">
+                <i class="fas fa-wrench"></i> Fix Quote Encoding
             </a>
             <a href="{{ url_for('admin_process.populate_daily_dates') }}" class="btn btn-warning" onclick="return confirm('This will reassign all daily dates for appropriate quotes. Continue?')">
                 <i class="fas fa-calendar"></i> Populate Daily Dates

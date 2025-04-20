@@ -6,7 +6,7 @@ This file contains the route handlers for form submissions from the admin interf
 
 from flask import Blueprint, request, jsonify, redirect, url_for, render_template, flash, current_app, session
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupSettings, DailyCompletion
+from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupSettings, DailyCompletion, Quote, DailyCompletion
 import logging
 import os
 import secrets
@@ -14,9 +14,10 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 import smtplib
+import random
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from sqlalchemy import func
+from sqlalchemy import func, text
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -67,14 +68,17 @@ def recalculate_weekly_winners(current_admin):
         from sqlalchemy import func
 
         # Get the date of the first game ever played
-        first_game = GameScore.query.order_by(GameScore.created_at.asc()).first()
+        first_game = GameScore.query.order_by(
+            GameScore.created_at.asc()).first()
         if not first_game:
             return redirect(url_for('admin.dashboard', error="No games found"))
 
         # Start from the beginning of the week of the first game
         # Start from the first Monday at 00:01 after the first game
-        start_date = first_game.created_at.date() - timedelta(days=first_game.created_at.weekday())
-        start_date = datetime.combine(start_date, datetime.min.time()) + timedelta(minutes=1)
+        start_date = first_game.created_at.date() - timedelta(
+            days=first_game.created_at.weekday())
+        start_date = datetime.combine(
+            start_date, datetime.min.time()) + timedelta(minutes=1)
         end_date = datetime.utcnow()
 
         # Delete all existing weekly leaderboard entries
@@ -88,32 +92,29 @@ def recalculate_weekly_winners(current_admin):
 
             # Get weekly scores and stats
             weekly_stats = db.session.query(
-                GameScore.user_id,
-                User.username,
+                GameScore.user_id, User.username,
                 db.func.sum(GameScore.score).label('total_score'),
                 db.func.count(GameScore.id).label('games_played'),
-                db.func.sum(db.case((GameScore.mistakes < 5, 1), else_=0)).label('games_won')
-            ).join(User).filter(
-                GameScore.created_at >= current_start,
-                GameScore.created_at < current_end,
-                GameScore.completed == True
-            ).group_by(GameScore.user_id, User.username).order_by(
-                db.desc('total_score')
-            ).all()
+                db.func.sum(db.case(
+                    (GameScore.mistakes < 5, 1),
+                    else_=0)).label('games_won')).join(User).filter(
+                        GameScore.created_at >= current_start,
+                        GameScore.created_at < current_end,
+                        GameScore.completed == True).group_by(
+                            GameScore.user_id, User.username).order_by(
+                                db.desc('total_score')).all()
 
             # Create leaderboard entries for this week
             for rank, stats in enumerate(weekly_stats, 1):
-                entry = LeaderboardEntry(
-                    user_id=stats.user_id,
-                    username=stats.username,
-                    period_type='weekly',
-                    period_start=current_start,
-                    period_end=current_end,
-                    rank=rank,
-                    score=stats.total_score,
-                    games_played=stats.games_played,
-                    games_won=stats.games_won
-                )
+                entry = LeaderboardEntry(user_id=stats.user_id,
+                                         username=stats.username,
+                                         period_type='weekly',
+                                         period_start=current_start,
+                                         period_end=current_end,
+                                         rank=rank,
+                                         score=stats.total_score,
+                                         games_played=stats.games_played,
+                                         games_won=stats.games_won)
                 db.session.add(entry)
 
             current_start = current_end
@@ -904,55 +905,97 @@ def register_admin_process_routes(app):
 def populate_daily_dates(current_admin):
     """Populate daily dates for quotes that meet criteria while preserving today's quote"""
     try:
-        from datetime import datetime, timedelta
-        from app.models import Quote, DailyCompletion
-        from sqlalchemy import func, text
-        import random
-
         # Get today's date
         today = datetime.utcnow().date()
 
-        # Find and preserve today's quote
-        todays_quote = Quote.query.filter(Quote.daily_date == today).first()
-        todays_quote_id = todays_quote.id if todays_quote else None
+        # Find and preserve today's quote using raw SQL
+        today_id = None
+        result = db.session.execute(
+            text("SELECT id FROM quote WHERE daily_date = :today"), {
+                "today": today
+            }).fetchone()
 
-        # Clear all other daily dates
-        if todays_quote_id:
-            db.session.execute(
-                text("UPDATE quote SET daily_date = NULL WHERE id != :id"),
-                {"id": todays_quote_id})
-        else:
-            db.session.execute(text("UPDATE quote SET daily_date = NULL"))
+        if result:
+            today_id = result[0]
+            logger.info(f"Found today's quote with ID: {today_id}")
 
-        db.session.commit()
+        # Clear all other daily dates using ORM
+        try:
+            if today_id:
+                Quote.query.filter(Quote.id != today_id).update(
+                    {"daily_date": None}, synchronize_session=False)
+            else:
+                Quote.query.update({"daily_date": None},
+                                   synchronize_session=False)
+
+            db.session.commit()
+            logger.info("Successfully cleared existing daily dates")
+        except Exception as clear_error:
+            db.session.rollback()
+            logger.error(f"Error clearing daily dates: {str(clear_error)}")
+            return redirect(
+                url_for(
+                    'admin.quotes',
+                    error=f"Error clearing daily dates: {str(clear_error)}"))
 
         # Start from tomorrow
         tomorrow = today + timedelta(days=1)
         current_date = tomorrow
 
-        # Get counts of each quote's usage as a daily challenge (by UNIQUE DATES)
+        # Get eligible quotes but check for encoding issues
+        eligible_quotes = Quote.query.filter(Quote.active == True,
+                                             func.length(Quote.text) <= 65,
+                                             Quote.unique_letters <= 15,
+                                             Quote.daily_date.is_(None)).all()
+
+        # Identify quotes with encoding issues
+        good_quotes = []
+        problematic_quotes = []
+
+        for quote in eligible_quotes:
+            try:
+                # Test for encoding issues
+                quote_id = quote.id
+                quote_text = quote.text
+                quote_author = quote.author
+                encoded_text = quote_text.encode('utf-8')
+                encoded_author = quote_author.encode('utf-8')
+
+                # If we made it here without exception, add to good quotes
+                good_quotes.append(quote)
+            except UnicodeEncodeError as encode_error:
+                # Add to problematic quotes with details
+                problematic_quotes.append({
+                    'id': quote_id,
+                    'error': str(encode_error),
+                })
+                logger.warning(
+                    f"Encoding issue with quote ID {quote_id}: {str(encode_error)}"
+                )
+
+        # Log problematic quotes
+        if problematic_quotes:
+            logger.warning(
+                f"Found {len(problematic_quotes)} quotes with encoding issues:"
+            )
+            for q in problematic_quotes:
+                logger.warning(f"  Quote ID {q['id']}: {q['error']}")
+
+        # Group quotes by daily usage
         daily_usage_counts = db.session.query(
             DailyCompletion.quote_id,
-            func.count(func.distinct(DailyCompletion.challenge_date)).label('daily_usage_count')
-        ).group_by(DailyCompletion.quote_id).all()
+            func.count(func.distinct(DailyCompletion.challenge_date)).label(
+                'daily_usage_count')).group_by(DailyCompletion.quote_id).all()
 
         # Convert to dict for easy lookup
         daily_usage_dict = {q_id: count for q_id, count in daily_usage_counts}
 
-        # Get eligible quotes (length ≤ 65, unique letters ≤ 15, active)
-        eligible_quotes = Quote.query.filter(
-            Quote.active == True,
-            func.length(Quote.text) <= 65, 
-            Quote.unique_letters <= 15,
-            Quote.daily_date.is_(None)
-        ).all()
-
-        # Group quotes by daily usage
+        # Sort quotes by usage
         never_used = []
         used_once = []
         used_multiple = []
 
-        for quote in eligible_quotes:
+        for quote in good_quotes:
             daily_count = daily_usage_dict.get(quote.id, 0)
 
             if daily_count == 0:
@@ -970,25 +1013,52 @@ def populate_daily_dates(current_admin):
         # Combine in priority order
         prioritized_quotes = never_used + used_once + used_multiple
 
-        # Assign dates
+        # Assign dates in batches of 20 to avoid timeouts
         total_assigned = 0
-        for quote in prioritized_quotes:
-            quote.daily_date = current_date
-            current_date += timedelta(days=1)
-            total_assigned += 1
+        batch_size = 20
 
-        db.session.commit()
+        for i in range(0, len(prioritized_quotes), batch_size):
+            batch = prioritized_quotes[i:i + batch_size]
 
-        preserved_msg = " (preserved today's quote)" if todays_quote_id else ""
-        logger.info(
-            f"Admin {current_admin.username} populated {total_assigned} daily dates{preserved_msg}"
-        )
-        return redirect(
-            url_for(
-                'admin.quotes',
-                success=
-                f"Successfully populated {total_assigned} daily dates{preserved_msg}"
-            ))
+            for quote in batch:
+                quote.daily_date = current_date
+                current_date += timedelta(days=1)
+                total_assigned += 1
+
+            # Commit each batch
+            db.session.commit()
+            logger.info(f"Assigned {total_assigned} daily dates so far")
+
+        # Prepare result message
+        preserved_msg = " (preserved today's quote)" if today_id else ""
+        problem_msg = ""
+
+        if problematic_quotes:
+            problem_ids = ", ".join(str(q['id']) for q in problematic_quotes)
+            problem_msg = f" Found {len(problematic_quotes)} quotes with encoding issues (IDs: {problem_ids})."
+            logger.info(
+                f"Populated {total_assigned} daily dates{preserved_msg}. {problem_msg}"
+            )
+
+            # Return with warning about problematic quotes
+            return redirect(
+                url_for(
+                    'admin.quotes',
+                    warning=
+                    f"Successfully populated {total_assigned} daily dates{preserved_msg}. {problem_msg}"
+                ))
+        else:
+            logger.info(
+                f"Populated {total_assigned} daily dates{preserved_msg} with no encoding issues."
+            )
+
+            # Return success message
+            return redirect(
+                url_for(
+                    'admin.quotes',
+                    success=
+                    f"Successfully populated {total_assigned} daily dates{preserved_msg}"
+                ))
 
     except Exception as e:
         logger.error(f"Error populating daily dates: {str(e)}", exc_info=True)
@@ -1031,7 +1101,9 @@ def delete_user(current_admin, user_id):
         return redirect(
             url_for('admin.users', error=f"Error deleting user: {str(e)}"))
 
+
 # Add to app/routes/admin_process.py
+
 
 @admin_process_bp.route('/recalculate-all-stats', methods=['POST'])
 @admin_required
@@ -1064,9 +1136,8 @@ def recalculate_all_stats(current_admin):
                 db.session.add(user_stats)
 
                 # Get all games for this user
-                games = GameScore.query.filter_by(
-                    user_id=user_id
-                ).order_by(GameScore.created_at).all()
+                games = GameScore.query.filter_by(user_id=user_id).order_by(
+                    GameScore.created_at).all()
 
                 if games:
                     # Calculate basic stats
@@ -1075,13 +1146,19 @@ def recalculate_all_stats(current_admin):
                     # Count wins correctly based on each game's difficulty
                     wins = 0
                     for game in games:
-                        difficulty = game.game_id.split('-')[0] if '-' in game.game_id else 'medium'
-                        max_mistakes = {'easy': 8, 'medium': 5, 'hard': 3}.get(difficulty, 5)
+                        difficulty = game.game_id.split(
+                            '-')[0] if '-' in game.game_id else 'medium'
+                        max_mistakes = {
+                            'easy': 8,
+                            'medium': 5,
+                            'hard': 3
+                        }.get(difficulty, 5)
                         if game.completed and game.mistakes < max_mistakes:
                             wins += 1
 
                     user_stats.games_won = wins
-                    user_stats.cumulative_score = sum(game.score for game in games)
+                    user_stats.cumulative_score = sum(game.score
+                                                      for game in games)
                     user_stats.last_played_date = games[-1].created_at
 
                     # Calculate streaks
@@ -1099,8 +1176,13 @@ def recalculate_all_stats(current_admin):
                     temp_noloss_streak = 0
 
                     for game in sorted_games:
-                        difficulty = game.game_id.split('-')[0] if '-' in game.game_id else 'medium'
-                        max_mistakes = {'easy': 8, 'medium': 5, 'hard': 3}.get(difficulty, 5)
+                        difficulty = game.game_id.split(
+                            '-')[0] if '-' in game.game_id else 'medium'
+                        max_mistakes = {
+                            'easy': 8,
+                            'medium': 5,
+                            'hard': 3
+                        }.get(difficulty, 5)
 
                         if game.completed and game.mistakes < max_mistakes:  # Won game
                             temp_win_streak += 1
@@ -1110,7 +1192,8 @@ def recalculate_all_stats(current_admin):
                             temp_noloss_streak = 0
 
                         max_streak = max(max_streak, temp_win_streak)
-                        max_noloss_streak = max(max_noloss_streak, temp_noloss_streak)
+                        max_noloss_streak = max(max_noloss_streak,
+                                                temp_noloss_streak)
 
                     # Now calculate current streaks starting from most recent games
                     # Reset counters for current streak calculation
@@ -1119,8 +1202,13 @@ def recalculate_all_stats(current_admin):
 
                     # Iterate through games in reverse order (newest to oldest)
                     for game in reversed(sorted_games):
-                        difficulty = game.game_id.split('-')[0] if '-' in game.game_id else 'medium'
-                        max_mistakes = {'easy': 8, 'medium': 5, 'hard': 3}.get(difficulty, 5)
+                        difficulty = game.game_id.split(
+                            '-')[0] if '-' in game.game_id else 'medium'
+                        max_mistakes = {
+                            'easy': 8,
+                            'medium': 5,
+                            'hard': 3
+                        }.get(difficulty, 5)
 
                         if game.completed and game.mistakes < max_mistakes:  # Won game
                             current_streak += 1
@@ -1137,27 +1225,32 @@ def recalculate_all_stats(current_admin):
                     # Calculate weekly score
                     now = datetime.utcnow()
                     week_start = now - timedelta(days=now.weekday())
-                    weekly_score = sum(game.score for game in games 
-                                      if game.created_at >= week_start)
+                    weekly_score = sum(game.score for game in games
+                                       if game.created_at >= week_start)
                     user_stats.highest_weekly_score = weekly_score
 
                 # Calculate daily stats if applicable
                 daily_completions = DailyCompletion.query.filter_by(
-                    user_id=user_id
-                ).order_by(DailyCompletion.challenge_date).all()
+                    user_id=user_id).order_by(
+                        DailyCompletion.challenge_date).all()
 
                 if daily_completions:
                     user_stats.total_daily_completed = len(daily_completions)
-                    user_stats.last_daily_completed_date = daily_completions[-1].challenge_date
+                    user_stats.last_daily_completed_date = daily_completions[
+                        -1].challenge_date
 
                     # Calculate daily streak
-                    dates = [completion.challenge_date for completion in daily_completions]
+                    dates = [
+                        completion.challenge_date
+                        for completion in daily_completions
+                    ]
 
                     # Get current streak (consecutive days from the most recent)
                     current_streak = 1  # Start with 1 for the most recent completion
                     last_date = dates[-1]
 
-                    for i in range(len(dates) - 2, -1, -1):  # Go backwards from second-to-last
+                    for i in range(len(dates) - 2, -1,
+                                   -1):  # Go backwards from second-to-last
                         if (last_date - dates[i]).days == 1:  # Consecutive day
                             current_streak += 1
                             last_date = dates[i]
@@ -1171,12 +1264,14 @@ def recalculate_all_stats(current_admin):
                     current_daily_streak = 1
 
                     for i in range(1, len(dates)):
-                        if (dates[i-1] - dates[i]).days == 1:  # Consecutive day
+                        if (dates[i - 1] -
+                                dates[i]).days == 1:  # Consecutive day
                             current_daily_streak += 1
                         else:
                             current_daily_streak = 1  # Reset streak
 
-                        max_daily_streak = max(max_daily_streak, current_daily_streak)
+                        max_daily_streak = max(max_daily_streak,
+                                               current_daily_streak)
 
                     user_stats.max_daily_streak = max_daily_streak
 
@@ -1186,10 +1281,12 @@ def recalculate_all_stats(current_admin):
                 # Commit every 50 users to avoid long transactions
                 if success_count % 50 == 0:
                     db.session.commit()
-                    logger.info(f"Processed {success_count}/{total_users} users")
+                    logger.info(
+                        f"Processed {success_count}/{total_users} users")
 
             except Exception as user_error:
-                logger.error(f"Error processing user {user_id}: {str(user_error)}")
+                logger.error(
+                    f"Error processing user {user_id}: {str(user_error)}")
                 failed_users.append(user_id)
 
         # Final commit for remaining users
@@ -1200,35 +1297,31 @@ def recalculate_all_stats(current_admin):
 
         logger.info(
             f"Admin {current_admin.username} recalculated stats for "
-            f"{success_count}/{total_users} users in {duration:.2f} seconds"
-        )
+            f"{success_count}/{total_users} users in {duration:.2f} seconds")
 
         if failed_users:
             return redirect(
                 url_for(
-                    'admin.dashboard', 
-                    warning=f"Stats recalculated for {success_count}/{total_users} users. "
-                            f"{len(failed_users)} users failed."
-                )
-            )
+                    'admin.dashboard',
+                    warning=
+                    f"Stats recalculated for {success_count}/{total_users} users. "
+                    f"{len(failed_users)} users failed."))
         else:
             return redirect(
                 url_for(
-                    'admin.dashboard', 
-                    success=f"Successfully recalculated stats for all {success_count} users "
-                            f"in {duration:.2f} seconds."
-                )
-            )
+                    'admin.dashboard',
+                    success=
+                    f"Successfully recalculated stats for all {success_count} users "
+                    f"in {duration:.2f} seconds."))
 
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error recalculating user stats: {str(e)}", exc_info=True)
+        logger.error(f"Error recalculating user stats: {str(e)}",
+                     exc_info=True)
         return redirect(
-            url_for(
-                'admin.dashboard', 
-                error=f"Error recalculating user stats: {str(e)}"
-            )
-        )
+            url_for('admin.dashboard',
+                    error=f"Error recalculating user stats: {str(e)}"))
+
 
 # Also add a scheduled task function that can be called by a cron job
 def scheduled_recalculate_all_stats():
@@ -1257,9 +1350,8 @@ def scheduled_recalculate_all_stats():
                 db.session.add(user_stats)
 
                 # Get all games for this user
-                games = GameScore.query.filter_by(
-                    user_id=user_id
-                ).order_by(GameScore.created_at).all()
+                games = GameScore.query.filter_by(user_id=user_id).order_by(
+                    GameScore.created_at).all()
 
                 # Calculate stats (same logic as admin function)
                 # ... [same calculation code as above - omitted for brevity]
@@ -1270,10 +1362,12 @@ def scheduled_recalculate_all_stats():
                 # Commit every 50 users to avoid long transactions
                 if success_count % 50 == 0:
                     db.session.commit()
-                    logger.info(f"Processed {success_count}/{total_users} users")
+                    logger.info(
+                        f"Processed {success_count}/{total_users} users")
 
             except Exception as user_error:
-                logger.error(f"Error processing user {user_id}: {str(user_error)}")
+                logger.error(
+                    f"Error processing user {user_id}: {str(user_error)}")
                 failed_users.append(user_id)
 
         # Final commit for remaining users
@@ -1284,8 +1378,7 @@ def scheduled_recalculate_all_stats():
 
         logger.info(
             f"Scheduled task recalculated stats for "
-            f"{success_count}/{total_users} users in {duration:.2f} seconds"
-        )
+            f"{success_count}/{total_users} users in {duration:.2f} seconds")
 
         return {
             "success": True,
@@ -1297,14 +1390,99 @@ def scheduled_recalculate_all_stats():
 
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Error in scheduled stats recalculation: {str(e)}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e)
+        logger.error(f"Error in scheduled stats recalculation: {str(e)}",
+                     exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+@admin_process_bp.route('/fix-quote-encoding', methods=['GET'])
+@admin_required
+def fix_quote_encoding(current_admin):
+    """Fix mangled encoding in quotes"""
+    try:
+        # Common encoding replacements
+        replacements = {
+            '’': "'",  # Right single quote'
+            '—': '-',  # Em dash'
+            '“': '"',  # Left double quote''
+            '”': '"',  # Right double quote''
+            'É': 'E',  # Capital E with acute accent
+            "é": 'e',  # lower case E with acute accent
+            '�': "'",  # Unknown character
+            '‚Äô': "'",  # Smart single quote
+            '‚Äù': '"',  # Smart double quote open
+            '‚Äú': '"',  # Smart double quote close
+            '‚Äî': '—',  # Em dash
+            '‚Äì': '–',  # En dash
+            '‚Ä¢': '•',  # Bullet
+            '‚Ä¦': '…',  # Ellipsis
+            '‚Äï': '"',  # Another smart quote variant
+            '‚Äò': "'",  # Another single quote variant
+            '‚Äó': "'",  # Another single quote variant
         }
 
-# Add menu item to admin dashboard template
-# In templates/admin/dashboard_home.html, add:
-"""
+        # Get all quotes
+        quotes = Quote.query.all()
 
-"""
+        # Track how many were fixed
+        fixed_count = 0
+
+        for quote in quotes:
+            original_text = quote.text
+            original_author = quote.author
+            original_minor = quote.minor_attribution
+
+            # Check and fix text
+            needs_update = False
+            new_text = original_text
+            new_author = original_author
+            new_minor = original_minor
+
+            # Apply all replacements to each field
+            for bad, good in replacements.items():
+                if bad in new_text:
+                    new_text = new_text.replace(bad, good)
+                    needs_update = True
+
+                if bad in new_author:
+                    new_author = new_author.replace(bad, good)
+                    needs_update = True
+
+                if new_minor and bad in new_minor:
+                    new_minor = new_minor.replace(bad, good)
+                    needs_update = True
+
+            # Update the quote if needed
+            if needs_update:
+                quote.text = new_text
+                quote.author = new_author
+                quote.minor_attribution = new_minor
+                fixed_count += 1
+
+                # Log the change
+                logger.info(f"Fixed encoding for quote ID {quote.id}:")
+                logger.info(f"  Original text: {original_text}")
+                logger.info(f"  Fixed text: {new_text}")
+
+        # Commit changes if any quotes were fixed
+        if fixed_count > 0:
+            db.session.commit()
+            logger.info(f"Fixed encoding issues in {fixed_count} quotes")
+            return redirect(
+                url_for(
+                    'admin.quotes',
+                    success=
+                    f"Successfully fixed encoding issues in {fixed_count} quotes"
+                ))
+        else:
+            return redirect(
+                url_for(
+                    'admin.quotes',
+                    info="No encoding issues found that match known patterns"))
+
+    except Exception as e:
+        logger.error(f"Error fixing quote encoding: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return redirect(
+            url_for('admin.quotes',
+                    error=f"Error fixing quote encoding: {str(e)}"))
