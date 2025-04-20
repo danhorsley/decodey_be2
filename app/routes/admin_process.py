@@ -1038,9 +1038,8 @@ def populate_daily_dates(current_admin):
             db.session.commit()
             logger.info(f"Assigned {total_assigned} daily dates so far")
             
-            # Sleep briefly between batches
-            from time import sleep
-            sleep(0.1)
+            # Commit batch and continue
+            db.session.commit()
 
         # Prepare result message
         preserved_msg = " (preserved today's quote)" if today_id else ""
