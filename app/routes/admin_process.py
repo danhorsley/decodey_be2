@@ -971,12 +971,10 @@ def populate_daily_dates(current_admin):
                     'author': quote_author,
                     'error': str(encode_error),
                 })
-                logger.warning(
-                    f"Encoding issue with quote ID {quote_id}:\n"
-                    f"Text: {quote_text}\n"
-                    f"Author: {quote_author}\n"
-                    f"Error: {str(encode_error)}"
-                )
+                logger.warning(f"Encoding issue with quote ID {quote_id}:\n"
+                               f"Text: {quote_text}\n"
+                               f"Author: {quote_author}\n"
+                               f"Error: {str(encode_error)}")
 
         # Log problematic quotes
         if problematic_quotes:
@@ -1020,21 +1018,18 @@ def populate_daily_dates(current_admin):
 
         # Assign dates in smaller batches with sleep between
         total_assigned = 0
-        batch_size = 10
-        
+        batch_size = 125
+
         for i in range(0, len(prioritized_quotes), batch_size):
             batch = prioritized_quotes[i:i + batch_size]
-            
+
             # Prepare bulk update data
             bulk_data = []
             for quote in batch:
-                bulk_data.append({
-                    'id': quote.id,
-                    'daily_date': current_date
-                })
+                bulk_data.append({'id': quote.id, 'daily_date': current_date})
                 current_date += timedelta(days=1)
                 total_assigned += 1
-            
+
             # Bulk update the batch
             db.session.bulk_update_mappings(Quote, bulk_data)
             db.session.commit()
