@@ -510,6 +510,7 @@ def game_status():
         # Get user identification
         user_id = get_jwt_identity()
         is_anonymous = user_id is None
+        is_daily = request.args.get('isDaily', 'false').lower() == 'true'
 
         # For anonymous users, we need the game_id
         game_id = request.args.get('game_id')
@@ -521,10 +522,20 @@ def game_status():
         if is_anonymous:
             identifier = f"{game_id}_anon"
         else:
-            # For authenticated users, we need both user_id and game_id
-            if not game_id:
-                return jsonify({"error": "Game ID required for status check"}), 400
-            identifier = f"{user_id}_{game_id}"
+            # For authenticated users, find the appropriate game based on type
+            if game_id:
+                identifier = f"{user_id}_{game_id}"
+            else:
+                # Find game based on isDaily flag
+                game = ActiveGameState.query.filter(
+                    ActiveGameState.user_id == user_id,
+                    ActiveGameState.game_id.like('%daily%') if is_daily else ~ActiveGameState.game_id.like('%daily%')
+                ).first()
+                
+                if not game:
+                    return jsonify({"hasActiveGame": False}), 200
+                    
+                identifier = f"{user_id}_{game.game_id}"
 
         game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
 
