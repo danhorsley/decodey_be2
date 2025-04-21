@@ -89,7 +89,7 @@ class GameScore(db.Model):
 
 
 class ActiveGameState(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)  # PostgreSQL IDENTITY will handle auto-increment
     user_id = db.Column(db.String,
                         db.ForeignKey('user.user_id'),nullable=False)
     game_id = db.Column(db.String, unique=True)
