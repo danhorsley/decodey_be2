@@ -3,7 +3,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from datetime import datetime, date, timedelta
-from app.models import db, Quote, DailyCompletion, UserStats
+from app.models import db, Quote, DailyCompletion, UserStats, ActiveGameState
 from app.services.game_logic import generate_mapping, encrypt_paragraph, get_letter_frequency, get_unique_letters, generate_display_blocks
 from app.services.game_state import get_max_mistakes_from_game_id, save_unified_game_state
 import logging
