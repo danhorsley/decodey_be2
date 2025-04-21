@@ -532,19 +532,19 @@ def game_status():
         db_operations_needed = False
         completion_record = None
         daily_date = None
-
+        if game_state['has_won']:
+            active_game = ActiveGameState.query.filter_by(user_id=user_id,game_id=game_id).first()
+            current_daily_streak = 0
+            time_taken = int((datetime.utcnow() - active_game.created_at).total_seconds())
         # Check if the game is won
         if game_state['has_won'] and not is_anonymous:
             # Get the active game record
-            active_game = ActiveGameState.query.filter_by(user_id=user_id,game_id=game_id).first()
+            
 
             if active_game:
-                # Calculate time taken
-                time_taken = int((datetime.utcnow() - active_game.created_at).total_seconds())
-
                 # Check if this is a daily challenge
                 is_daily = 'daily' in active_game.game_id
-                current_daily_streak = 0
+                
 
                 # For daily challenges, update the streak first
                 if is_daily:
@@ -602,15 +602,15 @@ def game_status():
                     # Commit the streak update first
                     db.session.commit()
 
-                    # Now get the updated streak for score calculation
-                    current_daily_streak = user_stats.current_daily_streak
-                    logger.info(f"Updated daily streak to {current_daily_streak} for user {user_id}")
+                
         if game_state['has_won']:
             # Now calculate score with the updated streak
             from app.utils.scoring import score_game
-            if is_anonymous:
-                current_daily_streak = 0
-                time_taken = time_taken = int((datetime.utcnow() - active_game.created_at).total_seconds())
+            if not is_anonymous:
+                # Now get the updated streak for score calculation
+                user_stats = UserStats(user_id=user_id)
+                current_daily_streak = user_stats.current_daily_streak
+                logger.info(f"Updated daily streak to {current_daily_streak} for user {user_id}")
             difficulty = game_state.get('difficulty', 'medium')
             mistakes = game_state.get('mistakes', 0)
             hardcore_mode = game_state.get('hardcore_mode', False)
