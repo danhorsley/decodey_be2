@@ -50,19 +50,14 @@ def get_unified_game_state(identifier, is_anonymous=False):
             }
         else:
             # For authenticated users, look up by user_id and game_id
-            try:
-                user_id, game_id = identifier.split('_', 1)
-                if not game_id:
-                    logger.error("No game_id provided in identifier for authenticated user")
-                    return None
-                    
+            user_id, game_id = identifier.split(
+                '_', 1) if '_' in identifier else (identifier, None)
+            print("game ids", user_id, game_id)
+            if game_id:
                 game = ActiveGameState.query.filter_by(
-                    user_id=user_id,
-                    game_id=game_id
-                ).first()
-            except ValueError:
-                logger.error(f"Invalid identifier format (no game_id): {identifier}")
-                return None
+                    user_id=user_id, game_id=game_id).first()
+            else:
+                game = ActiveGameState.query.filter_by(user_id=user_id).first()
             if not game:
                 logger.debug(f"No active game found for user: {user_id}")
                 return None
@@ -108,7 +103,10 @@ def get_unified_game_state(identifier, is_anonymous=False):
         return None
 
 
-def save_unified_game_state(identifier, game_state, is_anonymous=False, is_daily=None):
+def save_unified_game_state(identifier,
+                            game_state,
+                            is_anonymous=False,
+                            is_daily=None):
     """
     Save game state to the appropriate model based on user type.
 
@@ -166,7 +164,8 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False, is_daily
                 db.session.add(anon_game)
         else:
             # For authenticated users, save to ActiveGameState
-            user_id, game_id = identifier.split('_', 1) if '_' in identifier else (identifier, None)
+            user_id, game_id = identifier.split(
+                '_', 1) if '_' in identifier else (identifier, None)
 
             # Determine if this is a daily challenge if not explicitly specified
             if is_daily is None and game_id:
@@ -177,23 +176,23 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False, is_daily
                 # Only delete previous daily games
                 ActiveGameState.query.filter(
                     ActiveGameState.user_id == user_id,
-                    ActiveGameState.game_id.like('%daily%')
-                ).delete()
+                    ActiveGameState.game_id.like('%daily%')).delete()
             else:
                 # Delete previous non-daily games
                 ActiveGameState.query.filter(
                     ActiveGameState.user_id == user_id,
-                    ~ActiveGameState.game_id.like('%daily%')
-                ).delete()
-            
+                    ~ActiveGameState.game_id.like('%daily%')).delete()
+
             db.session.commit()
 
             # For completed games, we need to keep the ActiveGameState until
             # the win is acknowledged through the game-status endpoint
             if game_id:
-                active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
+                active_game = ActiveGameState.query.filter_by(
+                    user_id=user_id, game_id=game_id).first()
             else:
-                active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
+                active_game = ActiveGameState.query.filter_by(
+                    user_id=user_id).first()
 
             if active_game:
                 # Update existing game state
@@ -276,13 +275,11 @@ def abandon_game(user_id, is_daily=False):
         if is_daily:
             active_game = ActiveGameState.query.filter(
                 ActiveGameState.user_id == user_id,
-                ActiveGameState.game_id.like('%daily%')
-            ).first()
+                ActiveGameState.game_id.like('%daily%')).first()
         else:
             active_game = ActiveGameState.query.filter(
                 ActiveGameState.user_id == user_id,
-                ~ActiveGameState.game_id.like('%daily%')
-            ).first()
+                ~ActiveGameState.game_id.like('%daily%')).first()
 
         if not active_game:
             logger.warning(
