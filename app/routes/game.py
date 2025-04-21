@@ -419,7 +419,23 @@ def continue_game():
 
     try:
         user_id = get_jwt_identity()
-        game_state = get_unified_game_state(user_id, is_anonymous=False)
+        is_daily = request.args.get('isDaily', 'false').lower() == 'true'
+        
+        # Get active game state based on game type
+        if is_daily:
+            # Find daily game ID first
+            daily_game = ActiveGameState.query.filter(
+                ActiveGameState.user_id == user_id,
+                ActiveGameState.game_id.like('%daily%')
+            ).first()
+            
+            if daily_game:
+                game_state = get_unified_game_state(f"{user_id}_{daily_game.game_id}", is_anonymous=False)
+            else:
+                game_state = None
+        else:
+            # Get non-daily game
+            game_state = get_unified_game_state(user_id, is_anonymous=False)
 
         if not game_state:
             return jsonify({"error": "No active game found"}), 404
