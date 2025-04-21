@@ -89,7 +89,7 @@ class GameScore(db.Model):
 
 
 class ActiveGameState(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, db.Sequence('active_game_state_id_seq'), primary_key=True)
     user_id = db.Column(db.String, db.ForeignKey('user.user_id'), nullable=False)
     game_id = db.Column(db.String, unique=True)
     original_paragraph = db.Column(db.Text)

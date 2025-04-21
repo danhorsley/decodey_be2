@@ -16,12 +16,15 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    # Create sequence
-    op.execute('CREATE SEQUENCE IF NOT EXISTS active_game_state_id_seq')
+    # Drop existing sequence if it exists
+    op.execute('DROP SEQUENCE IF EXISTS active_game_state_id_seq')
     
-    # Add ID column 
+    # Create new sequence
+    op.execute('CREATE SEQUENCE active_game_state_id_seq')
+    
+    # Add ID column with sequence
     op.add_column('active_game_state',
-        sa.Column('id', sa.Integer(), nullable=True)
+        sa.Column('id', sa.Integer(), sa.Sequence('active_game_state_id_seq'), nullable=True)
     )
     
     # Set the sequence as default for id column
