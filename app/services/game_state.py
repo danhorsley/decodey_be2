@@ -50,11 +50,15 @@ def get_unified_game_state(identifier, is_anonymous=False):
             }
         else:
             # For authenticated users, look up by user_id and game_id
-            user_id, game_id = identifier.split('_', 1) if '_' in identifier else (identifier, None)
-            if game_id:
-                game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
-            else:
-                game = ActiveGameState.query.filter_by(user_id=user_id).first()
+            user_id, game_id = identifier.split('_', 1)
+            if not game_id:
+                logger.error("No game_id provided in identifier for authenticated user")
+                return None
+                
+            game = ActiveGameState.query.filter_by(
+                user_id=user_id,
+                game_id=game_id
+            ).first()
             if not game:
                 logger.debug(f"No active game found for user: {user_id}")
                 return None
