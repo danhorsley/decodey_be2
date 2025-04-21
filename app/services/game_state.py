@@ -100,7 +100,7 @@ def get_unified_game_state(identifier, is_anonymous=False):
         return None
 
 
-def save_unified_game_state(identifier, game_state, is_anonymous=False):
+def save_unified_game_state(identifier, game_state, is_anonymous=False, is_daily=None):
     """
     Save game state to the appropriate model based on user type.
 
@@ -108,6 +108,9 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
         identifier (str): User ID for authenticated users, game_id_anon for anonymous users
         game_state (dict): Game state dictionary to save
         is_anonymous (bool): Whether this is an anonymous user
+        is_daily (bool, optional): Whether to handle this as a daily challenge. 
+                                 If None, will be determined from game_id.
+                                 Affects which previous games are deleted.
 
     Returns:
         bool: Success or failure
@@ -156,6 +159,26 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
         else:
             # For authenticated users, save to ActiveGameState
             user_id, game_id = identifier.split('_', 1) if '_' in identifier else (identifier, None)
+
+            # Determine if this is a daily challenge if not explicitly specified
+            if is_daily is None and game_id:
+                is_daily = 'daily' in game_id
+
+            # Delete previous games based on type
+            if is_daily:
+                # Only delete previous daily games
+                ActiveGameState.query.filter(
+                    ActiveGameState.user_id == user_id,
+                    ActiveGameState.game_id.like('%daily%')
+                ).delete()
+            else:
+                # Delete previous non-daily games
+                ActiveGameState.query.filter(
+                    ActiveGameState.user_id == user_id,
+                    ~ActiveGameState.game_id.like('%daily%')
+                ).delete()
+            
+            db.session.commit()
 
             # For completed games, we need to keep the ActiveGameState until
             # the win is acknowledged through the game-status endpoint
