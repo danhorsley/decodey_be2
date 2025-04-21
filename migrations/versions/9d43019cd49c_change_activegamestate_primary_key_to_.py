@@ -42,6 +42,10 @@ def upgrade():
 
 
 def downgrade():
+    # First restore the user_id as primary key
     op.execute("ALTER TABLE active_game_state DROP CONSTRAINT IF EXISTS active_game_state_pkey")
+    op.execute("ALTER TABLE active_game_state ADD PRIMARY KEY (user_id)")
+    
+    # Then drop the id column and its sequence
     op.execute("ALTER TABLE active_game_state DROP COLUMN id")
     op.execute("DROP SEQUENCE IF EXISTS active_game_state_id_seq")
