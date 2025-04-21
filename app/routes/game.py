@@ -608,7 +608,7 @@ def game_status():
             from app.utils.scoring import score_game
             if not is_anonymous:
                 # Now get the updated streak for score calculation
-                user_stats = UserStats(user_id=user_id)
+                user_stats = UserStats.query.filter_by(user_id=user_id).first()
                 current_daily_streak = user_stats.current_daily_streak
                 logger.info(f"Updated daily streak to {current_daily_streak} for user {user_id}")
             difficulty = game_state.get('difficulty', 'medium')
