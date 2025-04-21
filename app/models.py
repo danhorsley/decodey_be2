@@ -89,8 +89,7 @@ class GameScore(db.Model):
 
 
 class ActiveGameState(db.Model):
-    id = db.Column(db.Integer, primary_key=True,
-                   server_default=db.text("nextval('active_game_state_id_seq'::regclass)"))
+    id = db.Column(db.Integer, primary_key=True, server_default=db.text("nextval('active_game_state_id_seq')"))
     user_id = db.Column(db.String,
                         db.ForeignKey('user.user_id'),nullable=False)
     game_id = db.Column(db.String, unique=True)
