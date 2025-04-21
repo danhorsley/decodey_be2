@@ -347,8 +347,13 @@ def check_active_game():
     try:
         user_id = get_jwt_identity()
         
-        # Check for regular game
-        game_state = get_unified_game_state(user_id, is_anonymous=False)
+        # Check for regular game (excluding daily games)
+        regular_game = ActiveGameState.query.filter(
+            ActiveGameState.user_id == user_id,
+            ~ActiveGameState.game_id.like('%daily%')
+        ).first()
+        
+        game_state = get_unified_game_state(f"{user_id}_{regular_game.game_id}", is_anonymous=False) if regular_game else None
         
         response = {"has_active_game": False, "has_active_daily_game": False}
         
