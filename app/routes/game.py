@@ -289,12 +289,12 @@ def hint():
         # Get request data
         data = request.get_json()
         game_id = data.get('game_id')
-
+        print("game_id on hint: ",game_id)
         logger.debug(
             f"Hint requested by {'anonymous' if is_anonymous else user_id}")
 
         # Get identifier based on user type
-        identifier = f"{game_id}_anon" if is_anonymous else user_id
+        identifier = f"{game_id}_anon" if is_anonymous else f"{user_id}_{game_id}"
 
         # Get current game state
         game_state = get_unified_game_state(identifier,
