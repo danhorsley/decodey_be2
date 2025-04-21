@@ -49,9 +49,12 @@ def get_unified_game_state(identifier, is_anonymous=False):
                 'has_won': game.won
             }
         else:
-            # For authenticated users, look up by user_id
-            user_id = identifier
-            game = ActiveGameState.query.filter_by(user_id=user_id).first()
+            # For authenticated users, look up by user_id and game_id
+            user_id, game_id = identifier.split('_', 1) if '_' in identifier else (identifier, None)
+            if game_id:
+                game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
+            else:
+                game = ActiveGameState.query.filter_by(user_id=user_id).first()
             if not game:
                 logger.debug(f"No active game found for user: {user_id}")
                 return None
@@ -152,12 +155,14 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False):
                 db.session.add(anon_game)
         else:
             # For authenticated users, save to ActiveGameState
-            user_id = identifier
+            user_id, game_id = identifier.split('_', 1) if '_' in identifier else (identifier, None)
 
             # For completed games, we need to keep the ActiveGameState until
             # the win is acknowledged through the game-status endpoint
-            active_game = ActiveGameState.query.filter_by(
-                user_id=user_id).first()
+            if game_id:
+                active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
+            else:
+                active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
 
             if active_game:
                 # Update existing game state
