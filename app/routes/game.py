@@ -403,7 +403,7 @@ def check_active_game():
                         "max_mistakes": daily_state['max_mistakes']
                     }
                 })
-
+        print(response)
         return jsonify(response), 200
     except Exception as e:
         logger.error(f"Error checking active game: {str(e)}", exc_info=True)
