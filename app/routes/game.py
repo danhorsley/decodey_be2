@@ -58,25 +58,14 @@ def start():
         # For authenticated users, check and clean up any existing active games
         if not is_anonymous:
             try:
-                # Check if this is a daily game
-                is_daily = 'daily' in game_id
-                
-                # Find active game of the same type
-                if is_daily:
-                    active_game = ActiveGameState.query.filter(
-                        ActiveGameState.user_id == user_id,
-                        ActiveGameState.game_id.like('%daily%')
-                    ).first()
-                else:
-                    active_game = ActiveGameState.query.filter(
-                        ActiveGameState.user_id == user_id,
-                        ~ActiveGameState.game_id.like('%daily%')
-                    ).first()
+                # Only find and abandon regular (non-daily) games
+                active_game = ActiveGameState.query.filter(
+                    ActiveGameState.user_id == user_id,
+                    ~ActiveGameState.game_id.like('%daily%')  # Only regular games
+                ).first()
 
                 if active_game:
-                    logger.info(
-                        f"Found existing {'daily' if is_daily else 'regular'} game for user {user_id} - abandoning"
-                    )
+                    logger.info(f"Found existing regular game for user {user_id} - abandoning")
 
                     # Record the abandoned game
                     game_score = GameScore(
@@ -98,18 +87,13 @@ def start():
                     db.session.delete(active_game)
                     db.session.commit()
 
-                    # Only update stats if abandoning a regular game
-                    if not is_daily:
-                        from app.utils.stats import initialize_or_update_user_stats
-                        initialize_or_update_user_stats(user_id)
+                    # Update stats for this abandoned game
+                    from app.utils.stats import initialize_or_update_user_stats
+                    initialize_or_update_user_stats(user_id)
 
-                    logger.info(
-                        f"Successfully abandoned {'daily' if is_daily else 'regular'} game for user {user_id}"
-                    )
+                    logger.info(f"Successfully abandoned regular game for user {user_id}")
             except Exception as abandon_err:
-                logger.error(
-                    f"Error abandoning existing game for user {user_id}: {str(abandon_err)}"
-                )
+                logger.error(f"Error abandoning existing game for user {user_id}: {str(abandon_err)}")
                 # Continue with new game creation anyway
                 db.session.rollback()
 
