@@ -33,25 +33,25 @@ def start():
         # Get user identification
         user_id = get_jwt_identity()
         is_anonymous = user_id is None
-        
+
         # For anonymous users, use IP address as identifier
         identifier = user_id if not is_anonymous else request.remote_addr
-        
+
         # Check if we're creating games too quickly
         current_time = time.time()
         last_creation_time = game_creation_timestamps.get(identifier, 0)
         time_since_last_creation = current_time - last_creation_time
-        
+
         if time_since_last_creation < GAME_CREATION_COOLDOWN:
             logger.warning(f"Game creation request rejected - cooldown period not elapsed for {'anonymous' if is_anonymous else user_id}")
             return jsonify({
                 "error": "Please wait a moment before starting a new game",
                 "cooldown_remaining": round(GAME_CREATION_COOLDOWN - time_since_last_creation, 1)
             }), 429  # 429 Too Many Requests
-        
+
         # Update the timestamp before proceeding
         game_creation_timestamps[identifier] = current_time
-        
+
         # Extract longText parameter
         long_text = request.args.get('longText', 'false').lower() == 'true'
 
@@ -232,7 +232,7 @@ def guess():
         )
 
         # Get identifier based on user type
-        identifier = f"{game_id}_anon" if is_anonymous else user_id
+        identifier = f"{game_id}_anon" if is_anonymous else f"{user_id}_{game_id}"
 
         # Get current game state
         game_state = get_unified_game_state(identifier,
