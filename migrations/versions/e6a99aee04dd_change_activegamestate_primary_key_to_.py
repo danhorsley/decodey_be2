@@ -1,3 +1,4 @@
+
 """Change ActiveGameState primary key to auto-increment ID
 
 Revision ID: e6a99aee04dd
@@ -17,8 +18,19 @@ depends_on = None
 
 
 def upgrade():
-    pass
+    # Drop the existing sequence if it exists
+    op.execute("DROP SEQUENCE IF EXISTS active_game_state_id_seq")
+    
+    # Create a new sequence
+    op.execute("CREATE SEQUENCE active_game_state_id_seq")
+    
+    # Set the sequence as owned by the id column
+    op.execute("ALTER SEQUENCE active_game_state_id_seq OWNED BY active_game_state.id")
+    
+    # Set the default value for the id column
+    op.execute("ALTER TABLE active_game_state ALTER COLUMN id SET DEFAULT nextval('active_game_state_id_seq')")
 
 
 def downgrade():
-    pass
+    op.execute("ALTER TABLE active_game_state ALTER COLUMN id DROP DEFAULT")
+    op.execute("DROP SEQUENCE IF EXISTS active_game_state_id_seq")
