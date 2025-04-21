@@ -18,13 +18,25 @@ depends_on = None
 
 
 def upgrade():
-    # Drop existing constraints and id column
+    # First drop existing constraints
     op.execute("ALTER TABLE active_game_state DROP CONSTRAINT IF EXISTS active_game_state_pkey CASCADE")
+    op.execute("DROP SEQUENCE IF EXISTS active_game_state_id_seq CASCADE")
+    
+    # Drop the id column if it exists
     op.execute("ALTER TABLE active_game_state DROP COLUMN IF EXISTS id CASCADE")
     
-    # Create new id column with identity
-    op.execute("ALTER TABLE active_game_state ADD COLUMN id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY")
+    # Create sequence and add id column properly
+    op.execute("CREATE SEQUENCE active_game_state_id_seq")
+    op.execute("ALTER TABLE active_game_state ADD COLUMN id INTEGER")
+    op.execute("ALTER TABLE active_game_state ALTER COLUMN id SET DEFAULT nextval('active_game_state_id_seq')")
+    op.execute("ALTER TABLE active_game_state ALTER COLUMN id SET NOT NULL")
+    op.execute("ALTER SEQUENCE active_game_state_id_seq OWNED BY active_game_state.id")
+    
+    # Add primary key constraint
+    op.execute("ALTER TABLE active_game_state ADD PRIMARY KEY (id)")
 
 
 def downgrade():
+    op.execute("ALTER TABLE active_game_state DROP CONSTRAINT active_game_state_pkey")
     op.execute("ALTER TABLE active_game_state DROP COLUMN id")
+    op.execute("DROP SEQUENCE IF EXISTS active_game_state_id_seq")
