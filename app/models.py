@@ -89,9 +89,9 @@ class GameScore(db.Model):
 
 
 class ActiveGameState(db.Model):
-    id = db.Column(db.Integer, primary_key=True)  # PostgreSQL IDENTITY will handle auto-increment
     user_id = db.Column(db.String,
-                        db.ForeignKey('user.user_id'),nullable=False)
+                        db.ForeignKey('user.user_id'),
+                        primary_key=True)
     game_id = db.Column(db.String, unique=True)
     original_paragraph = db.Column(db.Text)
     encrypted_paragraph = db.Column(db.Text)
