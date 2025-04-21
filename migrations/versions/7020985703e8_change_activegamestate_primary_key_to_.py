@@ -16,13 +16,22 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    # Create sequence for ID
+    # Create sequence
     op.execute('CREATE SEQUENCE IF NOT EXISTS active_game_state_id_seq')
     
-    # Add ID column with sequence
+    # Add ID column 
     op.add_column('active_game_state',
-        sa.Column('id', sa.Integer(), sa.Sequence('active_game_state_id_seq'), nullable=False)
+        sa.Column('id', sa.Integer(), nullable=True)
     )
+    
+    # Set the sequence as default for id column
+    op.execute("ALTER TABLE active_game_state ALTER COLUMN id SET DEFAULT nextval('active_game_state_id_seq')")
+    
+    # Update existing rows with sequence values
+    op.execute("UPDATE active_game_state SET id = nextval('active_game_state_id_seq') WHERE id IS NULL")
+    
+    # Make id not nullable
+    op.alter_column('active_game_state', 'id', nullable=False)
     
     # Drop the primary key constraint on user_id
     op.drop_constraint('active_game_state_pkey', 'active_game_state')
