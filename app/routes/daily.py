@@ -110,6 +110,13 @@ def get_daily_challenge(date_string=None):
 
         # For authenticated users, save game state
         if not is_anonymous:
+            # First check and delete any existing active game for this user
+            existing_game = ActiveGameState.query.filter_by(user_id=user_id).first()
+            if existing_game:
+                db.session.delete(existing_game)
+                db.session.commit()
+            
+            # Now save the new game state with proper identifier
             identifier = f"{user_id}_{game_id}"
             save_unified_game_state(identifier, game_state, is_anonymous=False)
         else:
