@@ -340,37 +340,71 @@ def hint():
 @bp.route('/check-active-game', methods=['GET', 'OPTIONS'])
 @jwt_required()
 def check_active_game():
-    """Check if user has an active game"""
+    """Check if user has an active game and/or daily game"""
     if request.method == 'OPTIONS':
         return jsonify({}), 200
 
     try:
         user_id = get_jwt_identity()
+        
+        # Check for regular game
         game_state = get_unified_game_state(user_id, is_anonymous=False)
+        
+        response = {"has_active_game": False, "has_active_daily_game": False}
+        
+        if game_state:
+            # Calculate regular game stats
+            encrypted_letters = set(c for c in game_state['encrypted_paragraph']
+                                    if c.isalpha())
+            completion_percentage = (len(game_state['correctly_guessed']) /
+                                     len(encrypted_letters) *
+                                     100) if encrypted_letters else 0
 
-        if not game_state:
-            return jsonify({"has_active_game": False}), 200
+            time_spent = int(
+                (datetime.utcnow() - game_state['start_time']).total_seconds())
 
-        # Calculate basic stats
-        encrypted_letters = set(c for c in game_state['encrypted_paragraph']
-                                if c.isalpha())
-        completion_percentage = (len(game_state['correctly_guessed']) /
-                                 len(encrypted_letters) *
-                                 100) if encrypted_letters else 0
+            response.update({
+                "has_active_game": True,
+                "game_stats": {
+                    "difficulty": game_state['difficulty'],
+                    "mistakes": game_state['mistakes'],
+                    "completion_percentage": round(completion_percentage, 1),
+                    "time_spent": time_spent,
+                    "max_mistakes": game_state['max_mistakes']
+                }
+            })
 
-        time_spent = int(
-            (datetime.utcnow() - game_state['start_time']).total_seconds())
+        # Check for daily game - use game_id with daily in the query
+        daily_game = ActiveGameState.query.filter(
+            ActiveGameState.user_id == user_id,
+            ActiveGameState.game_id.like('%daily%')
+        ).first()
 
-        return jsonify({
-            "has_active_game": True,
-            "game_stats": {
-                "difficulty": game_state['difficulty'],
-                "mistakes": game_state['mistakes'],
-                "completion_percentage": round(completion_percentage, 1),
-                "time_spent": time_spent,
-                "max_mistakes": game_state['max_mistakes']
-            }
-        }), 200
+        if daily_game:
+            # Calculate daily game stats
+            daily_state = get_unified_game_state(f"{user_id}_{daily_game.game_id}", is_anonymous=False)
+            if daily_state:
+                encrypted_letters = set(c for c in daily_state['encrypted_paragraph']
+                                        if c.isalpha())
+                completion_percentage = (len(daily_state['correctly_guessed']) /
+                                         len(encrypted_letters) *
+                                         100) if encrypted_letters else 0
+
+                time_spent = int(
+                    (datetime.utcnow() - daily_state['start_time']).total_seconds())
+
+                response.update({
+                    "has_active_daily_game": True,
+                    "daily_stats": {
+                        "difficulty": daily_state['difficulty'],
+                        "mistakes": daily_state['mistakes'],
+                        "completion_percentage": round(completion_percentage, 1),
+                        "time_spent": time_spent,
+                        "max_mistakes": daily_state['max_mistakes']
+                    }
+                })
+
+        return jsonify(response), 200
     except Exception as e:
         logger.error(f"Error checking active game: {str(e)}", exc_info=True)
         return jsonify({"error": "Error checking active game"}), 500
