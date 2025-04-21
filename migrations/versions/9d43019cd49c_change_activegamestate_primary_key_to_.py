@@ -18,18 +18,23 @@ depends_on = None
 
 
 def upgrade():
-    # First drop existing constraints
+    # Drop existing constraints and sequence
     op.execute("ALTER TABLE active_game_state DROP CONSTRAINT IF EXISTS active_game_state_pkey CASCADE")
     op.execute("DROP SEQUENCE IF EXISTS active_game_state_id_seq CASCADE")
     
-    # Drop the id column if it exists
-    op.execute("ALTER TABLE active_game_state DROP COLUMN IF EXISTS id CASCADE")
-    
-    # Create sequence and add id column properly
+    # Create new sequence
     op.execute("CREATE SEQUENCE active_game_state_id_seq")
+    
+    # Ensure the sequence starts after any existing IDs
+    op.execute("SELECT setval('active_game_state_id_seq', COALESCE((SELECT MAX(id) FROM active_game_state), 0) + 1, false)")
+    
+    # Drop and recreate id column
+    op.execute("ALTER TABLE active_game_state DROP COLUMN IF EXISTS id CASCADE")
     op.execute("ALTER TABLE active_game_state ADD COLUMN id INTEGER")
     op.execute("ALTER TABLE active_game_state ALTER COLUMN id SET DEFAULT nextval('active_game_state_id_seq')")
     op.execute("ALTER TABLE active_game_state ALTER COLUMN id SET NOT NULL")
+    
+    # Update sequence ownership
     op.execute("ALTER SEQUENCE active_game_state_id_seq OWNED BY active_game_state.id")
     
     # Add primary key constraint
@@ -37,6 +42,6 @@ def upgrade():
 
 
 def downgrade():
-    op.execute("ALTER TABLE active_game_state DROP CONSTRAINT active_game_state_pkey")
+    op.execute("ALTER TABLE active_game_state DROP CONSTRAINT IF EXISTS active_game_state_pkey")
     op.execute("ALTER TABLE active_game_state DROP COLUMN id")
     op.execute("DROP SEQUENCE IF EXISTS active_game_state_id_seq")
