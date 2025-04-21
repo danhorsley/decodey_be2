@@ -140,22 +140,6 @@ def save_unified_game_state(identifier,
                 anon_game.mistakes = game_state.get('mistakes', 0)
                 anon_game.last_updated = datetime.utcnow()
 
-                # Check if game is complete
-                logger.info(
-                    f"DEBUGGING - game_complete: {game_state.get('game_complete', False)}"
-                )
-                logger.info(
-                    f"DEBUGGING - has_won: {game_state.get('has_won', False)}")
-                logger.info(
-                    f"DEBUGGING - win_notified: {game_state.get('win_notified', False)}"
-                )
-                logger.info(
-                    f"DEBUGGING - win_notified type: {type(game_state.get('win_notified', False))}"
-                )
-                logger.info(
-                    f"DEBUGGING - condition check: {game_state.get('win_notified', False) is True}"
-                )
-
                 if game_state.get('game_complete', False) and game_state.get(
                         'has_won', False) and game_state.get(
                             'win_notified', False) is True:
@@ -227,44 +211,24 @@ def save_unified_game_state(identifier,
                 active_game.mistakes = game_state.get('mistakes', 0)
                 active_game.last_updated = datetime.utcnow()
 
-                # Check if this is a win that's been acknowledged
-                logger.info(
-                    f"DEBUGGING - game_complete: {game_state.get('game_complete', False)}"
-                )
-                logger.info(
-                    f"DEBUGGING - has_won: {game_state.get('has_won', False)}")
-                logger.info(
-                    f"DEBUGGING - win_notified: {game_state.get('win_notified', False)}"
-                )
-                logger.info(
-                    f"DEBUGGING - win_notified type: {type(game_state.get('win_notified', False))}"
-                )
-                logger.info(
-                    f"DEBUGGING - condition check: {game_state.get('win_notified', False) is True}"
-                )
-
-                if game_state.get('game_complete', False) and game_state.get(
-                        'has_won', False) and game_state.get(
-                            'win_notified', False) is True:
-                    logger.info(
-                        "DEBUGGING - Win condition satisfied, proceeding to record score"
-                    )
-                    # Rest of the code...
-                else:
-                    logger.info("DEBUGGING - Win condition NOT satisfied")
-                    # Once the win has been acknowledged, record the score and delete the active game
+                if game_state['has_won']:
                     time_taken = int((datetime.utcnow() -
                                       active_game.created_at).total_seconds())
-
+                   
                     # Record score
                     if not game_state.get('is_abandoned', False):
+                        my_score = calculate_game_score(
+                              game_state, time_taken)
+                        print("preparing score", my_score)
                         record_game_score(user_id=user_id,
                                           game_id=active_game.game_id,
-                                          score=calculate_game_score(
-                                              game_state, time_taken),
+                                          score=my_score,
                                           mistakes=active_game.mistakes,
                                           time_taken=time_taken,
                                           completed=True)
+                
+                    
+                    # Once the win has been acknowledged, record the score and delete the active game
 
                     # Now delete the active game
                     db.session.delete(active_game)

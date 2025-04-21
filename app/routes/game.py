@@ -534,74 +534,146 @@ def game_status():
         daily_date = None
 
         # Check if the game is won
-        if game_state['has_won']:
-            logger.info(f"Win detected for {'anonymous' if is_anonymous else user_id} - preparing database updates")
+        if game_state['has_won'] and not is_anonymous:
+            # Get the active game record
+            active_game = ActiveGameState.query.filter_by(user_id=user_id,game_id=game_id).first()
 
-            # Mark as notified to prevent duplicate notifications
-            game_state['win_notified'] = True
+            if active_game:
+                # Calculate time taken
+                time_taken = int((datetime.utcnow() - active_game.created_at).total_seconds())
 
-            # Flag that we need to save the game state
-            db_operations_needed = True
+                # Check if this is a daily challenge
+                is_daily = 'daily' in active_game.game_id
+                current_daily_streak = 0
 
-            # Record daily challenge completion if this is a daily challenge and user is authenticated
-            if not is_anonymous and game_state.get('is_daily', False):
-                try:
-                    # Get the daily date from game state
-                    daily_date_str = game_state.get('daily_date')
-                    if daily_date_str:
-                        # Parse the daily date
-                        daily_date = datetime.strptime(daily_date_str, '%Y-%m-%d').date()
+                # For daily challenges, update the streak first
+                if is_daily:
+                    # Extract the date from the game_id or use today's date
+                    # Format in game_id is typically: "difficulty-daily-YYYY-MM-DD-uuid"
+                    try:
+                        parts = active_game.game_id.split('-')
+                        if len(parts) >= 5:
+                            challenge_date_str = f"{parts[2]}-{parts[3]}-{parts[4]}"
+                            challenge_date = datetime.strptime(challenge_date_str, '%Y-%m-%d').date()
+                        else:
+                            # Fallback to today's date
+                            challenge_date = datetime.utcnow().date()
+                    except (ValueError, IndexError):
+                        challenge_date = datetime.utcnow().date()
 
-                        # Find the quote based on the date
-                        from app.models import Quote, DailyCompletion
-                        daily_quote = Quote.query.filter_by(daily_date=daily_date).first()
+                    # Update the streak
+                    user_stats = UserStats.query.filter_by(user_id=user_id).first()
 
-                        if daily_quote:
-                            # Check if already completed
-                            existing_completion = DailyCompletion.query.filter_by(
-                                user_id=user_id, challenge_date=daily_date).first()
+                    if not user_stats:
+                        # Create user stats if they don't exist
+                        user_stats = UserStats(user_id=user_id)
+                        db.session.add(user_stats)
 
-                            if not existing_completion:
-                                # Calculate time taken for the completion record
-                                time_taken = int((datetime.utcnow() - game_state['start_time']).total_seconds())
+                    # If this is their first completion
+                    if not user_stats.last_daily_completed_date:
+                        user_stats.current_daily_streak = 1
+                        user_stats.max_daily_streak = 1
+                        user_stats.total_daily_completed = 1
+                        user_stats.last_daily_completed_date = challenge_date
+                    else:
+                        # Check if this completion continues the streak
+                        last_date = user_stats.last_daily_completed_date
+                        delta = (challenge_date - last_date).days
 
-                                # Create new completion record (but don't add to session yet)
-                                completion_record = DailyCompletion(
-                                    user_id=user_id,
-                                    quote_id=daily_quote.id,  # Use the quote's ID
-                                    challenge_date=daily_date,
-                                    completed_at=datetime.utcnow(),
-                                    score=0,  # We'll update this after streak calculation
-                                    mistakes=game_state['mistakes'],
-                                    time_taken=time_taken)
-                except Exception as e:
-                    logger.error(f"Error preparing daily completion: {str(e)}", exc_info=True)
-                    # No need for rollback since we haven't modified the session yet
+                        # Check if this is a one-day advancement (continuing streak)
+                        if delta == 1:
+                            user_stats.current_daily_streak += 1
+                            # Update max streak if current is now higher
+                            if user_stats.current_daily_streak > user_stats.max_daily_streak:
+                                user_stats.max_daily_streak = user_stats.current_daily_streak
+                        # If same day completion (shouldn't happen but handle it)
+                        elif delta == 0:
+                            # No change to streak
+                            pass
+                        # If streak is broken
+                        else:
+                            # Reset streak to 1 for this new completion
+                            user_stats.current_daily_streak = 1
 
-        # Now perform all database operations in a single transaction if needed
-        if db_operations_needed:
-            try:
-                # Save the updated game state
-                save_unified_game_state(identifier, game_state, is_anonymous=is_anonymous)
+                        # Update total completed and last date
+                        user_stats.total_daily_completed += 1
+                        user_stats.last_daily_completed_date = challenge_date
 
-                # Add completion record if we created one
-                if completion_record:
-                    db.session.add(completion_record)
+                    # Commit the streak update first
+                    db.session.commit()
 
-                    # Update user's daily streak if we have a daily date
-                    if daily_date:
-                        update_daily_streak(user_id, daily_date)
+                    # Now get the updated streak for score calculation
+                    current_daily_streak = user_stats.current_daily_streak
+                    logger.info(f"Updated daily streak to {current_daily_streak} for user {user_id}")
 
-                # Single commit for all operations
+                # Now calculate score with the updated streak
+                from app.utils.scoring import score_game
+
+                difficulty = game_state.get('difficulty', 'medium')
+                mistakes = game_state.get('mistakes', 0)
+                hardcore_mode = game_state.get('hardcore_mode', False)
+
+                # Calculate final score
+                score = score_game(
+                    difficulty,
+                    mistakes,
+                    time_taken,
+                    hardcore_mode=hardcore_mode,
+                    current_daily_streak=current_daily_streak
+                )
+
+                logger.info(f"Calculated score: {score} for user {user_id}")
+
+                # Create and save the score record
+                game_score = GameScore(
+                    user_id=user_id,
+                    game_id=active_game.game_id,
+                    score=score,
+                    mistakes=active_game.mistakes,
+                    time_taken=time_taken,
+                    game_type='daily' if is_daily else 'regular',
+                    challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
+                    completed=True,
+                    created_at=datetime.utcnow()
+                )
+
+                # Save the score 
+                db.session.add(game_score)
+
+                # Record daily completion
+                if is_daily:
+                    # Find the quote for this date
+                    from app.models import Quote, DailyCompletion
+                    daily_quote = Quote.query.filter_by(daily_date=challenge_date).first()
+
+                    if daily_quote:
+                        # Create completion record
+                        completion = DailyCompletion(
+                            user_id=user_id,
+                            quote_id=daily_quote.id,
+                            challenge_date=challenge_date,
+                            completed_at=datetime.utcnow(),
+                            score=score,
+                            mistakes=mistakes,
+                            time_taken=time_taken
+                        )
+                        db.session.add(completion)
+
+                # Delete the active game
+                db.session.delete(active_game)
+
+                # Final commit
                 db.session.commit()
 
-                logger.info("Database updates committed successfully")
+                logger.info(f"Score {score} saved to database for user {user_id}")
 
-            except Exception as e:
-                db.session.rollback()
-                logger.error(f"Error updating database in game status: {str(e)}", exc_info=True)
-                # Continue execution to at least return the game status
-                # But we won't have win data since the operations failed
+                # Update user stats (for non-daily games)
+                if not is_daily:
+                    from app.utils.stats import initialize_or_update_user_stats
+                    initialize_or_update_user_stats(user_id, game_score)
+
+                # Store the score in game_state for the response
+                game_state['score'] = score
 
         # Prepare win data AFTER all database operations are complete
         win_data = None
