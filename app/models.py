@@ -89,9 +89,10 @@ class GameScore(db.Model):
 
 
 class ActiveGameState(db.Model):
+    id = db.Column(db.Integer, primary_key=True,
+                   server_default=db.text("nextval('active_game_state_id_seq'::regclass)"))
     user_id = db.Column(db.String,
-                        db.ForeignKey('user.user_id'),
-                        primary_key=True)
+                        db.ForeignKey('user.user_id'),nullable=False)
     game_id = db.Column(db.String, unique=True)
     original_paragraph = db.Column(db.Text)
     encrypted_paragraph = db.Column(db.Text)
@@ -106,6 +107,9 @@ class ActiveGameState(db.Model):
     last_updated = db.Column(db.DateTime,
                              default=datetime.utcnow,
                              onupdate=datetime.utcnow)
+    __table_args__ = (
+        db.Index('idx_active_game_userid', 'user_id'),
+    )
 
 
 class AnonymousGameState(db.Model):

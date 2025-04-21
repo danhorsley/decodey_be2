@@ -158,7 +158,7 @@ def start():
         game_state['hardcore_mode'] = hardcore_mode
 
         # Generate identifier for storage
-        identifier = game_id + "_anon" if is_anonymous else user_id
+        identifier = game_id + "_anon" if is_anonymous else f"{user_id}_{game_id}"
 
         # Save game state using unified function
         save_unified_game_state(identifier,
