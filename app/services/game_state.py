@@ -252,19 +252,29 @@ def save_unified_game_state(identifier, game_state, is_anonymous=False, is_daily
         return False
 
 
-def abandon_game(user_id):
+def abandon_game(user_id, is_daily=False):
     """
     Abandon a game for an authenticated user, recording it as incomplete.
 
     Args:
         user_id (str): User ID
+        is_daily (bool): Whether to abandon daily game (True) or regular game (False)
 
     Returns:
         bool: Success or failure
     """
     try:
-        # Get the active game
-        active_game = ActiveGameState.query.filter_by(user_id=user_id).first()
+        # Get the active game based on type
+        if is_daily:
+            active_game = ActiveGameState.query.filter(
+                ActiveGameState.user_id == user_id,
+                ActiveGameState.game_id.like('%daily%')
+            ).first()
+        else:
+            active_game = ActiveGameState.query.filter(
+                ActiveGameState.user_id == user_id,
+                ~ActiveGameState.game_id.like('%daily%')
+            ).first()
 
         if not active_game:
             logger.warning(

@@ -500,7 +500,8 @@ def abandon_game_route():
 
     try:
         user_id = get_jwt_identity()
-        result = abandon_game(user_id)
+        is_daily = request.args.get('isDaily', 'false').lower() == 'true'
+        result = abandon_game(user_id, is_daily=is_daily)
 
         if result:
             return jsonify({"message": "Game abandoned successfully"}), 200
