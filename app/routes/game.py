@@ -699,11 +699,8 @@ def game_status():
                 else:
                     logger.warning(f"No streak value found for user {user_id}")
 
-            # Now calculate score with up-to-date streak information
-            from app.utils.scoring import score_game
-            score = score_game(game_state['difficulty'], game_state['mistakes'], time_taken, 
-                              hardcore_mode=game_state.get('hardcore_mode', False),
-                              current_daily_streak=current_daily_streak)
+            # Use the score we already calculated and saved to avoid any discrepancies
+            score = game_state['score']
 
             # Update the completion record's score if we have one
             if completion_record:
