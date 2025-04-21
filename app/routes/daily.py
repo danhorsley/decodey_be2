@@ -110,7 +110,8 @@ def get_daily_challenge(date_string=None):
 
         # For authenticated users, save game state
         if not is_anonymous:
-            save_unified_game_state(user_id, game_state, is_anonymous=False)
+            identifier = f"{user_id}_{game_id}"
+            save_unified_game_state(identifier, game_state, is_anonymous=False)
         else:
             # For anonymous users, save with anon ID
             anon_id = f"{game_id}_anon"
