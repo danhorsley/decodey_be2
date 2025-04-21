@@ -518,8 +518,8 @@ def game_status():
             return jsonify({"error": "Game ID required for anonymous users"}), 400
 
         # Get identifier based on user type
-        identifier = f"{game_id}_anon" if is_anonymous else user_id
-
+        identifier = f"{game_id}_anon" if is_anonymous else f"{user_id}_{game_id}"
+        print("identifier on game status: ", identifier)
         game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
 
         logger.debug(f"Game status check for {'anonymous' if is_anonymous else user_id}")

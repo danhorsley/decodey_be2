@@ -141,9 +141,30 @@ def save_unified_game_state(identifier,
                 anon_game.last_updated = datetime.utcnow()
 
                 # Check if game is complete
-                if game_state.get('game_complete', False):
-                    anon_game.completed = True
-                    anon_game.won = game_state.get('has_won', False)
+                logger.info(
+                    f"DEBUGGING - game_complete: {game_state.get('game_complete', False)}"
+                )
+                logger.info(
+                    f"DEBUGGING - has_won: {game_state.get('has_won', False)}")
+                logger.info(
+                    f"DEBUGGING - win_notified: {game_state.get('win_notified', False)}"
+                )
+                logger.info(
+                    f"DEBUGGING - win_notified type: {type(game_state.get('win_notified', False))}"
+                )
+                logger.info(
+                    f"DEBUGGING - condition check: {game_state.get('win_notified', False) is True}"
+                )
+
+                if game_state.get('game_complete', False) and game_state.get(
+                        'has_won', False) and game_state.get(
+                            'win_notified', False) is True:
+                    logger.info(
+                        "DEBUGGING - Win condition satisfied, proceeding to record score"
+                    )
+                    # Rest of the code...
+                else:
+                    logger.info("DEBUGGING - Win condition NOT satisfied")
             else:
                 # Create new anonymous game entry
                 anon_game = AnonymousGameState(
@@ -166,7 +187,7 @@ def save_unified_game_state(identifier,
             # For authenticated users, save to ActiveGameState
             user_id, game_id = identifier.split(
                 '_', 1) if '_' in identifier else (identifier, None)
-
+            print("game ids", user_id, game_id)
             # Determine if this is a daily challenge if not explicitly specified
             if is_daily is None and game_id:
                 is_daily = 'daily' in game_id
@@ -207,9 +228,30 @@ def save_unified_game_state(identifier,
                 active_game.last_updated = datetime.utcnow()
 
                 # Check if this is a win that's been acknowledged
+                logger.info(
+                    f"DEBUGGING - game_complete: {game_state.get('game_complete', False)}"
+                )
+                logger.info(
+                    f"DEBUGGING - has_won: {game_state.get('has_won', False)}")
+                logger.info(
+                    f"DEBUGGING - win_notified: {game_state.get('win_notified', False)}"
+                )
+                logger.info(
+                    f"DEBUGGING - win_notified type: {type(game_state.get('win_notified', False))}"
+                )
+                logger.info(
+                    f"DEBUGGING - condition check: {game_state.get('win_notified', False) is True}"
+                )
+
                 if game_state.get('game_complete', False) and game_state.get(
                         'has_won', False) and game_state.get(
-                            'win_notified', False):
+                            'win_notified', False) is True:
+                    logger.info(
+                        "DEBUGGING - Win condition satisfied, proceeding to record score"
+                    )
+                    # Rest of the code...
+                else:
+                    logger.info("DEBUGGING - Win condition NOT satisfied")
                     # Once the win has been acknowledged, record the score and delete the active game
                     time_taken = int((datetime.utcnow() -
                                       active_game.created_at).total_seconds())
