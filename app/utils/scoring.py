@@ -99,6 +99,7 @@ def record_game_score(user_id,
 
     db.session.add(game_score)
     db.session.commit()
+    return game_score
 
 
 def update_active_game_state(user_id, game_state):

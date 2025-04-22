@@ -13,6 +13,8 @@ import uuid
 import json
 import time
 
+from app.utils.stats import initialize_or_update_user_stats
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -576,7 +578,7 @@ def game_status():
                 active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_state['game_id']).first()
                 if active_game:
                     # Record the score to GameScore
-                    record_game_score(
+                    game_score = record_game_score(
                         user_id, 
                         active_game.game_id, 
                         win_data['score'], 
@@ -599,6 +601,7 @@ def game_status():
                     # Delete the active game
                     db.session.delete(active_game)
                     db.session.commit()
+                    initialize_or_update_user_stats(user_id=user_id,game=game_score)
                     logger.info(f"Win processed and saved for user {user_id}, score: {win_data['score']}")
 
         # Create the response
