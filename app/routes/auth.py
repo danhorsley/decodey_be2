@@ -59,6 +59,8 @@ def login():
     try:
         data = request.get_json()
         identifier = data.get('username')  # Can be username or email
+        if '@' in identifier:  # If identifier is an email, convert to lowercase
+            identifier = identifier.lower()
         password = data.get('password')
         remember = data.get('rememberMe',
                             False)  # Changed from 'remember' to 'rememberMe'
