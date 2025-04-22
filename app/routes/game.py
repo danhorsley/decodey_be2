@@ -393,6 +393,7 @@ def check_active_game():
                         "completion_percentage": round(completion_percentage, 1),
                         "time_spent": time_spent,
                         "max_mistakes": daily_state['max_mistakes']
+                        "start_time": daily_state['start_time']
                     }
                 })
         print(response)
