@@ -1311,44 +1311,55 @@ def send_email(current_admin):
     """Send email using templates and variables"""
     try:
         # Load templates and variables
-        with open('plaintext.txt', 'r') as f:
+        with open('emailupdates/plaintext.txt', 'r') as f:
             plain_template = f.read()
             
-        with open('richtextinput.html', 'r') as f:
+        with open('emailupdates/richtextinput.html', 'r') as f:
             html_template = f.read()
             
-        with open('emailvariables.json', 'r') as f:
+        with open('emailupdates/emailvariables.json', 'r') as f:
             variables = json.load(f)
             
-        # Format templates with variables
-        plain_content = plain_template.format(**variables)
-        html_content = html_template.format(**variables)
-        
+        with open('emailupdates/recipients.json', 'r') as f:
+            recipients = json.load(f)
+
         # Get Mailgun configuration
         MAILGUN_API_KEY = current_app.config['MAILGUN_API_KEY']
         MAILGUN_DOMAIN = current_app.config['MAILGUN_DOMAIN']
         
-        # Prepare email data
-        data = {
-            "from": f"Admin <noreply@{MAILGUN_DOMAIN}>",
-            "to": request.form.get('to'),
-            "subject": request.form.get('subject'),
-            "text": plain_content,
-            "html": html_content
-        }
-        
-        # Send via Mailgun
-        response = requests.post(
-            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
-            auth=("api", MAILGUN_API_KEY),
-            data=data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"Mailgun error: {response.text}")
+        # Send to each recipient
+        success_count = 0
+        for recipient in recipients:
+            # Merge recipient data with other variables
+            email_vars = {**variables, **recipient}
             
-        logger.info(f"Admin {current_admin.username} sent email to {data['to']}")
-        return jsonify({"message": "Email sent successfully"}), 200
+            # Format templates with variables
+            plain_content = plain_template.format(**email_vars)
+            html_content = html_template.format(**email_vars)
+            
+            # Prepare email data
+            data = {
+                "from": f"Admin <noreply@{MAILGUN_DOMAIN}>",
+                "to": recipient['email'],
+                "subject": request.form.get('subject'),
+                "text": plain_content,
+                "html": html_content
+            }
+            
+            # Send via Mailgun
+            response = requests.post(
+                f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
+                auth=("api", MAILGUN_API_KEY),
+                data=data
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to send email to {recipient['email']}: {response.text}")
+            else:
+                success_count += 1
+                
+        logger.info(f"Admin {current_admin.username} sent emails to {success_count} recipients")
+        return jsonify({"message": f"Successfully sent {success_count} emails"}), 200
         
     except Exception as e:
         logger.error(f"Error sending email: {str(e)}")
