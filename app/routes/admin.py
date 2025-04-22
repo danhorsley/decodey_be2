@@ -234,46 +234,6 @@ def dashboard(current_admin):
                                stats=stats,
                                recent_activities=recent_activities)
 
-
-@admin_bp.route('/export-consented-users', methods=['GET'])
-@admin_required
-def export_consented_users(current_admin):
-    """Export consented users data as JSON"""
-    try:
-        users = User.query.filter_by(email_consent=True).all()
-        users_data = []
-        
-        for user in users:
-            if not user.unsubscribe_token:
-                user.generate_unsubscribe_token()
-                
-            users_data.append({
-                "email": user.email,
-                "firstname": user.username,  # Using username as firstname
-                "unique_token": user.unsubscribe_token
-            })
-            
-        return jsonify(users_data)
-        
-    except Exception as e:
-        logger.error(f"Error exporting consented users: {str(e)}")
-        return jsonify({"error": f"Error exporting users: {str(e)}"}), 500
-
-
-@admin_bp.route('/dashboard', methods=['GET'])
-@admin_required
-def dashboard(current_admin):
-    """Admin dashboard home page"""
-    try:
-        # Get basic statistics
-        total_users = User.query.count()
-        week_ago = datetime.utcnow() - timedelta(days=7)
-        new_users = User.query.filter(User.created_at >= week_ago).count()
-        new_users_percentage = round(
-            (new_users / total_users) * 100) if total_users > 0 else 0
-
-        # Rest of the dashboard code...
-
     except Exception as e:
         logger.error(f"Error loading admin dashboard: {str(e)}")
         return render_template('admin/dashboard_home.html',
@@ -1321,6 +1281,26 @@ def create_backup(current_admin):
             url_for('admin.backup', error=f"Backup failed: {str(e)}"))
 
 
-# @admin_bp.route('/login-test')
-# def admin_login_test():
-#     return "Admin login test page"
+@admin_bp.route('/export-consented-users', methods=['GET'])
+@admin_required
+def export_consented_users(current_admin):
+    """Export consented users data as JSON"""
+    try:
+        users = User.query.filter_by(email_consent=True).all()
+        users_data = []
+
+        for user in users:
+            if not user.unsubscribe_token:
+                user.generate_unsubscribe_token()
+
+            users_data.append({
+                "email": user.email,
+                "firstname": user.username,  # Using username as firstname
+                "unique_token": user.unsubscribe_token
+            })
+
+        return jsonify(users_data)
+
+    except Exception as e:
+        logger.error(f"Error exporting consented users: {str(e)}")
+        return jsonify({"error": f"Error exporting users: {str(e)}"}), 500

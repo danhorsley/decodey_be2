@@ -54,11 +54,9 @@
         <div class="col">
             <div class="card bg-info text-white stats-card">
                 <div class="card-body">
-                    <h5 class="card-title">Active Users</h5>
-                    <h2>{{ stats.active_users }}</h2>
-                    <a href="{{ url_for('admin.export_consented_users') }}" class="btn btn-primary mt-3" download="consented_users.json">
-                        Export Consented Users
-                    </a>
+                    <h5 class="card-title">Active Now</h5>
+                    <h2 class="card-text">{{ stats.active_users }}</h2>
+                    <p class="card-text"><small>Last updated: {{ stats.last_updated }}</small></p>
                 </div>
             </div>
         </div>
