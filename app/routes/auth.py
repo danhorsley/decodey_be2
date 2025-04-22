@@ -477,6 +477,39 @@ def unsubscribe(token):
         db.session.rollback()
         return jsonify({"error": "Failed to process unsubscribe request"}), 500
 
+@bp.route('/resubscribe', methods=['POST'])
+def resubscribe():
+    """Resubscribe a user to emails using their email and unsubscribe token"""
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        token = data.get('token')
+        
+        if not email or not token:
+            return jsonify({"error": "Both email and token are required"}), 400
+            
+        user = User.query.filter_by(
+            unsubscribe_token=token,
+            email=email.lower()
+        ).first()
+        
+        if not user:
+            return jsonify({"error": "Invalid token or email"}), 400
+            
+        user.email_consent = True
+        user.consent_date = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Successfully resubscribed to emails",
+            "email": user.email
+        }), 200
+            
+    except Exception as e:
+        logging.error(f"Error in resubscribe: {str(e)}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to process resubscribe request"}), 500
+
 @bp.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
     token = request.args.get('token')
