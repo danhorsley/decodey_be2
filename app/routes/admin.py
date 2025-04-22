@@ -1316,13 +1316,10 @@ def send_email(current_admin):
         with open('emailupdates/plaintext.txt', 'r') as f:
             plain_template = f.read()
 
-        with open('emailupdates/richtextinput.html', 'r') as f:
+        with open('emailupdates/richtext.html', 'r') as f:
             html_template = f.read()
 
-        with open('emailupdates/emailvariables.json', 'r') as f:
-            variables = json.load(f)
-
-        with open('emailupdates/emailvariables.json', 'r') as f:
+        with open('emailupdates/recipients.json', 'r') as f:
             recipients = json.load(f)
 
         # Get Mailgun configuration
@@ -1332,12 +1329,9 @@ def send_email(current_admin):
         # Send to each recipient
         success_count = 0
         for recipient in recipients:
-            # Merge recipient data with other variables
-            email_vars = {**variables, **recipient}
-
-            # Format templates with variables
-            plain_content = plain_template.format(**email_vars)
-            html_content = html_template.format(**email_vars)
+            # Format templates with recipient variables
+            plain_content = plain_template.replace("{{unique_token}}", recipient['unique_token'])
+            html_content = html_template.replace("{{unique_token}}", recipient['unique_token'])
 
             # Prepare email data
             data = {
