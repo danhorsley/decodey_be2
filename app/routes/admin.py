@@ -232,6 +232,7 @@ def dashboard(current_admin):
         return render_template('admin/dashboard_home.html',
                                active_tab='dashboard',
                                stats=stats,
+                               recent_activities=recent_activities)
 
 
 @admin_bp.route('/export-consented-users', methods=['GET'])
@@ -257,9 +258,6 @@ def export_consented_users(current_admin):
     except Exception as e:
         logger.error(f"Error exporting consented users: {str(e)}")
         return jsonify({"error": f"Error exporting users: {str(e)}"}), 500
-
-
-                               recent_activities=recent_activities)
 
     except Exception as e:
         logger.error(f"Error loading admin dashboard: {str(e)}")
