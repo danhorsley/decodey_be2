@@ -31,4 +31,4 @@ Thanks again, d.
 
 ---
 You're receiving this email because you opted in to updates from decodey.
-To unsubscribe, click here: [unsubscribe_link]
+To unsubscribe, click here: https://api.decodey.game/unsubscribe?token={{unique_token}}

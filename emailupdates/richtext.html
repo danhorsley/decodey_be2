@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>decodey - Major Game Improvements & First Champion Crowned!</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #4cc9f0;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        .logo-svg {
+            width: 40px;
+            height: 40px;
+        }
+        h2 {
+            color: #007bff;
+            border-left: 4px solid #4cc9f0;
+            padding-left: 10px;
+            margin-top: 25px;
+        }
+        ul {
+            padding-left: 25px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .cta {
+            background-color: #4cc9f0;
+            color: #000;
+            padding: 12px 25px;
+            text-decoration: none;
+            display: inline-block;
+            margin: 20px 0;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        .footer {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #666;
+        }
+        .champion {
+            background-color: #f8f9fa;
+            border-left: 4px solid #ffd700;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .thanks {
+            background-color: #f8f9fa;
+            border-left: 4px solid #4cc9f0;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .new-feature {
+            background-color: #f8f9fa;
+            border-left: 4px solid #00cc44;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <svg class="logo-svg" viewBox="0 0 100 100">
+            <style>
+                .block {
+                font-family: monospace;
+                font-weight: bold;
+                font-size: 45px;
+                dominant-baseline: middle;
+                text-anchor: middle;
+                }
+                .question {
+                font-family: monospace;
+                font-weight: bold;
+                font-size: 45px;
+                dominant-baseline: middle;
+                text-anchor: middle;
+                }
+            </style>
+            <!-- Background -->
+            <rect width="100" height="100" fill="#f8f8f8" rx="10" />
+
+            <!-- 2x2 Grid of Characters -->
+            <!-- Top Row -->
+            <text class="block" x="30" y="30">█</text>
+            <text class="question" x="70" y="30">?</text>
+
+            <!-- Bottom Row -->
+            <text class="question" x="30" y="80">?</text>
+            <text class="block" x="70" y="80">█</text>
+        </svg>
+        <div>
+            <div class="logo">D E C O D E Y</div>
+            <div>CIPHER PUZZLE GAME</div>
+        </div>
+    </div>
+
+    <p>Dear Decoders,</p>
+
+    <p>Many thanks to everyone who played the game and provided feedback last week. I've managed to incorporate many of the features you suggested:</p>
+
+    <h2>NEW ADDITIONS</h2>
+    <ul>
+        <li>Quick tutorial on first open for new players</li>
+        <li>Portrait mode on mobile is vastly improved and should work for all screen sizes</li>
+        <li>200+ new quotes to decrypt from great wits such as Dorothy Parker and Mae West</li>
+        <li>New Home Page with quick access to all game modes</li>
+        <li>Daily streak bonus - earn up to +100% score for consistent play</li>
+        <li>Quote feedback button - suggest, remove, or correct quotes</li>
+    </ul>
+
+    <h2>FIXES & IMPROVEMENTS</h2>
+    <ul>
+        <li>Larger encrypted text display</li>
+        <li>More touch-friendly buttons</li>
+        <li>Improved login persistence</li>
+        <li>Fixed accidental repeat guesses issue</li>
+        <li>Full slide menu for easier navigation</li>
+        <li>Streamlined settings access</li>
+    </ul>
+
+    <h2>FIRST CHAMPION</h2>
+    <div class="champion">
+        <p>Huge congratulations to <strong>RoobarbMcTron</strong> for becoming our inaugural world champion with <strong>112,880 points</strong>! A special trophy will be sent to you in the post. 🏆</p>
+    </div>
+
+    <p>Could you all share decodey with 5 people? I'd like to expand our user testing. Please feel free to continue providing feedback as it helps a great deal.</p>
+
+    <p style="text-align: center;">
+        <a href="https://decodey.game" class="cta">PLAY NOW</a>
+    </p>
+
+    <p>Thanks again,</p>
+    <p>d.</p>
+
+    <div class="footer">
+        You're receiving this email because you opted in to updates from decodey.<br>
+        To unsubscribe, <a href="https://api.decodey.game/unsubscribe?token={{unique_token}}">click here</a>.
+    </div>
+</body>
+</html>
