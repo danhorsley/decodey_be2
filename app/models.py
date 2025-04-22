@@ -52,6 +52,12 @@ class User(UserMixin, db.Model):
         """Set a separate admin password hash for admin users"""
         self.admin_password_hash = generate_password_hash(password)
 
+    def generate_unsubscribe_token(self):
+        """Generate a unique unsubscribe token for the user"""
+        self.unsubscribe_token = secrets.token_urlsafe(32)
+        db.session.commit()
+        return self.unsubscribe_token
+
 
 class UserStats(db.Model):
     user_id = db.Column(db.String,
