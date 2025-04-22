@@ -1,0 +1,60 @@
+2025-04-22 19:56:24.88
+b0069f02
+User
+ERROR:root:Error fetching leaderboard: (psycopg2.errors.DivisionByZero) division by zero
+2025-04-22 19:56:24.88
+b0069f02
+User
+File "/home/runner/workspace/app/routes/stats.py", line 75, in get_leaderboard
+2025-04-22 19:56:31.38
+b0069f02
+User
+ERROR:root:Error fetching leaderboard: (psycopg2.errors.DivisionByZero) division by zero
+2025-04-22 19:56:31.39
+b0069f02
+User
+File "/home/runner/workspace/app/routes/stats.py", line 75, in get_leaderboard
+2025-04-22 19:56:35.55
+b0069f02
+User
+INFO:root:Streak leaderboard request received with params: ImmutableMultiDict([('type', 'win'), ('period', 'current'), ('page', '1'), ('per_page', '10')])
+2025-04-22 19:56:38.55
+b0069f02
+User
+INFO:root:Streak leaderboard request received with params: ImmutableMultiDict([('type', 'win'), ('period', 'best'), ('page', '1'), ('per_page', '10')])
+2025-04-22 19:56:40.94
+b0069f02
+User
+INFO:root:Streak leaderboard request received with params: ImmutableMultiDict([('type', 'win'), ('period', 'current'), ('page', '1'), ('per_page', '10')])
+2025-04-22 19:56:44.96
+b0069f02
+User
+ERROR:root:Error fetching leaderboard: (psycopg2.errors.DivisionByZero) division by zero
+2025-04-22 19:56:44.97
+b0069f02
+User
+File "/home/runner/workspace/app/routes/stats.py", line 75, in get_leaderboard
+2025-04-22 19:56:54.70
+b0069f02
+User
+INFO:root:Streak leaderboard request received with params: ImmutableMultiDict([('type', 'win'), ('period', 'current'), ('page', '1'), ('per_page', '10')])
+2025-04-22 19:56:57.92
+b0069f02
+User
+ERROR:root:Error fetching leaderboard: (psycopg2.errors.DivisionByZero) division by zero
+2025-04-22 19:56:57.92
+b0069f02
+User
+File "/home/runner/workspace/app/routes/stats.py", line 75, in get_leaderboard
+2025-04-22 19:57:30.48
+b0069f02
+User
+INFO:root:Streak leaderboard request received with params: ImmutableMultiDict([('type', 'win'), ('period', 'current'), ('page', '1'), ('per_page', '10')])
+2025-04-22 19:57:38.08
+b0069f02
+User
+ERROR:root:Error fetching leaderboard: (psycopg2.errors.DivisionByZero) division by zero
+2025-04-22 19:57:38.09
+b0069f02
+User
+File "/home/runner/workspace/app/routes/stats.py", line 75, in get_leaderboard
