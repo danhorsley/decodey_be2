@@ -392,7 +392,7 @@ def check_active_game():
                         "mistakes": daily_state['mistakes'],
                         "completion_percentage": round(completion_percentage, 1),
                         "time_spent": time_spent,
-                        "max_mistakes": daily_state['max_mistakes']
+                        "max_mistakes": daily_state['max_mistakes'],
                         "start_time": daily_state['start_time']
                     }
                 })
@@ -428,7 +428,11 @@ def continue_game():
                 game_state = None
         else:
             # Get non-daily game
-            game_state = get_unified_game_state(user_id, is_anonymous=False)
+            regular_game = ActiveGameState.query.filter(
+                ActiveGameState.user_id == user_id,
+                ~ActiveGameState.game_id.like('%daily%')
+            ).first()
+            game_state = get_unified_game_state(f"{user_id}_{regular_game.game_id}", is_anonymous=False)
 
         if not game_state:
             return jsonify({"error": "No active game found"}), 404
