@@ -259,6 +259,21 @@ def export_consented_users(current_admin):
         logger.error(f"Error exporting consented users: {str(e)}")
         return jsonify({"error": f"Error exporting users: {str(e)}"}), 500
 
+
+@admin_bp.route('/dashboard', methods=['GET'])
+@admin_required
+def dashboard(current_admin):
+    """Admin dashboard home page"""
+    try:
+        # Get basic statistics
+        total_users = User.query.count()
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        new_users = User.query.filter(User.created_at >= week_ago).count()
+        new_users_percentage = round(
+            (new_users / total_users) * 100) if total_users > 0 else 0
+
+        # Rest of the dashboard code...
+
     except Exception as e:
         logger.error(f"Error loading admin dashboard: {str(e)}")
         return render_template('admin/dashboard_home.html',
