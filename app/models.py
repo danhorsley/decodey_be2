@@ -27,6 +27,7 @@ class User(UserMixin, db.Model):
     admin_password_hash = db.Column(db.String(256), nullable=True)
     reset_token = db.Column(db.String(100), unique=True, nullable=True)
     reset_token_expires = db.Column(db.DateTime, nullable=True)
+    unsubscribe_token = db.Column(db.String(100), unique=True, nullable=True)
 
     def __init__(self, email, username, password, email_consent=False):
         self.email = email

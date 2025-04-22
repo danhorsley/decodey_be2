@@ -452,6 +452,29 @@ def forgot_password():
                         "Failed to process password reset request"}), 500
 
 
+@bp.route('/unsubscribe/<token>', methods=['GET'])
+def unsubscribe(token):
+    """Unsubscribe a user from emails using their unique token"""
+    try:
+        user = User.query.filter_by(unsubscribe_token=token).first()
+        
+        if not user:
+            return jsonify({"error": "Invalid unsubscribe token"}), 400
+            
+        user.email_consent = False
+        user.consent_date = None
+        db.session.commit()
+        
+        return jsonify({
+            "message": "Successfully unsubscribed from emails",
+            "email": user.email
+        }), 200
+            
+    except Exception as e:
+        logging.error(f"Error in unsubscribe: {str(e)}")
+        db.session.rollback()
+        return jsonify({"error": "Failed to process unsubscribe request"}), 500
+
 @bp.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
     token = request.args.get('token')
