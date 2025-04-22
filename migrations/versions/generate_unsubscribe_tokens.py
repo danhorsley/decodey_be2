@@ -1,3 +1,4 @@
+
 """Generate unsubscribe tokens for existing users
 
 Revision ID: generate_unsubscribe_tokens
@@ -6,8 +7,6 @@ Create Date: 2025-04-22 13:05:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy import text
-import secrets
 
 # revision identifiers, used by Alembic.
 revision = 'generate_unsubscribe_tokens'
@@ -16,16 +15,10 @@ branch_labels = None
 depends_on = None
 
 def upgrade():
-    connection = op.get_bind()
-    users = connection.execute(text("SELECT user_id FROM \"user\" WHERE unsubscribe_token IS NULL"))
-
-    for user in users:
-        token = secrets.token_urlsafe(32)
-        connection.execute(
-            text("UPDATE \"user\" SET unsubscribe_token = :token WHERE user_id = :user_id"),
-            {"token": token, "user_id": user.user_id}
-        )
+    # Add unsubscribe_token column
+    op.add_column('user', sa.Column('unsubscribe_token', sa.String(100), nullable=True))
+    op.create_unique_constraint('uq_user_unsubscribe_token', 'user', ['unsubscribe_token'])
 
 def downgrade():
-    connection = op.get_bind()
-    connection.execute(text("UPDATE \"user\" SET unsubscribe_token = NULL"))
+    op.drop_constraint('uq_user_unsubscribe_token', 'user', type_='unique')
+    op.drop_column('user', 'unsubscribe_token')
