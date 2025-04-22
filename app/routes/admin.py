@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from functools import wraps
 from datetime import datetime, timedelta
 import json
+import requests
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 logger = logging.getLogger(__name__)
@@ -1330,8 +1331,10 @@ def send_email(current_admin):
         success_count = 0
         for recipient in recipients:
             # Format templates with recipient variables
-            plain_content = plain_template.replace("{{unique_token}}", recipient['unique_token'])
-            html_content = html_template.replace("{{unique_token}}", recipient['unique_token'])
+            plain_content = plain_template.replace("{{unique_token}}",
+                                                   recipient['unique_token'])
+            html_content = html_template.replace("{{unique_token}}",
+                                                 recipient['unique_token'])
 
             # Prepare email data
             data = {
