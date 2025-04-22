@@ -17,18 +17,22 @@
                             <i class="fas fa-sync-alt me-2"></i> Recalculate Weekly Winners
                         </button>
                     </form>
-                    <form action="{{ url_for('admin_process.regenerate_unsubscribe_tokens') }}" method="POST" class="d-inline mt-2">
+                    <form action="{{ url_for('admin_process.regenerate_unsubscribe_tokens') }}" method="POST" class="d-inline">
                         <button type="submit" class="btn btn-warning" onclick="return confirm('Are you sure you want to regenerate all unsubscribe tokens? This will invalidate all existing tokens.');">
                             <i class="fas fa-sync me-2"></i> Regenerate All Unsubscribe Tokens
                         </button>
                     </form>
-                    <button type="button" class="btn btn-warning mt-2" data-bs-toggle="modal" data-bs-target="#sendEmailModal">
+                    <button type="button" class="btn btn-warning ms-2" data-bs-toggle="modal" data-bs-target="#sendEmailModal">
                         <i class="fas fa-envelope me-2"></i> Send Email Update
                     </button>
+                    <a href="{{ url_for('admin.export_consented_users') }}" class="btn btn-info ms-2">
+                        <i class="fas fa-file-export me-2"></i> Export Consented Users
+                    </a>
                 </div>
             </div>
         </div>
     </div>
+
     <!-- Send Email Warning Modal -->
     <div class="modal fade" id="sendEmailModal" tabindex="-1">
         <div class="modal-dialog">
@@ -54,10 +58,6 @@
             </div>
         </div>
     </div>
-    <a href="{{ url_for('admin.export_consented_users') }}" class="btn btn-info mt-2">
-                        <i class="fas fa-file-export me-2"></i> Export Consented Users
-                    </a>
-                </div>
             </div>
         </div>
     </div>
