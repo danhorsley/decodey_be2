@@ -69,7 +69,7 @@ def get_leaderboard():
                 UserStats.cumulative_score.label('total_score'),
                 UserStats.total_games_played.label('games_played'),
                 (db.func.cast(UserStats.cumulative_score, db.Float) /
-                 db.func.coalesce(UserStats.total_games_played, 1)).label('avg_score')
+                 db.func.nullif(db.func.coalesce(UserStats.total_games_played, 1), 0)).label('avg_score')
             ).join(UserStats, User.user_id == UserStats.user_id)\
              .order_by(db.desc(UserStats.cumulative_score))\
              .offset(offset).limit(per_page).all()
