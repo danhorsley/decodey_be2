@@ -790,6 +790,28 @@ def load_email_settings():
         }
 
 
+@admin_process_bp.route('/regenerate-unsubscribe-tokens', methods=['POST'])
+@admin_required 
+def regenerate_unsubscribe_tokens(current_admin):
+    """Regenerate unsubscribe tokens for all users"""
+    try:
+        users = User.query.all()
+        updated_count = 0
+        
+        for user in users:
+            user.unsubscribe_token = secrets.token_urlsafe(32)
+            updated_count += 1
+            
+        db.session.commit()
+        
+        logger.info(f"Admin {current_admin.username} regenerated {updated_count} unsubscribe tokens")
+        return redirect(url_for('admin.dashboard', success=f"Successfully regenerated {updated_count} unsubscribe tokens"))
+        
+    except Exception as e:
+        logger.error(f"Error regenerating unsubscribe tokens: {str(e)}")
+        db.session.rollback()
+        return redirect(url_for('admin.dashboard', error=f"Error regenerating tokens: {str(e)}"))
+
 def register_admin_process_routes(app):
     """Register the admin process blueprint and set up routes"""
     # Register blueprint
