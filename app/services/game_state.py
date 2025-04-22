@@ -485,13 +485,6 @@ def process_guess(game_state, encrypted_letter, guessed_letter):
     game_state['game_complete'] = status['game_complete']
     game_state['has_won'] = status['has_won']
 
-    # If game is lost, abandon it
-    if status['game_complete'] and not status['has_won']:
-        from flask_jwt_extended import get_jwt_identity
-        user_id = get_jwt_identity()
-        if user_id:
-            abandon_game(user_id, is_daily='daily' in game_state.get('game_id', ''))
-
     # Generate the display
     display = get_display(game_state.get('encrypted_paragraph', ''),
                           correctly_guessed, reverse_mapping)
