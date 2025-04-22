@@ -22,7 +22,39 @@
                             <i class="fas fa-sync me-2"></i> Regenerate All Unsubscribe Tokens
                         </button>
                     </form>
-                    <a href="{{ url_for('admin.export_consented_users') }}" class="btn btn-info mt-2">
+                    <button type="button" class="btn btn-warning mt-2" data-bs-toggle="modal" data-bs-target="#sendEmailModal">
+                        <i class="fas fa-envelope me-2"></i> Send Email Update
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Send Email Warning Modal -->
+    <div class="modal fade" id="sendEmailModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Send Email Update</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This will send emails to all users who have consented to receive updates.
+                    </div>
+                    <p>Please ensure your email content is ready in the emailupdates folder before proceeding.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <form action="{{ url_for('admin.send_email') }}" method="POST">
+                        <input type="text" name="subject" class="form-control mb-2" placeholder="Email Subject" required>
+                        <button type="submit" class="btn btn-warning">Send Emails</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <a href="{{ url_for('admin.export_consented_users') }}" class="btn btn-info mt-2">
                         <i class="fas fa-file-export me-2"></i> Export Consented Users
                     </a>
                 </div>
