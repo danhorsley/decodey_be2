@@ -1,0 +1,7 @@
+
+# Email update files
+emailupdates/
+emailupdates/plaintext.txt
+emailupdates/recipients.json
+emailupdates/richtext.html
+emailupdates/variables.json
