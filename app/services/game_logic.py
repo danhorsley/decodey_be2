@@ -99,7 +99,7 @@ def start_game(long_text=False):
             db.session.rollback()
 
             random_quote = Quote.query.filter_by(active=True)\
-                                     .filter(Quote.daily_date.is_(None))\
+                                     .filter(Quote.daily_date.isnot_(None))\
                                      .order_by(func.random())\
                                      .first()
 
