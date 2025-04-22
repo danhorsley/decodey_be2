@@ -260,13 +260,13 @@ def abandon_game(user_id, is_daily=False):
         game_score = GameScore(
             user_id=user_id,
             game_id=active_game.game_id,
-            score=0,  # Zero score for abandoned games
+            score=0,  # Zero score for lost games
             mistakes=active_game.mistakes,
             time_taken=int(
                 (datetime.utcnow() - active_game.created_at).total_seconds()),
             game_type='regular',
             challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
-            completed=False,  # Mark as incomplete
+            completed=True,  # Game is completed, just lost due to mistakes
             created_at=datetime.utcnow())
 
         # Delete the active game
