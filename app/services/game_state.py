@@ -34,65 +34,59 @@ def get_unified_game_state(identifier, is_anonymous=False):
                 'encrypted_paragraph': game.encrypted_paragraph,
                 'mapping': game.mapping,
                 'reverse_mapping': game.reverse_mapping,
-                'correctly_guessed': game.correctly_guessed
-                or [],  # Handle None case
-                'incorrect_guesses': game.incorrect_guesses
-                or {},  # Add this line
+                'correctly_guessed': game.correctly_guessed or [],  # Handle None case
+                'incorrect_guesses': game.incorrect_guesses or {},  # Add this line
                 'mistakes': game.mistakes,
                 'max_mistakes': get_max_mistakes_from_game_id(game.game_id),
                 'major_attribution': game.major_attribution,
                 'minor_attribution': game.minor_attribution,
                 'start_time': game.created_at,
-                'difficulty':
-                game.game_id.split('-')[0] if game.game_id else 'medium',
-                'game_complete': game.completed,
-                'has_won': game.won
+                'difficulty': game.game_id.split('-')[0] if game.game_id else 'medium',
             }
+
+            # Check game status dynamically for anonymous users too
+            status = check_game_status(game_state)
+            game_state['game_complete'] = status['game_complete']
+            game_state['has_won'] = status['has_won']
+
+            # Update database record if status has changed
+            if (game.completed != status['game_complete'] or 
+                game.won != status['has_won']):
+                game.completed = status['game_complete']
+                game.won = status['has_won']
+                db.session.commit()
+                logger.debug(f"Updated anonymous game completion status: complete={status['game_complete']}, won={status['has_won']}")
         else:
-            # For authenticated users, look up by user_id and game_id
-            user_id, game_id = identifier.split(
-                '_', 1) if '_' in identifier else (identifier, None)
-            print("game ids", user_id, game_id)
+            # For authenticated users, look up by user_id and game_id (unchanged)
+            user_id, game_id = identifier.split('_', 1) if '_' in identifier else (identifier, None)
+
             if game_id:
-                game = ActiveGameState.query.filter_by(
-                    user_id=user_id, game_id=game_id).first()
+                game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
             else:
                 game = ActiveGameState.query.filter_by(user_id=user_id).first()
+
             if not game:
                 logger.debug(f"No active game found for user: {user_id}")
                 return None
 
-            # Convert database model to standardized game state dict
+            # Convert database model to standardized game state dict (unchanged)
             game_state = {
-                'game_id':
-                game.game_id,
-                'original_paragraph':
-                game.original_paragraph,
-                'encrypted_paragraph':
-                game.encrypted_paragraph,
-                'mapping':
-                game.mapping,
-                'reverse_mapping':
-                game.reverse_mapping,
-                'correctly_guessed':
-                game.correctly_guessed or [],  # Handle None case
-                'incorrect_guesses':
-                game.incorrect_guesses or {},  # Add this line
-                'mistakes':
-                game.mistakes,
-                'max_mistakes':
-                get_max_mistakes_from_game_id(game.game_id),
-                'major_attribution':
-                game.major_attribution,
-                'minor_attribution':
-                game.minor_attribution,
-                'start_time':
-                game.created_at,
-                'difficulty':
-                game.game_id.split('-')[0] if game.game_id else 'medium'
+                'game_id': game.game_id,
+                'original_paragraph': game.original_paragraph,
+                'encrypted_paragraph': game.encrypted_paragraph,
+                'mapping': game.mapping,
+                'reverse_mapping': game.reverse_mapping,
+                'correctly_guessed': game.correctly_guessed or [],  # Handle None case
+                'incorrect_guesses': game.incorrect_guesses or {},  # Add this line
+                'mistakes': game.mistakes,
+                'max_mistakes': get_max_mistakes_from_game_id(game.game_id),
+                'major_attribution': game.major_attribution,
+                'minor_attribution': game.minor_attribution,
+                'start_time': game.created_at,
+                'difficulty': game.game_id.split('-')[0] if game.game_id else 'medium'
             }
-            # print(game_state)
-            # Check game status dynamically
+
+            # Check game status dynamically (unchanged)
             status = check_game_status(game_state)
             game_state['game_complete'] = status['game_complete']
             game_state['has_won'] = status['has_won']
@@ -102,11 +96,10 @@ def get_unified_game_state(identifier, is_anonymous=False):
         logger.error(f"Error getting game state: {str(e)}", exc_info=True)
         return None
 
+# Now, let's update save_unified_game_state to remove the problematic win_notified condition
 
-def save_unified_game_state(identifier,
-                            game_state,
-                            is_anonymous=False,
-                            is_daily=None):
+
+def save_unified_game_state(identifier, game_state, is_anonymous=False, is_daily=None):
     """
     Save game state to the appropriate model based on user type.
 
@@ -125,47 +118,40 @@ def save_unified_game_state(identifier,
         if is_anonymous:
             # For anonymous users, save to AnonymousGameState
             anon_id = identifier
-            anon_game = AnonymousGameState.query.filter_by(
-                anon_id=anon_id).first()
+            anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
 
             if anon_game:
                 # Update existing anonymous game
                 anon_game.mapping = game_state.get('mapping', {})
-                anon_game.reverse_mapping = game_state.get(
-                    'reverse_mapping', {})
-                anon_game.correctly_guessed = game_state.get(
-                    'correctly_guessed', [])
-                anon_game.incorrect_guesses = game_state.get(
-                    'incorrect_guesses', {})  # Add this line
+                anon_game.reverse_mapping = game_state.get('reverse_mapping', {})
+                anon_game.correctly_guessed = game_state.get('correctly_guessed', [])
+                anon_game.incorrect_guesses = game_state.get('incorrect_guesses', {})
                 anon_game.mistakes = game_state.get('mistakes', 0)
                 anon_game.last_updated = datetime.utcnow()
 
-                if game_state.get('game_complete', False) and game_state.get(
-                        'has_won', False) and game_state.get(
-                            'win_notified', False) is True:
-                    logger.info(
-                        "DEBUGGING - Win condition satisfied, proceeding to record score"
-                    )
-                    # Rest of the code...
-                else:
-                    logger.info("DEBUGGING - Win condition NOT satisfied")
+                # Always update completion status
+                anon_game.completed = game_state.get('game_complete', False)
+                anon_game.won = game_state.get('has_won', False)
+
+                if anon_game.completed and anon_game.won:
+                    logger.info(f"Anonymous game {anon_id} marked as won")
             else:
                 # Create new anonymous game entry
                 anon_game = AnonymousGameState(
                     anon_id=anon_id,
                     game_id=game_state.get('game_id', ''),
-                    original_paragraph=game_state.get('original_paragraph',
-                                                      ''),
-                    encrypted_paragraph=game_state.get('encrypted_paragraph',
-                                                       ''),
+                    original_paragraph=game_state.get('original_paragraph', ''),
+                    encrypted_paragraph=game_state.get('encrypted_paragraph', ''),
                     mapping=game_state.get('mapping', {}),
                     reverse_mapping=game_state.get('reverse_mapping', {}),
                     correctly_guessed=game_state.get('correctly_guessed', []),
-                    incorrect_guesses=game_state.get('incorrect_guesses',
-                                                     {}),  # Add this line
+                    incorrect_guesses=game_state.get('incorrect_guesses', {}),
                     mistakes=game_state.get('mistakes', 0),
                     major_attribution=game_state.get('major_attribution', ''),
-                    minor_attribution=game_state.get('minor_attribution', ''))
+                    minor_attribution=game_state.get('minor_attribution', ''),
+                    completed=game_state.get('game_complete', False),
+                    won=game_state.get('has_won', False)
+                )
                 db.session.add(anon_game)
         else:
             # For authenticated users, save to ActiveGameState
@@ -210,7 +196,7 @@ def save_unified_game_state(identifier,
                     'incorrect_guesses', {})
                 active_game.mistakes = game_state.get('mistakes', 0)
                 active_game.last_updated = datetime.utcnow()
-                
+
             else:
                 # Create new active game state
                 active_game = ActiveGameState(
@@ -224,7 +210,7 @@ def save_unified_game_state(identifier,
                     reverse_mapping=game_state.get('reverse_mapping', {}),
                     correctly_guessed=game_state.get('correctly_guessed', []),
                     incorrect_guesses=game_state.get('incorrect_guesses',
-                                                     {}),  # Add this line
+                                                     {}),
                     mistakes=game_state.get('mistakes', 0),
                     major_attribution=game_state.get('major_attribution', ''),
                     minor_attribution=game_state.get('minor_attribution', ''),
@@ -242,7 +228,6 @@ def save_unified_game_state(identifier,
         logger.error(f"Error saving game state: {str(e)}", exc_info=True)
         db.session.rollback()
         return False
-
 
 def abandon_game(user_id, is_daily=False):
     """

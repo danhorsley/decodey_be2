@@ -504,6 +504,7 @@ def abandon_game_route():
         return jsonify({"error": "Error abandoning game"}), 500
 
 
+
 @bp.route('/game-status', methods=['GET', 'OPTIONS'])
 @jwt_required(optional=True)
 def game_status():
@@ -523,7 +524,11 @@ def game_status():
             return jsonify({"error": "Game ID required for anonymous users"}), 400
 
         # Get identifier based on user type
-        identifier = f"{game_id}_anon" if is_anonymous else f"{user_id}_{game_id}"
+        if is_anonymous:
+            identifier = f"{game_id}_anon"
+        else:
+            identifier = f"{user_id}_{game_id}" if game_id else user_id
+
         logger.debug(f"Game status check identifier: {identifier}")
 
         game_state = get_unified_game_state(identifier, is_anonymous=is_anonymous)
@@ -532,14 +537,23 @@ def game_status():
             logger.debug(f"No active game found for {'anonymous' if is_anonymous else user_id}")
             return jsonify({"hasActiveGame": False}), 200
 
+        # Log the game state for debugging
+        logger.debug(f"Game state: complete={game_state['game_complete']}, won={game_state['has_won']}")
+
         # Initialize win data
         win_data = None
-        active_game = None
 
         # Handle winning games
         if game_state['has_won']:
-            # Get active game and calculate time taken
-            if not is_anonymous:
+            logger.info(f"Win detected for {'anonymous' if is_anonymous else 'user'}: {identifier}")
+
+            # Calculate time taken
+            if is_anonymous:
+                anon_game = AnonymousGameState.query.filter_by(anon_id=identifier).first()
+                time_taken = int((datetime.utcnow() - (anon_game.created_at if anon_game else game_state.get('start_time', datetime.utcnow()))).total_seconds())
+                is_daily = 'daily' in game_id if game_id else False
+                current_daily_streak = 0  # No streak for anonymous users
+            else:
                 active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
                 if not active_game:
                     logger.error(f"Active game not found for user {user_id}, game_id {game_id}")
@@ -548,49 +562,44 @@ def game_status():
                 time_taken = int((datetime.utcnow() - active_game.created_at).total_seconds())
                 is_daily = 'daily' in active_game.game_id
                 challenge_date = extract_challenge_date(active_game.game_id, is_daily)
-
-                # Update streaks for authenticated users
                 current_daily_streak = update_streak(user_id, challenge_date, is_daily)
-            else:
-                # For anonymous users
-                time_taken = int((datetime.utcnow() - game_state.get('start_time', datetime.utcnow())).total_seconds())
-                is_daily = 'daily' in game_id if game_id else False
-                challenge_date = extract_challenge_date(game_id, is_daily)
-                current_daily_streak = 0  # No streak for anonymous users
 
-            # Generate win data - same logic for both anonymous and authenticated
+            # Generate win data for both user types
             win_data = generate_win_data(
                 game_state, 
                 time_taken, 
-                current_daily_streak
+                current_daily_streak if not is_anonymous else 0
             )
 
             # For authenticated users, persist the win
-            if not is_anonymous and active_game:
-                # Record the score to GameScore
-                record_game_score(
-                    user_id, 
-                    active_game.game_id, 
-                    win_data['score'], 
-                    active_game.mistakes, 
-                    time_taken,
-                    is_daily
-                )
-
-                # Record daily completion if applicable
-                if is_daily:
-                    record_daily_completion(
+            if not is_anonymous and 'game_id' in game_state:
+                active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_state['game_id']).first()
+                if active_game:
+                    # Record the score to GameScore
+                    record_game_score(
                         user_id, 
-                        challenge_date, 
+                        active_game.game_id, 
                         win_data['score'], 
-                        game_state['mistakes'], 
-                        time_taken
+                        active_game.mistakes, 
+                        time_taken,
+                        is_daily
                     )
 
-                # Delete the active game
-                db.session.delete(active_game)
-                db.session.commit()
-                logger.info(f"Win processed and saved for user {user_id}, score: {win_data['score']}")
+                    # Record daily completion if applicable
+                    if is_daily:
+                        challenge_date = extract_challenge_date(active_game.game_id, is_daily)
+                        record_daily_completion(
+                            user_id, 
+                            challenge_date, 
+                            win_data['score'], 
+                            game_state['mistakes'], 
+                            time_taken
+                        )
+
+                    # Delete the active game
+                    db.session.delete(active_game)
+                    db.session.commit()
+                    logger.info(f"Win processed and saved for user {user_id}, score: {win_data['score']}")
 
         # Create the response
         response_data = {
