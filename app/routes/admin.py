@@ -1304,3 +1304,52 @@ def export_consented_users(current_admin):
     except Exception as e:
         logger.error(f"Error exporting consented users: {str(e)}")
         return jsonify({"error": f"Error exporting users: {str(e)}"}), 500
+
+@admin_bp.route('/send_email', methods=['POST'])
+@admin_required
+def send_email(current_admin):
+    """Send email using templates and variables"""
+    try:
+        # Load templates and variables
+        with open('plaintext.txt', 'r') as f:
+            plain_template = f.read()
+            
+        with open('richtextinput.html', 'r') as f:
+            html_template = f.read()
+            
+        with open('emailvariables.json', 'r') as f:
+            variables = json.load(f)
+            
+        # Format templates with variables
+        plain_content = plain_template.format(**variables)
+        html_content = html_template.format(**variables)
+        
+        # Get Mailgun configuration
+        MAILGUN_API_KEY = current_app.config['MAILGUN_API_KEY']
+        MAILGUN_DOMAIN = current_app.config['MAILGUN_DOMAIN']
+        
+        # Prepare email data
+        data = {
+            "from": f"Admin <noreply@{MAILGUN_DOMAIN}>",
+            "to": request.form.get('to'),
+            "subject": request.form.get('subject'),
+            "text": plain_content,
+            "html": html_content
+        }
+        
+        # Send via Mailgun
+        response = requests.post(
+            f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
+            auth=("api", MAILGUN_API_KEY),
+            data=data
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Mailgun error: {response.text}")
+            
+        logger.info(f"Admin {current_admin.username} sent email to {data['to']}")
+        return jsonify({"message": "Email sent successfully"}), 200
+        
+    except Exception as e:
+        logger.error(f"Error sending email: {str(e)}")
+        return jsonify({"error": f"Error sending email: {str(e)}"}), 500
