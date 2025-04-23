@@ -51,3 +51,7 @@ args = "celery -A app.celery_worker worker --loglevel=info"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 6379
+externalPort = 3000

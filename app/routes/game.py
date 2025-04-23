@@ -271,7 +271,25 @@ def guess():
                     'current_streak': 0,
                     'streak_continued': False
                 }
+            score = 0
+            time_taken = int((datetime.utcnow() - game_state.get(
+                'start_time', datetime.utcnow())).total_seconds())
+            if result['has_won']:
+                from app.utils.scoring import score_game
+                difficulty = game_state.get('difficulty', 'medium')
+                mistakes = game_state.get('mistakes', 0)
+                hardcore_mode = game_state.get('hardcore_mode', False)
+                
+                # For authenticated users with daily challenges, get streak
+                current_daily_streak = 0
+                if not is_anonymous:
+                    current_daily_streak = get_current_daily_streak(user_id)
 
+                score = score_game(difficulty,
+                                   mistakes,
+                                   time_taken,
+                                   hardcore_mode=hardcore_mode,
+                                   current_daily_streak=current_daily_streak)
             # Queue the async task for database updates
             process_game_completion.delay(
                 user_id=user_id if not is_anonymous else None,
@@ -391,7 +409,25 @@ def hint():
                     'current_streak': 0,
                     'streak_continued': False
                 }
+            score = 0
+            time_taken = int((datetime.utcnow() - game_state.get(
+                'start_time', datetime.utcnow())).total_seconds())
+            if result['has_won']:
+                from app.utils.scoring import score_game
+                difficulty = game_state.get('difficulty', 'medium')
+                mistakes = game_state.get('mistakes', 0)
+                hardcore_mode = game_state.get('hardcore_mode', False)
 
+                # For authenticated users with daily challenges, get streak
+                current_daily_streak = 0
+                if not is_anonymous:
+                    current_daily_streak = get_current_daily_streak(user_id)
+
+                score = score_game(difficulty,
+                                   mistakes,
+                                   time_taken,
+                                   hardcore_mode=hardcore_mode,
+                                   current_daily_streak=current_daily_streak)
             # Queue the async task for database updates
             process_game_completion.delay(
                 user_id=user_id if not is_anonymous else None,
