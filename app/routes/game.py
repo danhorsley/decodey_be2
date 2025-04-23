@@ -1132,21 +1132,15 @@ def game_complete():
             else:
                 # For authenticated users, include streak info
                 user_stats = UserStats.query.filter_by(user_id=user_id).first()
-                current_streak = user_stats.current_daily_streak if user_stats else 0
+                current_streak = get_current_daily_streak(user_id)
 
                 win_data = {
-                    'score':
-                    completed_game.score,
-                    'mistakes':
-                    completed_game.mistakes,
-                    'maxMistakes':
-                    get_max_mistakes_from_game_id(game_id),
-                    'gameTimeSeconds':
-                    completed_game.time_taken,
-                    'attribution':
-                    attribution,
-                    'current_daily_streak':
-                    current_streak if 'daily' in game_id else 0
+                    'score': completed_game.score,
+                    'mistakes': completed_game.mistakes,
+                    'maxMistakes': get_max_mistakes_from_game_id(game_id),
+                    'gameTimeSeconds': completed_game.time_taken,
+                    'attribution': attribution,
+                    'current_daily_streak': current_streak
                 }
 
                 return jsonify({
@@ -1226,7 +1220,6 @@ def get_current_daily_streak(user_id):
         # Get today's date and yesterday's date
         today = datetime.utcnow().date()
         yesterday = today - timedelta(days=1)
-
         # If they already did today's challenge, return the current streak
         # (this should already be up to date)
         if user_stats.last_daily_completed_date == today:
@@ -1236,8 +1229,6 @@ def get_current_daily_streak(user_id):
         # even if they haven't done today's challenge yet
         if user_stats.last_daily_completed_date == yesterday:
             return user_stats.current_daily_streak
-        print("user_stats.last_daily_completed_date: ",
-              user_stats.current_daily_streak)
         # If their last completion was before yesterday, check if they missed any days
         # Get all completions in reverse chronological order
         completions = DailyCompletion.query.filter_by(user_id=user_id)\
@@ -1249,7 +1240,6 @@ def get_current_daily_streak(user_id):
 
         # Get the dates of their most recent completions
         completion_dates = [c.challenge_date for c in completions]
-        print("completion_dates: ", completion_dates)
         # Start with their last completion
         last_date = completion_dates[0]
         current_streak = 1
@@ -1264,7 +1254,6 @@ def get_current_daily_streak(user_id):
                 current_streak += 1
             else:
                 break
-        print("current_streak: ", current_streak)
         return current_streak
 
     except Exception as e:
