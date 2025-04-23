@@ -19,6 +19,7 @@ def get_max_mistakes_for_game(game):
 def initialize_or_update_user_stats(user_id, game=None):
     """
     Update user stats incrementally if a game is provided, or initialize stats from scratch if needed.
+    Now also handles daily streaks properly.
 
     Args:
         user_id (str): User ID
@@ -121,35 +122,64 @@ def initialize_or_update_user_stats(user_id, game=None):
                     user_stats.highest_weekly_score = current_week_total
 
             # Update streaks based on win/loss and chronological order
-            # Get most recent game before this one
-            most_recent_game = GameScore.query.filter(
-                GameScore.user_id == user_id,
-                GameScore.id != game.id  # Exclude current game
-            ).order_by(GameScore.created_at.desc()).first()
+            # [existing streak update code...]
 
-            # Only update streaks if this is the most recent game
-            if not most_recent_game or game.created_at > most_recent_game.created_at:
-                if game_won:
-                    # Win streak continues or starts
-                    user_stats.current_streak += 1
-                    # Update max streak if needed
-                    if user_stats.current_streak > user_stats.max_streak:
-                        user_stats.max_streak = user_stats.current_streak
-
-                    # No-loss streak also continues or starts
-                    user_stats.current_noloss_streak += 1
-                    # Update max no-loss streak if needed
-                    if user_stats.current_noloss_streak > user_stats.max_noloss_streak:
-                        user_stats.max_noloss_streak = user_stats.current_noloss_streak
+            # Handle daily challenge streaks if this is a daily challenge game
+            if game.game_type == 'daily' and game.completed:
+                # Get the challenge date from the game
+                if game.challenge_date:
+                    try:
+                        # Parse the challenge date from the game
+                        challenge_date = datetime.strptime(game.challenge_date, '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        # Fallback to created_at date if challenge_date is invalid
+                        challenge_date = game.created_at.date()
                 else:
-                    # Win streak resets
-                    user_stats.current_streak = 0
-                    # No-loss streak resets
-                    user_stats.current_noloss_streak = 0
+                    # Default to the game creation date
+                    challenge_date = game.created_at.date()
 
-            db.session.commit()
-            logging.info(f"Incrementally updated stats for user {user_id}")
+                # Update daily streak logic
+                # If this is their first completion
+                if not user_stats.last_daily_completed_date:
+                    user_stats.current_daily_streak = 1
+                    user_stats.max_daily_streak = 1
+                    user_stats.total_daily_completed = 1
+                    user_stats.last_daily_completed_date = challenge_date
+                else:
+                    # Check if this completion continues the streak
+                    last_date = user_stats.last_daily_completed_date
+                    delta = (challenge_date - last_date).days
 
+                    # Check if this is a one-day advancement (continuing streak)
+                    if delta == 1:
+                        user_stats.current_daily_streak += 1
+                        # Update max streak if current is now higher
+                        if user_stats.current_daily_streak > user_stats.max_daily_streak:
+                            user_stats.max_daily_streak = user_stats.current_daily_streak
+                    # If same day completion (shouldn't happen but handle it)
+                    elif delta == 0:
+                        # No change to streak
+                        pass
+                    # If today is the next day after last_date (special case for overnight completion)
+                    elif challenge_date == datetime.utcnow().date() and (datetime.utcnow().date() - last_date).days == 1:
+                        user_stats.current_daily_streak += 1
+                        # Update max streak if current is now higher
+                        if user_stats.current_daily_streak > user_stats.max_daily_streak:
+                            user_stats.max_daily_streak = user_stats.current_daily_streak
+                    # If streak is broken
+                    else:
+                        # Reset streak to 1 for this new completion
+                        user_stats.current_daily_streak = 1
+
+                    # Update total completed and last date regardless of streak continuation
+                    user_stats.total_daily_completed += 1
+                    user_stats.last_daily_completed_date = challenge_date
+
+                # Log the streak update
+                logging.info(f"Updated daily streak for user {user_id} to {user_stats.current_daily_streak}")
+
+        db.session.commit()
+        logging.info(f"User stats updated for user {user_id}")
         return user_stats
 
     except Exception as e:

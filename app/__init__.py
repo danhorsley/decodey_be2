@@ -7,6 +7,7 @@ import logging
 from flask_jwt_extended import exceptions as jwt_exceptions
 from flask_migrate import Migrate
 import os
+from app.celery_worker import make_celery
 
 jwt = JWTManager()
 # Store revoked tokens in memory
@@ -16,7 +17,7 @@ jwt_blocklist = set()
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
-
+    celery = make_celery(app)
     # Set up logging
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
