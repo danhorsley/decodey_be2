@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 
 def make_celery(app=None):
     """Create a Celery instance with Flask app context"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
     # Configure Redis as message broker with production fallback
     redis_url = os.environ.get('REDIS_URL', 'redis://0.0.0.0:6379/0')
     
@@ -334,6 +338,11 @@ def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mis
                 logger.info(f"User stats updated successfully")
 
                 return True
+
+            except Exception as e:
+                logger.error(f"Error processing game completion: {str(e)}", exc_info=True)
+                db.session.rollback()
+                return False
 
             else:  # Anonymous user
                 logger.info(f"Processing anonymous game completion: anon_id={anon_id}, game_id={game_id}")
