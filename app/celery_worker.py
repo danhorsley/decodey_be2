@@ -245,11 +245,16 @@ def cleanup_old_backups():
 def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mistakes, time_taken):
     from app import create_app
     app = create_app()
-    
+
     with app.app_context():
         try:
+            logger.info(f"Starting game completion processing for {'user '+user_id if user_id else 'anonymous '+anon_id}")
+
             if user_id:  # Authenticated user
+                logger.info(f"Processing authenticated game completion: user_id={user_id}, game_id={game_id}")
+
                 # 1. Record GameScore
+                logger.info(f"Creating GameScore record: score={score}, mistakes={mistakes}")
                 game_score = GameScore(
                     user_id=user_id,
                     game_id=game_id,
@@ -262,33 +267,63 @@ def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mis
                     created_at=datetime.utcnow()
                 )
                 db.session.add(game_score)
-    
+                logger.info(f"Added GameScore to session")
+
                 # 2. Record daily completion if applicable
                 if is_daily:
-                    challenge_date = extract_challenge_date(game_id, is_daily)
-                    daily_completion = DailyCompletion(
-                        user_id=user_id,
-                        quote_id=get_quote_id_for_date(challenge_date),
-                        challenge_date=challenge_date,
-                        completed_at=datetime.utcnow(),
-                        score=score,
-                        mistakes=mistakes,
-                        time_taken=time_taken
-                    )
-                    db.session.add(daily_completion)
-    
+                    logger.info(f"Processing daily challenge completion")
+                    try:
+                        # Import the function locally to avoid circular imports
+                        from app.routes.game import extract_challenge_date, get_quote_id_for_date
+
+                        challenge_date = extract_challenge_date(game_id, is_daily)
+                        logger.info(f"Extracted challenge date: {challenge_date}")
+
+                        quote_id = get_quote_id_for_date(challenge_date)
+                        logger.info(f"Retrieved quote_id: {quote_id}")
+
+                        if quote_id:
+                            daily_completion = DailyCompletion(
+                                user_id=user_id,
+                                quote_id=quote_id,
+                                challenge_date=challenge_date,
+                                completed_at=datetime.utcnow(),
+                                score=score,
+                                mistakes=mistakes,
+                                time_taken=time_taken
+                            )
+                            db.session.add(daily_completion)
+                            logger.info(f"Added DailyCompletion to session")
+                        else:
+                            logger.warning(f"No quote found for date {challenge_date}, skipping DailyCompletion")
+                    except Exception as daily_err:
+                        logger.error(f"Error processing daily completion: {str(daily_err)}", exc_info=True)
+                        # Continue processing even if daily completion fails
+
                 # 3. Delete active game state
+                logger.info(f"Looking for active game state to delete")
                 active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
                 if active_game:
+                    logger.info(f"Deleting active game state for user {user_id}")
                     db.session.delete(active_game)
-    
+                else:
+                    logger.warning(f"No active game state found for user {user_id}, game {game_id}")
+
                 # Commit these changes
+                logger.info(f"Committing database changes")
                 db.session.commit()
-    
+                logger.info(f"Database changes committed successfully")
+
                 # 4. Update user stats (including daily streak)
+                logger.info(f"Updating user stats")
                 initialize_or_update_user_stats(user_id, game_score)
-    
+                logger.info(f"User stats updated successfully")
+
+                return True
+
             else:  # Anonymous user
+                logger.info(f"Processing anonymous game completion: anon_id={anon_id}, game_id={game_id}")
+
                 # Record anonymous game
                 anon_game_score = AnonymousGameScore(
                     anon_id=anon_id,
@@ -303,15 +338,23 @@ def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mis
                     created_at=datetime.utcnow()
                 )
                 db.session.add(anon_game_score)
-        
-                    # Clean up anonymous game state
+                logger.info(f"Added AnonymousGameScore to session")
+
+                # Clean up anonymous game state
+                logger.info(f"Looking for anonymous game state to delete")
                 anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
                 if anon_game:
+                    logger.info(f"Deleting anonymous game state for {anon_id}")
                     db.session.delete(anon_game)
-    
+                else:
+                    logger.warning(f"No anonymous game state found for {anon_id}")
+
+                logger.info(f"Committing database changes")
                 db.session.commit()
-        
+                logger.info(f"Database changes committed successfully")
+
                 return True
+
         except Exception as e:
             logger.error(f"Error processing game completion: {str(e)}", exc_info=True)
             db.session.rollback()
