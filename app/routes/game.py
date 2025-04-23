@@ -995,13 +995,13 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id, is_
     """
     # Get basic daily streak info for UI (without saving to DB yet)
     streak_info = None
-    if not is_anonymous and is_daily and result['has_won']:
+    if not is_anonymous and result['has_won']:
         current_streak = get_current_daily_streak(user_id)
         streak_info = {
             'current_streak': current_streak + 1,  # +1 for visual feedback
             'streak_continued': True
         }
-    elif not is_anonymous and is_daily and not result['has_won']:
+    elif not is_anonymous and not result['has_won']:
         streak_info = {
             'current_streak': 0,
             'streak_continued': False
@@ -1053,7 +1053,7 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id, is_
         }
 
         # Add streak info for authenticated users on daily challenges
-        if not is_anonymous and is_daily and streak_info:
+        if not is_anonymous and streak_info:
             response_data['winData']['current_daily_streak'] = streak_info['current_streak']
 
     # Queue the async task for database updates
