@@ -65,8 +65,8 @@ task = "shell.exec"
 args = "celery -A app.celery_worker worker --loglevel=info --detach"
 
 [[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
+task = "workflow.run"
+args = "Start application"
 
 [[ports]]
 localPort = 5000
