@@ -289,3 +289,16 @@ class LeaderboardEntry(db.Model):
                                           'period_type',
                                           'period_start',
                                           name='unique_user_period'), )
+
+class AnonymousGameScore(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    anon_id = db.Column(db.String)  # Identifier for anonymous user
+    game_id = db.Column(db.String)
+    score = db.Column(db.Integer, default=0)
+    mistakes = db.Column(db.Integer, default=0)
+    time_taken = db.Column(db.Integer)  # Time in seconds
+    game_type = db.Column(db.String, default='regular')
+    difficulty = db.Column(db.String, default='medium')
+    completed = db.Column(db.Boolean, default=True)
+    won = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
