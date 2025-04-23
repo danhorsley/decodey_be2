@@ -6,7 +6,10 @@ packages = ["libev", "redis"]
 
 [deployment]
 deploymentTarget = "gce"
-run = ["sh", "-c", "gunicorn --bind 0.0.0.0:5000 main:app"]
+run = ["sh", "-c", "redis-server --bind 0.0.0.0 --daemonize yes && celery -A app.celery_worker worker --loglevel=info --detach && gunicorn --bind 0.0.0.0:5000 main:app"]
+
+[env]
+REDIS_URL = "redis://0.0.0.0:6379/0"
 
 [workflows]
 runButton = "Project"

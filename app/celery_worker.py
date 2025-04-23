@@ -28,13 +28,9 @@ def make_celery(app=None):
     # Configure Redis as message broker with production fallback
     redis_url = os.environ.get('REDIS_URL', 'redis://0.0.0.0:6379/0')
     
-    # Additional production settings
-    broker_use_ssl = os.environ.get('FLASK_ENV') == 'production'
-    
     celery = Celery('app',
                     broker=redis_url,
                     backend=redis_url,
-                    broker_use_ssl=broker_use_ssl,
                     include=['app.celery_worker'])
 
     # Production-specific configurations
