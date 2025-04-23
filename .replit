@@ -35,6 +35,19 @@ task = "shell.exec"
 args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
 waitForPort = 5000
 
+[[workflows.workflow]]
+name = "Start Background Services"
+author = 1706970
+mode = "parallel"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "redis-server --bind 0.0.0.0"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "celery -A app.celery_worker worker --loglevel=info"
+
 [[ports]]
 localPort = 5000
 externalPort = 80

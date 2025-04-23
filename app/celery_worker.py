@@ -26,8 +26,7 @@ logger = logging.getLogger(__name__)
 def make_celery(app=None):
     """Create a Celery instance with Flask app context"""
     # Configure Redis as message broker
-    # For production, use a real Redis server
-    redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+    redis_url = os.environ.get('REDIS_URL', 'redis://0.0.0.0:6379/0')
 
     celery = Celery('app',
                     broker=redis_url,
