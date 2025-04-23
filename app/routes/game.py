@@ -996,9 +996,10 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id, is_
     # Get basic daily streak info for UI (without saving to DB yet)
     streak_info = None
     if not is_anonymous and result['has_won']:
+        my_increment = 1 if is_daily else 0
         current_streak = get_current_daily_streak(user_id)
         streak_info = {
-            'current_streak': current_streak + 1,  # +1 for visual feedback
+            'current_streak': current_streak + my_increment,  # +1 for visual feedback
             'streak_continued': True
         }
     elif not is_anonymous and not result['has_won']:
