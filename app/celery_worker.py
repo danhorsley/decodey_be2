@@ -33,6 +33,11 @@ def make_celery(app=None):
                     backend=redis_url,
                     include=['app.celery_worker'])
 
+    if not app:
+        # Import here to avoid circular imports
+        from app import create_app
+        app = create_app()
+
     # Production-specific configurations
     if os.environ.get('FLASK_ENV') == 'production':
         celery.conf.update(
