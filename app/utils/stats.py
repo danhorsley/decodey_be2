@@ -122,8 +122,24 @@ def initialize_or_update_user_stats(user_id, game=None):
                     user_stats.highest_weekly_score = current_week_total
 
             # Update streaks based on win/loss and chronological order
-            # [existing streak update code...]
-
+            if game_won:
+                # print("triggered update normal streak section")
+                # Win - increment streak
+                user_stats.current_streak += 1
+                user_stats.current_noloss_streak += 1
+                # Update max streaks if current exceeds them
+                if user_stats.current_streak > user_stats.max_streak:
+                    user_stats.max_streak = user_stats.current_streak
+                if user_stats.current_noloss_streak > user_stats.max_noloss_streak:
+                    user_stats.max_noloss_streak = user_stats.current_noloss_streak
+            else:
+                # Loss - reset win streak
+                user_stats.current_streak = 0
+                # Reset noloss streak only for completed games that were lost
+                # (abandoning a game breaks the streak)
+                if game.completed:
+                    user_stats.current_noloss_streak = 0
+            # print(f"current streak is {user_stats.current_streak}")
             # Handle daily challenge streaks if this is a daily challenge game
             if game.game_type == 'daily' and game.completed:
                 # Get the challenge date from the game

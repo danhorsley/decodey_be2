@@ -543,6 +543,10 @@ def continue_game():
             "guessed_letters": display_guessed
         }
         print(ret)
+        if not is_anonymous:
+            response_data["active_game_info"] = active_game_info
+            from app.celery_worker import verify_daily_streak
+            verify_daily_streak.delay(user_id)
         return jsonify(ret), 200
     except Exception as e:
         logger.error(f"Error continuing game: {str(e)}", exc_info=True)
@@ -616,18 +620,18 @@ def abandon_game_route():
             # Record abandoned game
             time_taken = int(
                 (datetime.utcnow() - active_game.created_at).total_seconds())
-
-            game_score = GameScore(
-                user_id=user_id,
-                game_id=game_id,
-                score=0,  # Zero score for abandoned games
-                mistakes=active_game.mistakes,
-                time_taken=time_taken,
-                game_type='daily' if is_daily else 'regular',
-                challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
-                completed=False,  # Mark as incomplete
-                created_at=datetime.utcnow())
-            db.session.add(game_score)
+            if active_game.mistakes > 0 or len(active_game.correctly_guessed) > 0:
+                game_score = GameScore(
+                    user_id=user_id,
+                    game_id=game_id,
+                    score=0,  # Zero score for abandoned games
+                    mistakes=active_game.mistakes,
+                    time_taken=time_taken,
+                    game_type='daily' if is_daily else 'regular',
+                    challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
+                    completed=False,  # Mark as incomplete
+                    created_at=datetime.utcnow())
+                db.session.add(game_score)
 
             # Delete the active game
             db.session.delete(active_game)
