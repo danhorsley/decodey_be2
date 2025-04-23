@@ -243,48 +243,43 @@ def cleanup_old_backups():
 
 @celery.task
 def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mistakes, time_taken):
-    # Import Flask app to get application context
-    from app import create_app
-    app = create_app()
-    
-    with app.app_context():
-        try:
-            if user_id:  # Authenticated user
-                # 1. Record GameScore
-                game_score = GameScore(
+    try:
+        if user_id:  # Authenticated user
+            # 1. Record GameScore
+            game_score = GameScore(
+                user_id=user_id,
+                game_id=game_id,
+                score=score,
+                mistakes=mistakes,
+                time_taken=time_taken,
+                game_type='daily' if is_daily else 'regular',
+                challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
+                completed=True,
+                created_at=datetime.utcnow()
+            )
+            db.session.add(game_score)
+
+            # 2. Record daily completion if applicable
+            if is_daily:
+                challenge_date = extract_challenge_date(game_id, is_daily)
+                daily_completion = DailyCompletion(
                     user_id=user_id,
-                    game_id=game_id,
+                    quote_id=get_quote_id_for_date(challenge_date),
+                    challenge_date=challenge_date,
+                    completed_at=datetime.utcnow(),
                     score=score,
                     mistakes=mistakes,
-                    time_taken=time_taken,
-                    game_type='daily' if is_daily else 'regular',
-                    challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
-                    completed=True,
-                    created_at=datetime.utcnow()
+                    time_taken=time_taken
                 )
-                db.session.add(game_score)
+                db.session.add(daily_completion)
 
-                # 2. Record daily completion if applicable
-                if is_daily:
-                    challenge_date = extract_challenge_date(game_id, is_daily)
-                    daily_completion = DailyCompletion(
-                        user_id=user_id,
-                        quote_id=get_quote_id_for_date(challenge_date),
-                        challenge_date=challenge_date,
-                        completed_at=datetime.utcnow(),
-                        score=score,
-                        mistakes=mistakes,
-                        time_taken=time_taken
-                    )
-                    db.session.add(daily_completion)
+            # 3. Delete active game state
+            active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
+            if active_game:
+                db.session.delete(active_game)
 
-                # 3. Delete active game state
-                active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
-                if active_game:
-                    db.session.delete(active_game)
-
-                # Commit these changes
-                db.session.commit()
+            # Commit these changes
+            db.session.commit()
 
             # 4. Update user stats (including daily streak)
             initialize_or_update_user_stats(user_id, game_score)
