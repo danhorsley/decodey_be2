@@ -543,10 +543,9 @@ def continue_game():
             "guessed_letters": display_guessed
         }
         print(ret)
-        if not is_anonymous:
-            response_data["active_game_info"] = active_game_info
-            from app.celery_worker import verify_daily_streak
-            verify_daily_streak.delay(user_id)
+        
+        from app.celery_worker import verify_daily_streak
+        verify_daily_streak.delay(user_id)
         return jsonify(ret), 200
     except Exception as e:
         logger.error(f"Error continuing game: {str(e)}", exc_info=True)
