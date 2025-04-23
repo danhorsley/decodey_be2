@@ -12,7 +12,7 @@ run = ["sh", "-c", "redis-server --bind 0.0.0.0 --daemonize yes && celery -A app
 REDIS_URL = "redis://0.0.0.0:6379/0"
 
 [workflows]
-runButton = "Project"
+runButton = "Dev Environment"
 
 [[workflows.workflow]]
 name = "Project"
@@ -50,6 +50,23 @@ args = "redis-server --bind 0.0.0.0"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "celery -A app.celery_worker worker --loglevel=info"
+
+[[workflows.workflow]]
+name = "Dev Environment"
+author = 1706970
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "redis-server --bind 0.0.0.0 --daemonize yes"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "celery -A app.celery_worker worker --loglevel=info --detach"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
 
 [[ports]]
 localPort = 5000
