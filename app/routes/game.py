@@ -448,9 +448,8 @@ def hint():
 
             # For authenticated users with daily challenges, get streak
             current_daily_streak = 0
-            if not is_anonymous and is_daily:
-                user_stats = UserStats.query.filter_by(user_id=user_id).first()
-                current_daily_streak = user_stats.current_daily_streak if user_stats else 0
+            if not is_anonymous:
+                current_daily_streak = get_current_daily_streak(user_id)
 
             score = score_game(difficulty,
                                mistakes,
