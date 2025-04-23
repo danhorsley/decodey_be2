@@ -25,13 +25,27 @@ logger = logging.getLogger(__name__)
 
 def make_celery(app=None):
     """Create a Celery instance with Flask app context"""
-    # Configure Redis as message broker
+    # Configure Redis as message broker with production fallback
     redis_url = os.environ.get('REDIS_URL', 'redis://0.0.0.0:6379/0')
-
+    
+    # Additional production settings
+    broker_use_ssl = os.environ.get('FLASK_ENV') == 'production'
+    
     celery = Celery('app',
                     broker=redis_url,
                     backend=redis_url,
+                    broker_use_ssl=broker_use_ssl,
                     include=['app.celery_worker'])
+
+    # Production-specific configurations
+    if os.environ.get('FLASK_ENV') == 'production':
+        celery.conf.update(
+            broker_pool_limit=None,  # Remove broker pool limit
+            worker_max_tasks_per_child=1000,  # Restart workers after 1000 tasks
+            worker_prefetch_multiplier=1,  # Don't prefetch more tasks than workers
+            task_time_limit=1800,  # 30 minute hard time limit
+            task_soft_time_limit=1200,  # 20 minute soft time limit
+        )
 
     # Configure Celery
     celery.conf.update(
