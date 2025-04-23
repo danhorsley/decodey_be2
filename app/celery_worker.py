@@ -25,16 +25,12 @@ logger = logging.getLogger(__name__)
 
 def make_celery(app=None):
     """Create a Celery instance with Flask app context"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
     # Configure Redis as message broker with production fallback
     redis_url = os.environ.get('REDIS_URL', 'redis://0.0.0.0:6379/0')
-
+    
     # Additional production settings
     broker_use_ssl = os.environ.get('FLASK_ENV') == 'production'
-
+    
     celery = Celery('app',
                     broker=redis_url,
                     backend=redis_url,
@@ -339,11 +335,6 @@ def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mis
 
                 return True
 
-            except Exception as e:
-                logger.error(f"Error processing game completion: {str(e)}", exc_info=True)
-                db.session.rollback()
-                return False
-
             else:  # Anonymous user
                 logger.info(f"Processing anonymous game completion: anon_id={anon_id}, game_id={game_id}")
 
@@ -388,34 +379,34 @@ def verify_daily_streak(user_id):
     """Verify and correct daily streak if needed"""
     from app import create_app
     app = create_app()
-
+    
     with app.app_context():
         try:
             from app.models import UserStats, DailyCompletion
-
+    
             user_stats = UserStats.query.filter_by(user_id=user_id).first()
             if not user_stats:
                 return
-
+    
             # Get all completions in chronological order
             completions = DailyCompletion.query.filter_by(user_id=user_id)\
                                              .order_by(DailyCompletion.challenge_date)\
                                              .all()
-
+    
             if not completions:
                 # No completions, streak should be 0
                 if user_stats.current_daily_streak != 0:
                     user_stats.current_daily_streak = 0
                     db.session.commit()
                 return
-
+    
             # Get today and yesterday
             today = datetime.utcnow().date()
             yesterday = today - timedelta(days=1)
-
+    
             # Get most recent completion
             latest = completions[-1].challenge_date
-
+    
             # Calculate correct streak
             if latest < yesterday:
                 # Streak broken - they missed yesterday
@@ -426,14 +417,14 @@ def verify_daily_streak(user_id):
                 # Verify streak by counting consecutive days backward
                 dates = [c.challenge_date for c in completions]
                 current_streak = 1  # Start with most recent
-
+    
                 # Start from the most recent and work backwards
                 for i in range(len(dates) - 1, 0, -1):
                     if (dates[i] - dates[i-1]).days == 1:
                         current_streak += 1
                     else:
                         break
-
+    
                 # Update if different
                 if user_stats.current_daily_streak != current_streak:
                     user_stats.current_daily_streak = current_streak
