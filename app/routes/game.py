@@ -225,6 +225,7 @@ def guess():
         encrypted_letter = data.get('encrypted_letter')
         guessed_letter = data.get('guessed_letter')
         game_id = data.get('game_id')
+        is_daily = 'daily' in game_id if game_id else False
 
         if not encrypted_letter or not guessed_letter:
             return jsonify({"error": "Missing required fields"}), 400
@@ -284,18 +285,24 @@ def guess():
             )
 
             # Return immediate response
-            return jsonify({
-                'display': result['display'],
-                'mistakes': result['game_state']['mistakes'],
-                'correctly_guessed': result['game_state']['correctly_guessed'],
-                'incorrect_guesses': result['game_state']['incorrect_guesses'],
-                'game_complete': result['complete'],
-                'hasWon': result['has_won'],
-                'is_correct': result['is_correct'],
-                'max_mistakes': result['game_state']['max_mistakes'],
-                'streak_info': streak_info,
-                'processing_stats': True
-            }), 200
+        return jsonify({
+            'display':
+            result['display'],
+            'mistakes':
+            result['game_state']['mistakes'],
+            'correctly_guessed':
+            result['game_state']['correctly_guessed'],
+            'incorrect_guesses':
+            result['game_state']['incorrect_guesses'],
+            'game_complete':
+            result['complete'],
+            'hasWon':
+            result['has_won'],
+            'is_correct':
+            result['is_correct'],
+            'max_mistakes':
+            result['game_state']['max_mistakes']
+        }), 200
     except Exception as e:
         logger.error(f"Error processing guess: {str(e)}", exc_info=True)
         db.session.rollback()
@@ -343,6 +350,7 @@ def hint():
         # Get request data
         data = request.get_json()
         game_id = data.get('game_id')
+        is_daily = 'daily' in game_id if game_id else False
         logger.debug(
             f"Hint requested by {'anonymous' if is_anonymous else user_id}")
 
@@ -397,18 +405,24 @@ def hint():
             )
 
             # Return immediate response
-            return jsonify({
-                'display': result['display'],
-                'mistakes': result['game_state']['mistakes'],
-                'correctly_guessed': result['game_state']['correctly_guessed'],
-                'incorrect_guesses': result['game_state']['incorrect_guesses'],
-                'game_complete': result['complete'],
-                'hasWon': result['has_won'],
-                'is_correct': result['is_correct'],
-                'max_mistakes': result['game_state']['max_mistakes'],
-                'streak_info': streak_info,
-                'processing_stats': True
-            }), 200
+        return jsonify({
+            'display':
+            result['display'],
+            'mistakes':
+            result['game_state']['mistakes'],
+            'correctly_guessed':
+            result['game_state']['correctly_guessed'],
+            'incorrect_guesses':
+            result['game_state']['incorrect_guesses'],
+            'game_complete':
+            result['complete'],
+            'hasWon':
+            result['has_won'],
+            'is_correct':
+            True,
+            'max_mistakes':
+            result['game_state']['max_mistakes']
+        }), 200
     except Exception as e:
         logger.error(f"Error processing hint: {str(e)}", exc_info=True)
         db.session.rollback()
