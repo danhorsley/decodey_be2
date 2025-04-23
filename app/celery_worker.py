@@ -248,74 +248,74 @@ def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mis
     
     with app.app_context():
         try:
-        if user_id:  # Authenticated user
-            # 1. Record GameScore
-            game_score = GameScore(
-                user_id=user_id,
-                game_id=game_id,
-                score=score,
-                mistakes=mistakes,
-                time_taken=time_taken,
-                game_type='daily' if is_daily else 'regular',
-                challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
-                completed=True,
-                created_at=datetime.utcnow()
-            )
-            db.session.add(game_score)
-
-            # 2. Record daily completion if applicable
-            if is_daily:
-                challenge_date = extract_challenge_date(game_id, is_daily)
-                daily_completion = DailyCompletion(
+            if user_id:  # Authenticated user
+                # 1. Record GameScore
+                game_score = GameScore(
                     user_id=user_id,
-                    quote_id=get_quote_id_for_date(challenge_date),
-                    challenge_date=challenge_date,
-                    completed_at=datetime.utcnow(),
+                    game_id=game_id,
                     score=score,
                     mistakes=mistakes,
-                    time_taken=time_taken
+                    time_taken=time_taken,
+                    game_type='daily' if is_daily else 'regular',
+                    challenge_date=datetime.utcnow().strftime('%Y-%m-%d'),
+                    completed=True,
+                    created_at=datetime.utcnow()
                 )
-                db.session.add(daily_completion)
-
-            # 3. Delete active game state
-            active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
-            if active_game:
-                db.session.delete(active_game)
-
-            # Commit these changes
-            db.session.commit()
-
-            # 4. Update user stats (including daily streak)
-            initialize_or_update_user_stats(user_id, game_score)
-
-        else:  # Anonymous user
-            # Record anonymous game
-            anon_game_score = AnonymousGameScore(
-                anon_id=anon_id,
-                game_id=game_id,
-                score=score,
-                mistakes=mistakes,
-                time_taken=time_taken,
-                game_type='daily' if is_daily else 'regular',
-                difficulty=game_id.split('-')[0] if '-' in game_id else 'medium',
-                completed=True,
-                won=won,
-                created_at=datetime.utcnow()
-            )
-            db.session.add(anon_game_score)
-
-            # Clean up anonymous game state
-            anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
-            if anon_game:
-                db.session.delete(anon_game)
-
-            db.session.commit()
-
-        return True
-    except Exception as e:
-        logger.error(f"Error processing game completion: {str(e)}", exc_info=True)
-        db.session.rollback()
-        return False
+                db.session.add(game_score)
+    
+                # 2. Record daily completion if applicable
+                if is_daily:
+                    challenge_date = extract_challenge_date(game_id, is_daily)
+                    daily_completion = DailyCompletion(
+                        user_id=user_id,
+                        quote_id=get_quote_id_for_date(challenge_date),
+                        challenge_date=challenge_date,
+                        completed_at=datetime.utcnow(),
+                        score=score,
+                        mistakes=mistakes,
+                        time_taken=time_taken
+                    )
+                    db.session.add(daily_completion)
+    
+                # 3. Delete active game state
+                active_game = ActiveGameState.query.filter_by(user_id=user_id, game_id=game_id).first()
+                if active_game:
+                    db.session.delete(active_game)
+    
+                # Commit these changes
+                db.session.commit()
+    
+                # 4. Update user stats (including daily streak)
+                initialize_or_update_user_stats(user_id, game_score)
+    
+            else:  # Anonymous user
+                # Record anonymous game
+                anon_game_score = AnonymousGameScore(
+                    anon_id=anon_id,
+                    game_id=game_id,
+                    score=score,
+                    mistakes=mistakes,
+                    time_taken=time_taken,
+                    game_type='daily' if is_daily else 'regular',
+                    difficulty=game_id.split('-')[0] if '-' in game_id else 'medium',
+                    completed=True,
+                    won=won,
+                    created_at=datetime.utcnow()
+                )
+                db.session.add(anon_game_score)
+        
+                    # Clean up anonymous game state
+                anon_game = AnonymousGameState.query.filter_by(anon_id=anon_id).first()
+                if anon_game:
+                    db.session.delete(anon_game)
+    
+                db.session.commit()
+        
+                return True
+        except Exception as e:
+            logger.error(f"Error processing game completion: {str(e)}", exc_info=True)
+            db.session.rollback()
+            return False
 
 @celery.task
 def verify_daily_streak(user_id):
@@ -325,56 +325,56 @@ def verify_daily_streak(user_id):
     
     with app.app_context():
         try:
-        from app.models import UserStats, DailyCompletion
+            from app.models import UserStats, DailyCompletion
+    
+            user_stats = UserStats.query.filter_by(user_id=user_id).first()
+            if not user_stats:
+                return
+    
+            # Get all completions in chronological order
+            completions = DailyCompletion.query.filter_by(user_id=user_id)\
+                                             .order_by(DailyCompletion.challenge_date)\
+                                             .all()
+    
+            if not completions:
+                # No completions, streak should be 0
+                if user_stats.current_daily_streak != 0:
+                    user_stats.current_daily_streak = 0
+                    db.session.commit()
+                return
+    
+            # Get today and yesterday
+            today = datetime.utcnow().date()
+            yesterday = today - timedelta(days=1)
+    
+            # Get most recent completion
+            latest = completions[-1].challenge_date
+    
+            # Calculate correct streak
+            if latest < yesterday:
+                # Streak broken - they missed yesterday
+                if user_stats.current_daily_streak != 0:
+                    user_stats.current_daily_streak = 0
+                    db.session.commit()
+            else:
+                # Verify streak by counting consecutive days backward
+                dates = [c.challenge_date for c in completions]
+                current_streak = 1  # Start with most recent
+    
+                # Start from the most recent and work backwards
+                for i in range(len(dates) - 1, 0, -1):
+                    if (dates[i] - dates[i-1]).days == 1:
+                        current_streak += 1
+                    else:
+                        break
+    
+                # Update if different
+                if user_stats.current_daily_streak != current_streak:
+                    user_stats.current_daily_streak = current_streak
+                    if current_streak > user_stats.max_daily_streak:
+                        user_stats.max_daily_streak = current_streak
+                    db.session.commit()
 
-        user_stats = UserStats.query.filter_by(user_id=user_id).first()
-        if not user_stats:
-            return
-
-        # Get all completions in chronological order
-        completions = DailyCompletion.query.filter_by(user_id=user_id)\
-                                         .order_by(DailyCompletion.challenge_date)\
-                                         .all()
-
-        if not completions:
-            # No completions, streak should be 0
-            if user_stats.current_daily_streak != 0:
-                user_stats.current_daily_streak = 0
-                db.session.commit()
-            return
-
-        # Get today and yesterday
-        today = datetime.utcnow().date()
-        yesterday = today - timedelta(days=1)
-
-        # Get most recent completion
-        latest = completions[-1].challenge_date
-
-        # Calculate correct streak
-        if latest < yesterday:
-            # Streak broken - they missed yesterday
-            if user_stats.current_daily_streak != 0:
-                user_stats.current_daily_streak = 0
-                db.session.commit()
-        else:
-            # Verify streak by counting consecutive days backward
-            dates = [c.challenge_date for c in completions]
-            current_streak = 1  # Start with most recent
-
-            # Start from the most recent and work backwards
-            for i in range(len(dates) - 1, 0, -1):
-                if (dates[i] - dates[i-1]).days == 1:
-                    current_streak += 1
-                else:
-                    break
-
-            # Update if different
-            if user_stats.current_daily_streak != current_streak:
-                user_stats.current_daily_streak = current_streak
-                if current_streak > user_stats.max_daily_streak:
-                    user_stats.max_daily_streak = current_streak
-                db.session.commit()
-
-    except Exception as e:
-        logger.error(f"Error verifying daily streak: {str(e)}", exc_info=True)
-        db.session.rollback()
+        except Exception as e:
+            logger.error(f"Error verifying daily streak: {str(e)}", exc_info=True)
+            db.session.rollback()
