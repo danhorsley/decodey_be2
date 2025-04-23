@@ -7,7 +7,7 @@ import logging
 from flask_jwt_extended import exceptions as jwt_exceptions
 from flask_migrate import Migrate
 import os
-from app.celery_worker import make_celery
+# Import celery after app creation to avoid circular imports
 
 jwt = JWTManager()
 # Store revoked tokens in memory
