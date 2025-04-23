@@ -243,7 +243,11 @@ def cleanup_old_backups():
 
 @celery.task
 def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mistakes, time_taken):
-    try:
+    from app import create_app
+    app = create_app()
+    
+    with app.app_context():
+        try:
         if user_id:  # Authenticated user
             # 1. Record GameScore
             game_score = GameScore(
@@ -316,7 +320,11 @@ def process_game_completion(user_id, anon_id, game_id, is_daily, won, score, mis
 @celery.task
 def verify_daily_streak(user_id):
     """Verify and correct daily streak if needed"""
-    try:
+    from app import create_app
+    app = create_app()
+    
+    with app.app_context():
+        try:
         from app.models import UserStats, DailyCompletion
 
         user_stats = UserStats.query.filter_by(user_id=user_id).first()
