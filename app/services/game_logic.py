@@ -59,11 +59,11 @@ def generate_display_blocks(text):
     return display
 
 
-def start_game(long_text=False):
+def start_game(long_text=False, is_backdoor=False):
     """
     Start a new game by selecting a random quote and creating the game state
     """
-    from app.models import Quote, db
+    from app.models import Quote, db, Backdoor
     from sqlalchemy.sql import func
 
     # Initialize with defaults
@@ -72,6 +72,7 @@ def start_game(long_text=False):
     minor_attribution = "Error"
 
     try:
+        QuoteModel = Backdoor if is_backdoor else Quote
         # Only apply length filtering for short quotes
         if long_text:
             length_filter = True  # No length restriction for long quotes
@@ -79,10 +80,10 @@ def start_game(long_text=False):
             # For short quotes, ensure both total length <= 65 and unique chars <= 18
             from sqlalchemy import and_
             length_filter = and_(
-                func.length(Quote.text) <= 65, Quote.unique_letters <= 15)
+                func.length(QuoteModel.text) <= 65, QuoteModel.unique_letters <= 15)
 
         # Get a random quote directly from the database with length constraint
-        random_quote = Quote.query.filter_by(active=True)\
+        random_quote = QuoteModel.query.filter_by(active=True)\
                                  .filter(length_filter)\
                                  .order_by(func.random())\
                                  .first()
@@ -99,7 +100,7 @@ def start_game(long_text=False):
             db.session.rollback()
 
             random_quote = Quote.query.filter_by(active=True)\
-                                     .filter(Quote.daily_date.isnot_(None))\
+                                     .filter(QuoteModel.daily_date.isnot_(None))\
                                      .order_by(func.random())\
                                      .first()
 

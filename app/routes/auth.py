@@ -93,7 +93,8 @@ def login():
             "refresh_token": refresh_token if remember else None,
             "username": user.username,
             "has_active_game": has_active_game,
-            "user_id": user.user_id  # Add this line to include the user ID
+            "user_id": user.user_id,
+            "subadmin": user.subadmin# Add this line to include the user ID
         }), 200
 
     except Exception as e:
@@ -134,12 +135,14 @@ def refresh():
 @jwt_required()
 def verify_token():
     """Endpoint to verify if a token is valid"""
-    current_user = get_jwt_identity()
+    current_user = get_jwt_identity
+    my_user = User.query.filter_by(user_id=current_user).first()
     claims = get_jwt()
     return jsonify({
         "valid": True,
         "user_id": current_user,
-        "username": claims.get("username")
+        "username": claims.get("username"),
+        "subadmin":my_user.subadmin
     }), 200
 
 

@@ -36,7 +36,19 @@ def start():
         # Get user identification
         user_id = get_jwt_identity()
         is_anonymous = user_id is None
+        # Check for backdoor mode
+        use_backdoor = request.args.get('backdoor', 'false').lower() == 'true'
 
+        # If backdoor mode is requested, check user permissions
+        if use_backdoor:
+            # Check if user is authenticated and has subadmin privileges
+            if is_anonymous:
+                return jsonify({"error": "Authentication required for backdoor mode"}), 403
+
+            # Verify user is a subadmin
+            user = User.query.filter_by(user_id=user_id).first()
+            if not user or not user.subadmin:
+                return jsonify({"error": "Insufficient permissions for backdoor mode"}), 403
         # For anonymous users, use IP address as identifier
         identifier = user_id if not is_anonymous else request.remote_addr
 
