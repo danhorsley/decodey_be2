@@ -6,11 +6,13 @@ This file contains the route handlers for form submissions from the admin interf
 
 from flask import Blueprint, request, jsonify, redirect, url_for, render_template, flash, current_app, session
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupSettings, DailyCompletion, Quote, DailyCompletion
+from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupSettings, DailyCompletion, Quote, DailyCompletion, Backdoor # Added Backdoor import
 import logging
 import os
 import secrets
 import json
+import io #Added io import for CSV handling
+import csv #Added csv import for CSV handling
 from datetime import datetime, timedelta
 from pathlib import Path
 import smtplib
@@ -797,16 +799,16 @@ def regenerate_unsubscribe_tokens(current_admin):
     try:
         users = User.query.all()
         updated_count = 0
-        
+
         for user in users:
             user.unsubscribe_token = secrets.token_urlsafe(32)
             updated_count += 1
-            
+
         db.session.commit()
-        
+
         logger.info(f"Admin {current_admin.username} regenerated {updated_count} unsubscribe tokens")
         return redirect(url_for('admin.dashboard', success=f"Successfully regenerated {updated_count} unsubscribe tokens"))
-        
+
     except Exception as e:
         logger.error(f"Error regenerating unsubscribe tokens: {str(e)}")
         db.session.rollback()
@@ -1044,7 +1046,7 @@ def populate_daily_dates(current_admin):
         update_values = []
         for i, quote in enumerate(prioritized_quotes):
             update_values.append(f"({quote.id}, '{(current_date + timedelta(days=i)).isoformat()}')")
-        
+
         if update_values:
             # Build and execute update SQL
             sql = f"""
@@ -1437,7 +1439,7 @@ def fix_quote_encoding(current_admin):
             '”': '"',  # Right double quote''
             'É': 'E',  # Capital E with acute accent
             "é": 'e',  # lower case E with acute accent
-            '�': "'",  # Unknown character
+            '': "'",  # Unknown character
             '‚Äô': "'",  # Smart single quote
             '‚Äù': '"',  # Smart double quote open
             '‚Äú': '"',  # Smart double quote close
@@ -1515,3 +1517,186 @@ def fix_quote_encoding(current_admin):
         return redirect(
             url_for('admin.quotes',
                     error=f"Error fixing quote encoding: {str(e)}"))
+
+@admin_process_bp.route('/quotes/import', methods=['POST'])
+@admin_required
+def import_quotes(current_admin, is_backdoor=False):
+    """Import quotes from CSV"""
+    if 'csv_file' not in request.files:
+        return redirect(url_for('admin.quotes', error="No file provided"))
+
+    file = request.files['csv_file']
+    if file.filename == '':
+        return redirect(url_for('admin.quotes', error="No file selected"))
+
+    replace_existing = request.form.get('replace_existing', 'off') == 'on'
+    is_backdoor = request.form.get('is_backdoor', 'false') == 'true'
+    QuoteModel = Backdoor if is_backdoor else Quote
+
+    try:
+        # Read CSV file
+        file_content = file.stream.read().decode(
+            "UTF-8-sig")  # Use UTF-8-sig to handle BOM
+        stream = io.StringIO(file_content, newline=None)
+        reader = csv.DictReader(stream)
+
+        # Store all rows in memory
+        rows = list(reader)
+
+        # Validate CSV structure
+        if not rows:
+            return redirect(url_for('admin.quotes', error="CSV file is empty"))
+
+        # Check if required fields exist (handle BOM in field names)
+        fieldnames = reader.fieldnames
+        has_text = any(field.endswith('text') for field in fieldnames)
+        has_author = 'author' in fieldnames
+
+        if not has_text or not has_author:
+            missing = []
+            if not has_text:
+                missing.append("text")
+            if not has_author:
+                missing.append("author")
+            return redirect(
+                url_for(
+                    'admin.quotes',
+                    error=f"Missing required fields: {', '.join(missing)}"))
+
+        if replace_existing:
+            # Delete existing quotes
+            QuoteModel.query.delete()
+
+        # Process rows
+        for row in rows:
+            quote = QuoteModel(text=row['text'], author=row['author'])
+            db.session.add(quote)
+
+        db.session.commit()
+        logger.info(
+            f"Admin {current_admin.username} imported {len(rows)} quotes{' (backdoor)' if is_backdoor else ''}"
+        )
+        return redirect(
+            url_for('admin.quotes',
+                    success=f"Successfully imported {len(rows)} quotes"))
+
+    except Exception as e:
+        logger.error(f"Error importing quotes: {str(e)}")
+        db.session.rollback()
+        return redirect(
+            url_for('admin.quotes', error=f"Error importing quotes: {str(e)}"))
+
+@admin_process_bp.route('/quotes/import-backdoor', methods=['POST'])
+@admin_required
+def import_backdoor_quotes(current_admin):
+    """Import backdoor quotes from CSV using a separate route"""
+    return import_quotes(current_admin, is_backdoor=True)
+
+def register_admin_process_routes(app):
+    """Register the admin process blueprint and set up routes"""
+    # Register blueprint
+    app.register_blueprint(admin_process_bp)
+
+    # Modify the existing admin.settings view to load settings
+    from app.routes.admin import admin_bp
+
+    @admin_bp.route('/settings', methods=['GET'])
+    @admin_required
+    def settings(current_admin):
+        """System settings page with actual settings data loaded"""
+        # Load settings from various sources
+        game_settings = load_game_settings()
+        system_status = load_system_status()
+        security_settings = load_security_settings()
+        email_settings = load_email_settings()
+
+        return render_template('admin/settings.html',
+                               active_tab='settings',
+                               game_settings=game_settings,
+                               system_status=system_status,
+                               security_settings=security_settings,
+                               email_settings=email_settings)
+
+    # This overrides the existing settings route
+
+    # Also modify the admin routes in app/routes/admin.py to forward to our process functions
+    # These won't override existing routes but add new ones for functions we've implemented
+
+    @admin_bp.route('/users/suspend/<user_id>', methods=['GET', 'POST'])
+    @admin_required
+    def suspend_user(current_admin, user_id):
+        """Forward to the suspend_user process function"""
+        if request.method == 'GET':
+            # Show confirmation page
+            user = User.query.get(user_id)
+            if not user:
+                return redirect(url_for('admin.users', error="User not found"))
+
+            return render_template('admin/confirm_action.html',
+                                   active_tab='users',
+                                   action="suspend",
+                                   item_type="user",
+                                   item=user,
+                                   form_action=url_for(
+                                       'admin_process.suspend_user',
+                                       user_id=user_id))
+        else:
+            # Forward to process function
+            return redirect(
+                url_for('admin_process.suspend_user', user_id=user_id))
+
+    @admin_bp.route('/users/activate/<user_id>', methods=['GET', 'POST'])
+    @admin_required
+    def activate_user(current_admin, user_id):
+        """Forward to the activate_user process function"""
+        if request.method == 'GET':
+            # Show confirmation page
+            user = User.query.get(user_id)
+            if not user:
+                return redirect(url_for('admin.users', error="User not found"))
+
+            return render_template('admin/confirm_action.html',
+                                   active_tab='users',
+                                   action="activate",
+                                   item_type="user",
+                                   item=user,
+                                   form_action=url_for(
+                                       'admin_process.activate_user',
+                                       user_id=user_id))
+        else:
+            # Forward to process function
+            return redirect(
+                url_for('admin_process.activate_user', user_id=user_id))
+
+    # Add URL route rules for the update settings functions
+    admin_bp.add_url_rule('/update-game-settings',
+                          endpoint='update_game_settings',
+                          view_func=update_game_settings,
+                          methods=['POST'])
+
+    admin_bp.add_url_rule('/update-system-status',
+                          endpoint='update_system_status',
+                          view_func=update_system_status,
+                          methods=['POST'])
+
+    admin_bp.add_url_rule('/update-security-settings',
+                          endpoint='update_security_settings',
+                          view_func=update_security_settings,
+                          methods=['POST'])
+
+    admin_bp.add_url_rule('/rotate-jwt-key',
+                          endpoint='rotate_jwt_key',
+                          view_func=rotate_jwt_key,
+                          methods=['POST'])
+
+    admin_bp.add_url_rule('/update-email-settings',
+                          endpoint='update_email_settings',
+                          view_func=update_email_settings,
+                          methods=['POST'])
+
+    admin_bp.add_url_rule('/test-email',
+                          endpoint='test_email',
+                          view_func=test_email,
+                          methods=['POST'])
+
+    logger.info("Admin process routes registered successfully")
