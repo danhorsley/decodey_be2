@@ -24,6 +24,7 @@ class User(UserMixin, db.Model):
                               default=False)  # GDPR email marketing consent
     consent_date = db.Column(db.DateTime)  # When consent was given
     is_admin = db.Column(db.Boolean, default=False)
+    subadmin = db.Column(db.Boolean, default=False)
     admin_password_hash = db.Column(db.String(256), nullable=True)
     reset_token = db.Column(db.String(100), unique=True, nullable=True)
     reset_token_expires = db.Column(db.DateTime, nullable=True)
@@ -242,6 +243,33 @@ class Quote(db.Model):
 @event.listens_for(Quote, 'before_insert')
 @event.listens_for(Quote, 'before_update')
 def set_unique_letters(mapper, connection, target):
+    target._update_unique_letters()
+
+
+class Backdoor(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    text = db.Column(db.Text, nullable=False)
+    author = db.Column(db.String(255), nullable=False)
+    minor_attribution = db.Column(db.String(255))
+    difficulty = db.Column(db.Float, default=0.0)
+    daily_date = db.Column(db.Date().with_variant(postgresql.DATE(), 'postgresql'), unique=True, nullable=True)
+    times_used = db.Column(db.Integer, default=0)
+    unique_letters = db.Column(db.Integer)
+    active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @staticmethod
+    def _count_unique_letters(text):
+        return len(set(char.upper() for char in text if char.isalpha()))
+
+    def _update_unique_letters(self):
+        self.unique_letters = self._count_unique_letters(self.text)
+
+
+@event.listens_for(Backdoor, 'before_insert')
+@event.listens_for(Backdoor, 'before_update')
+def set_backdoor_unique_letters(mapper, connection, target):
     target._update_unique_letters()
 
 
