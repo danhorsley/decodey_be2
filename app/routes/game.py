@@ -38,7 +38,7 @@ def start():
         is_anonymous = user_id is None
         # Check for backdoor mode
         use_backdoor = request.args.get('backdoor', 'false').lower() == 'true'
-
+        print("use_backdoor: ", use_backdoor)
         # If backdoor mode is requested, check user permissions
         if use_backdoor:
             # Check if user is authenticated and has subadmin privileges
@@ -175,7 +175,7 @@ def start():
         )
 
         # Start a new game and get game data
-        game_data = start_game(long_text=long_text)
+        game_data = start_game(long_text=long_text,is_backdoor=use_backdoor)
         game_state = game_data['game_state']
 
         # Add additional info to game state
