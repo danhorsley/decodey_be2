@@ -6,7 +6,7 @@ from app.services.game_state import (get_unified_game_state,
                                      check_game_status, get_display,
                                      process_guess, process_hint, abandon_game,
                                      get_attribution_from_quotes)
-from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats, DailyCompletion, AnonymousGameScore
+from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats, DailyCompletion, AnonymousGameScore, User
 from app.services.game_state import get_max_mistakes_from_game_id
 from datetime import datetime, date, timedelta
 import logging
@@ -43,12 +43,16 @@ def start():
         if use_backdoor:
             # Check if user is authenticated and has subadmin privileges
             if is_anonymous:
-                return jsonify({"error": "Authentication required for backdoor mode"}), 403
+                return jsonify(
+                    {"error":
+                     "Authentication required for backdoor mode"}), 403
 
             # Verify user is a subadmin
             user = User.query.filter_by(user_id=user_id).first()
             if not user or not user.subadmin:
-                return jsonify({"error": "Insufficient permissions for backdoor mode"}), 403
+                return jsonify(
+                    {"error":
+                     "Insufficient permissions for backdoor mode"}), 403
         # For anonymous users, use IP address as identifier
         identifier = user_id if not is_anonymous else request.remote_addr
 
@@ -272,26 +276,28 @@ def guess():
         if result['complete']:
             # Handle game completion using the helper function
             response_data, status_code = handle_game_completion(
-                result, 
-                game_state, 
-                user_id, 
-                identifier, 
-                game_id, 
-                is_anonymous, 
-                is_daily
-            )
+                result, game_state, user_id, identifier, game_id, is_anonymous,
+                is_daily)
             return jsonify(response_data), status_code
 
         # Return normal response for incomplete games
         return jsonify({
-            'display': result['display'],
-            'mistakes': result['game_state']['mistakes'],
-            'correctly_guessed': result['game_state']['correctly_guessed'],
-            'incorrect_guesses': result['game_state']['incorrect_guesses'],
-            'game_complete': result['complete'],
-            'hasWon': result['has_won'],
-            'is_correct': result['is_correct'],
-            'max_mistakes': result['game_state']['max_mistakes']
+            'display':
+            result['display'],
+            'mistakes':
+            result['game_state']['mistakes'],
+            'correctly_guessed':
+            result['game_state']['correctly_guessed'],
+            'incorrect_guesses':
+            result['game_state']['incorrect_guesses'],
+            'game_complete':
+            result['complete'],
+            'hasWon':
+            result['has_won'],
+            'is_correct':
+            result['is_correct'],
+            'max_mistakes':
+            result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing guess: {str(e)}", exc_info=True)
@@ -370,26 +376,28 @@ def hint():
         if result['complete']:
             # Handle game completion using the helper function
             response_data, status_code = handle_game_completion(
-                result, 
-                game_state, 
-                user_id, 
-                identifier, 
-                game_id, 
-                is_anonymous, 
-                is_daily
-            )
+                result, game_state, user_id, identifier, game_id, is_anonymous,
+                is_daily)
             return jsonify(response_data), status_code
 
         # Return normal response for incomplete games
         return jsonify({
-            'display': result['display'],
-            'mistakes': result['game_state']['mistakes'],
-            'correctly_guessed': result['game_state']['correctly_guessed'],
-            'incorrect_guesses': result['game_state']['incorrect_guesses'],
-            'game_complete': result['complete'],
-            'hasWon': result['has_won'],
-            'is_correct': True,
-            'max_mistakes': result['game_state']['max_mistakes']
+            'display':
+            result['display'],
+            'mistakes':
+            result['game_state']['mistakes'],
+            'correctly_guessed':
+            result['game_state']['correctly_guessed'],
+            'incorrect_guesses':
+            result['game_state']['incorrect_guesses'],
+            'game_complete':
+            result['complete'],
+            'hasWon':
+            result['has_won'],
+            'is_correct':
+            True,
+            'max_mistakes':
+            result['game_state']['max_mistakes']
         }), 200
     except Exception as e:
         logger.error(f"Error processing hint: {str(e)}", exc_info=True)
@@ -555,7 +563,7 @@ def continue_game():
             "guessed_letters": display_guessed
         }
         print(ret)
-        
+
         from app.celery_worker import verify_daily_streak
         verify_daily_streak.delay(user_id)
         return jsonify(ret), 200
@@ -631,7 +639,8 @@ def abandon_game_route():
             # Record abandoned game
             time_taken = int(
                 (datetime.utcnow() - active_game.created_at).total_seconds())
-            if active_game.mistakes > 0 or len(active_game.correctly_guessed) > 0:
+            if active_game.mistakes > 0 or len(
+                    active_game.correctly_guessed) > 0:
                 game_score = GameScore(
                     user_id=user_id,
                     game_id=game_id,
@@ -861,18 +870,12 @@ def game_complete():
                 current_streak = get_current_daily_streak(user_id)
 
                 win_data = {
-                    'score':
-                    completed_game.score,
-                    'mistakes':
-                    completed_game.mistakes,
-                    'maxMistakes':
-                    get_max_mistakes_from_game_id(game_id),
-                    'gameTimeSeconds':
-                    completed_game.time_taken,
-                    'attribution':
-                    attribution,
-                    'current_daily_streak':
-                    current_streak 
+                    'score': completed_game.score,
+                    'mistakes': completed_game.mistakes,
+                    'maxMistakes': get_max_mistakes_from_game_id(game_id),
+                    'gameTimeSeconds': completed_game.time_taken,
+                    'attribution': attribution,
+                    'current_daily_streak': current_streak
                 }
 
                 return jsonify({
@@ -992,7 +995,9 @@ def get_current_daily_streak(user_id):
         logger.error(f"Error calculating daily streak: {str(e)}")
         return 0  # Default to 0 on error
 
-def handle_game_completion(result, game_state, user_id, identifier, game_id, is_anonymous, is_daily):
+
+def handle_game_completion(result, game_state, user_id, identifier, game_id,
+                           is_anonymous, is_daily):
     """
     Handle the common logic for game completion in both guess and hint endpoints.
 
@@ -1014,18 +1019,17 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id, is_
         my_increment = 1 if is_daily else 0
         current_streak = get_current_daily_streak(user_id)
         streak_info = {
-            'current_streak': current_streak + my_increment,  # +1 for visual feedback
+            'current_streak':
+            current_streak + my_increment,  # +1 for visual feedback
             'streak_continued': True
         }
     elif not is_anonymous and not result['has_won']:
-        streak_info = {
-            'current_streak': 0,
-            'streak_continued': False
-        }
+        streak_info = {'current_streak': 0, 'streak_continued': False}
 
     score = 0
-    time_taken = int((datetime.utcnow() - game_state.get(
-        'start_time', datetime.utcnow())).total_seconds())
+    time_taken = int(
+        (datetime.utcnow() -
+         game_state.get('start_time', datetime.utcnow())).total_seconds())
 
     # Prepare response data
     response_data = {
@@ -1035,7 +1039,8 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id, is_
         'incorrect_guesses': result['game_state']['incorrect_guesses'],
         'game_complete': result['complete'],
         'hasWon': result['has_won'],
-        'is_correct': result.get('is_correct', True),  # Default to True for hint
+        'is_correct': result.get('is_correct',
+                                 True),  # Default to True for hint
         'max_mistakes': result['game_state']['max_mistakes']
     }
 
@@ -1051,10 +1056,10 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id, is_
             current_daily_streak = get_current_daily_streak(user_id)
 
         score = score_game(difficulty,
-                          mistakes,
-                          time_taken,
-                          hardcore_mode=hardcore_mode,
-                          current_daily_streak=current_daily_streak)
+                           mistakes,
+                           time_taken,
+                           hardcore_mode=hardcore_mode,
+                           current_daily_streak=current_daily_streak)
 
         # Add win data to the response
         response_data['winData'] = {
@@ -1063,14 +1068,16 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id, is_
             'maxMistakes': game_state.get('max_mistakes', 5),
             'gameTimeSeconds': time_taken,
             'attribution': {
-                'major_attribution': game_state.get('major_attribution', 'Unknown'),
+                'major_attribution': game_state.get('major_attribution',
+                                                    'Unknown'),
                 'minor_attribution': game_state.get('minor_attribution', '')
             }
         }
 
         # Add streak info for authenticated users on daily challenges
         if not is_anonymous and streak_info:
-            response_data['winData']['current_daily_streak'] = streak_info['current_streak']
+            response_data['winData']['current_daily_streak'] = streak_info[
+                'current_streak']
 
     # Queue the async task for database updates
     process_game_completion.delay(
@@ -1081,8 +1088,7 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id, is_
         won=result['has_won'],
         score=score,
         mistakes=game_state.get('mistakes', 0),
-        time_taken=time_taken
-    )
+        time_taken=time_taken)
 
     # Return response data and status code
     return response_data, 200
