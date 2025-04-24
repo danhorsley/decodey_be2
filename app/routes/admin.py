@@ -2,7 +2,7 @@
 from flask import Blueprint, request, jsonify, redirect, url_for, render_template, current_app, send_file, session
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 from werkzeug.security import check_password_hash
-from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupRecord, BackupSettings, Quote
+from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupRecord, BackupSettings, Quote, Backdoor
 import logging
 import os
 import subprocess
@@ -989,7 +989,7 @@ def export_quotes(current_admin):
 
 @admin_bp.route('/quotes/import', methods=['POST'])
 @admin_required
-def import_quotes(current_admin):
+def import_quotes(current_admin, is_backdoor=False):
     """Import quotes from CSV"""
     if 'csv_file' not in request.files:
         return redirect(url_for('admin.quotes', error="No file provided"))
@@ -999,7 +999,8 @@ def import_quotes(current_admin):
         return redirect(url_for('admin.quotes', error="No file selected"))
 
     replace_existing = request.form.get('replace_existing', 'off') == 'on'
-
+    is_backdoor = request.form.get('is_backdoor', 'false') == 'true'
+    QuoteModel = Backdoor if is_backdoor else Quote
     try:
         # Read CSV file
         file_content = file.stream.read().decode(
@@ -1032,7 +1033,7 @@ def import_quotes(current_admin):
 
         if replace_existing:
             # Delete existing quotes
-            Quote.query.delete()
+            QuoteModel.query.delete()
 
         # Import quotes
         text_field = next(field for field in fieldnames
@@ -1040,7 +1041,7 @@ def import_quotes(current_admin):
         count = 0
 
         for row in rows:
-            quote = Quote(
+            quote = QuoteModel(
                 text=row[text_field],  # Use the detected text field name
                 author=row['author'],
                 minor_attribution=row.get('minor_attribution', ''),
@@ -1050,7 +1051,8 @@ def import_quotes(current_admin):
 
         db.session.commit()
         logger.info(
-            f"Admin {current_admin.username} imported {count} quotes from CSV")
+            f"Admin {current_admin.username} imported {count} quotes from CSV - isbackdoor: {is_backdoor}"
+        )
         return redirect(
             url_for('admin.quotes',
                     success=f"Successfully imported {count} quotes"))
