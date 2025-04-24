@@ -333,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="importBackdoorForm" method="POST" action="{{ url_for('admin.import_quotes') }}" enctype="multipart/form-data">
+                    <form id="importBackdoorForm" method="POST" action="{{ url_for('admin_process.import_backdoor_quotes') }}" enctype="multipart/form-data">
                         <input type="hidden" name="is_backdoor" value="true">
                         <div class="mb-3">
                             <div class="drop-zone">
