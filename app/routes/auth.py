@@ -135,7 +135,7 @@ def refresh():
 @jwt_required()
 def verify_token():
     """Endpoint to verify if a token is valid"""
-    current_user = get_jwt_identity
+    current_user = get_jwt_identity()
     my_user = User.query.filter_by(user_id=current_user).first()
     claims = get_jwt()
     return jsonify({
