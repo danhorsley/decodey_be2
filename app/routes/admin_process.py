@@ -6,13 +6,13 @@ This file contains the route handlers for form submissions from the admin interf
 
 from flask import Blueprint, request, jsonify, redirect, url_for, render_template, flash, current_app, session
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupSettings, DailyCompletion, Quote, DailyCompletion, Backdoor # Added Backdoor import
+from app.models import db, User, GameScore, UserStats, ActiveGameState, BackupSettings, DailyCompletion, Quote, DailyCompletion, Backdoor  # Added Backdoor import
 import logging
 import os
 import secrets
 import json
-import io #Added io import for CSV handling
-import csv #Added csv import for CSV handling
+import io  #Added io import for CSV handling
+import csv  #Added csv import for CSV handling
 from datetime import datetime, timedelta
 from pathlib import Path
 import smtplib
@@ -793,7 +793,7 @@ def load_email_settings():
 
 
 @admin_process_bp.route('/regenerate-unsubscribe-tokens', methods=['POST'])
-@admin_required 
+@admin_required
 def regenerate_unsubscribe_tokens(current_admin):
     """Regenerate unsubscribe tokens for all users"""
     try:
@@ -806,13 +806,23 @@ def regenerate_unsubscribe_tokens(current_admin):
 
         db.session.commit()
 
-        logger.info(f"Admin {current_admin.username} regenerated {updated_count} unsubscribe tokens")
-        return redirect(url_for('admin.dashboard', success=f"Successfully regenerated {updated_count} unsubscribe tokens"))
+        logger.info(
+            f"Admin {current_admin.username} regenerated {updated_count} unsubscribe tokens"
+        )
+        return redirect(
+            url_for(
+                'admin.dashboard',
+                success=
+                f"Successfully regenerated {updated_count} unsubscribe tokens")
+        )
 
     except Exception as e:
         logger.error(f"Error regenerating unsubscribe tokens: {str(e)}")
         db.session.rollback()
-        return redirect(url_for('admin.dashboard', error=f"Error regenerating tokens: {str(e)}"))
+        return redirect(
+            url_for('admin.dashboard',
+                    error=f"Error regenerating tokens: {str(e)}"))
+
 
 def register_admin_process_routes(app):
     """Register the admin process blueprint and set up routes"""
@@ -995,12 +1005,10 @@ def populate_daily_dates(current_admin):
                     'author': quote_author,
                     'error': str(encode_error),
                 })
-                logger.warning(
-                    f"Encoding issue with quote ID {quote_id}:\n"
-                    f"Text: {quote_text}\n"
-                    f"Author: {quote_author}\n"
-                    f"Error: {str(encode_error)}"
-                )
+                logger.warning(f"Encoding issue with quote ID {quote_id}:\n"
+                               f"Text: {quote_text}\n"
+                               f"Author: {quote_author}\n"
+                               f"Error: {str(encode_error)}")
 
         # Log problematic quotes
         if problematic_quotes:
@@ -1045,7 +1053,9 @@ def populate_daily_dates(current_admin):
         # Update all quotes in a single SQL transaction
         update_values = []
         for i, quote in enumerate(prioritized_quotes):
-            update_values.append(f"({quote.id}, '{(current_date + timedelta(days=i)).isoformat()}')")
+            update_values.append(
+                f"({quote.id}, '{(current_date + timedelta(days=i)).isoformat()}')"
+            )
 
         if update_values:
             # Build and execute update SQL
@@ -1058,7 +1068,8 @@ def populate_daily_dates(current_admin):
             db.session.execute(text(sql))
             db.session.commit()
             total_assigned = len(update_values)
-            logger.info(f"Assigned {total_assigned} daily dates in single transaction")
+            logger.info(
+                f"Assigned {total_assigned} daily dates in single transaction")
 
         # Prepare result message
         preserved_msg = " (preserved today's quote)" if today_id else ""
@@ -1169,7 +1180,10 @@ def recalculate_all_stats(current_admin):
                 # Get all games for this user
                 games = GameScore.query.filter_by(user_id=user_id).order_by(
                     GameScore.created_at).all()
-                games = [game for game in games if game.mistakes>0 or game.completed] #meaningful games
+                games = [
+                    game for game in games
+                    if game.mistakes > 0 or game.completed
+                ]  #meaningful games
                 if games:
                     # Calculate basic stats
                     user_stats.total_games_played = len(games)
@@ -1518,6 +1532,7 @@ def fix_quote_encoding(current_admin):
             url_for('admin.quotes',
                     error=f"Error fixing quote encoding: {str(e)}"))
 
+
 @admin_process_bp.route('/quotes/import', methods=['POST'])
 @admin_required
 def import_quotes(current_admin, is_backdoor=False):
@@ -1536,7 +1551,7 @@ def import_quotes(current_admin, is_backdoor=False):
     try:
         # Read CSV file
         file_content = file.stream.read().decode(
-            "UTF-8-sig")  # Use UTF-8-sig to handle BOM
+            "UTF-8-sig")  # Use UTF-8-sig to handle
         stream = io.StringIO(file_content, newline=None)
         reader = csv.DictReader(stream)
 
@@ -1586,11 +1601,13 @@ def import_quotes(current_admin, is_backdoor=False):
         return redirect(
             url_for('admin.quotes', error=f"Error importing quotes: {str(e)}"))
 
+
 @admin_process_bp.route('/quotes/import-backdoor', methods=['POST'])
 @admin_required
 def import_backdoor_quotes(current_admin):
     """Import backdoor quotes from CSV using a separate route"""
     return import_quotes(current_admin, is_backdoor=True)
+
 
 def register_admin_process_routes(app):
     """Register the admin process blueprint and set up routes"""
