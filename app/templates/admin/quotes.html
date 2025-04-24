@@ -61,7 +61,8 @@ document.addEventListener('DOMContentLoaded', function() {
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#importQuotesModal">
                 <i class="fas fa-file-import"></i> Import Quotes
             </button>
-            <button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#importBackdoorModal">
+            
+            <button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#importQuotesModal">
                 <i class="fas fa-file-import"></i> Import Backdoor Quotes
             </button>
             <a href="{{ url_for('admin.export_quotes') }}" class="btn btn-secondary">
