@@ -1167,7 +1167,7 @@ def recalculate_all_stats(current_admin):
                 # Get all games for this user
                 games = GameScore.query.filter_by(user_id=user_id).order_by(
                     GameScore.created_at).all()
-                games = [game for game in games if game.mistakes>0] #meaningful games
+                games = [game for game in games if game.mistakes>0 or game.completed] #meaningful games
                 if games:
                     # Calculate basic stats
                     user_stats.total_games_played = len(games)
