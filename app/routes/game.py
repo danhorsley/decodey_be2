@@ -6,7 +6,7 @@ from app.services.game_state import (get_unified_game_state,
                                      check_game_status, get_display,
                                      process_guess, process_hint, abandon_game,
                                      get_attribution_from_quotes)
-from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats, DailyCompletion, AnonymousGameScore, User
+from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats, DailyCompletion, AnonymousGameScore, User, Quote
 from app.services.game_state import get_max_mistakes_from_game_id
 from datetime import datetime, date, timedelta
 import logging
@@ -175,7 +175,7 @@ def start():
         )
 
         # Start a new game and get game data
-        game_data = start_game(long_text=long_text,is_backdoor=use_backdoor)
+        game_data = start_game(long_text=long_text, is_backdoor=use_backdoor)
         game_state = game_data['game_state']
 
         # Add additional info to game state
@@ -1092,3 +1092,49 @@ def handle_game_completion(result, game_state, user_id, identifier, game_id,
 
     # Return response data and status code
     return response_data, 200
+
+
+@bp.route('/get_daily', methods=['GET'])
+@jwt_required()
+def get_daily_quote():
+    try:
+        today = datetime.utcnow().date()
+
+        # Find quote for today
+        daily_quote = Quote.query.filter_by(daily_date=today,
+                                            active=True).first()
+
+        if not daily_quote:
+            return jsonify({"error":
+                            "No daily quote available for today"}), 404
+
+        # Format the response
+        response = {
+            "id": daily_quote.id,
+            "text": daily_quote.text,
+            "author": daily_quote.author,
+            "minor_attribution": daily_quote.minor_attribution,
+            "difficulty": daily_quote.difficulty,
+            "date": daily_quote.daily_date.isoformat(),
+            "unique_letters": daily_quote.unique_letters
+        }
+
+        # Record that user has seen this daily quote (optional)
+        # user_id = get_jwt_identity()
+        # existing_completion = DailyCompletion.query.filter_by(
+        #     user_id=user_id, quote_id=daily_quote.id).first()
+
+        # if not existing_completion:
+        #     # Record that user has seen this, but not completed it yet
+        #     completion = DailyCompletion(user_id=user_id,
+        #                                  quote_id=daily_quote.id,
+        #                                  challenge_date=datetime.utcnow(),
+        #                                  completed=False)
+        #     db.session.add(completion)
+        #     db.session.commit()
+
+        return jsonify(response)
+
+    except Exception as e:
+        logging.error(f"Error getting daily quote: {e}")
+        return jsonify({"error": "Failed to retrieve daily quote"}), 500

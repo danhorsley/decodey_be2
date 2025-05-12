@@ -29,12 +29,16 @@ def create_app(config_class=Config):
             app,
             resources={
                 r"/*": {  # Apply CORS to all routes
-                    "origins": "*",  # Allow all origins during development
+                    "origins":
+                    "*",  # Allow all origins during development
                     "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                    "allow_headers":
-                    ["Content-Type", "Authorization", "Accept"],
+                    "allow_headers": [
+                        "Content-Type", "Authorization", "Accept",
+                        "X-Requested-With"
+                    ],
                     "expose_headers": ["Content-Type", "Authorization"],
-                    "supports_credentials": True
+                    "supports_credentials":
+                    True
                 }
             })
 
@@ -46,7 +50,7 @@ def create_app(config_class=Config):
         CORS(app,
              resources={
                  r"/*": {
-                     "origins": "https://decodey.game",
+                     "origins": ["https://decodey.game", "decodey://*"],
                      "allow_credentials": True,
                      "expose_headers": ["Content-Type", "Authorization"],
                      "allow_headers":
@@ -64,7 +68,8 @@ def create_app(config_class=Config):
     app.config['JWT_HEADER_TYPE'] = 'Bearer'
     app.config['JWT_ACCESS_COOKIE_NAME'] = 'access_token_cookie'
     app.config['JWT_REFRESH_COOKIE_NAME'] = 'refresh_token_cookie'
-    app.config['JWT_COOKIE_DOMAIN'] = '.replit.dev' if app.config['FLASK_ENV'] != 'development' else None
+    app.config['JWT_COOKIE_DOMAIN'] = '.replit.dev' if app.config[
+        'FLASK_ENV'] != 'development' else None
 
     @jwt.expired_token_loader
     def expired_token_callback(jwt_header, jwt_payload):

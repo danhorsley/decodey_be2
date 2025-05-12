@@ -46,7 +46,9 @@ def get_leaderboard():
         if period == 'weekly':
             # Get start of current week
             today = datetime.utcnow()
-            start_of_week = today - timedelta(days=today.weekday())
+            today_start = datetime(today.year, today.month,
+                                   today.day)  # Set to start of day in UTC
+            start_of_week = today_start - timedelta(days=today.weekday())
 
             # Weekly scores from game_scores
             top_entries = db.session.query(
@@ -105,31 +107,40 @@ def get_leaderboard():
                 if period == 'weekly':
                     # Calculate user's rank in weekly scores
                     rank_query = db.session.query(
-                        db.func.count(db.distinct(GameScore.user_id))
-                    ).filter(
-                        GameScore.completed == True,
-                        GameScore.created_at >= start_of_week,
-                        db.func.sum(GameScore.score).over(partition_by=GameScore.user_id) > user_stats.weekly_score
-                    ).scalar()
+                        db.func.count(db.distinct(GameScore.user_id))).filter(
+                            GameScore.completed == True, GameScore.created_at
+                            >= start_of_week,
+                            db.func.sum(GameScore.score).over(
+                                partition_by=GameScore.user_id)
+                            > user_stats.weekly_score).scalar()
                 else:
                     # Calculate user's rank in all-time scores
                     rank_query = db.session.query(
-                        db.func.count(UserStats.user_id)
-                    ).filter(
-                        UserStats.cumulative_score > user_stats.cumulative_score
-                    ).scalar()
+                        db.func.count(UserStats.user_id)).filter(
+                            UserStats.cumulative_score >
+                            user_stats.cumulative_score).scalar()
 
                 # User's rank is the count of users with higher scores + 1
                 user_rank = (rank_query or 0) + 1
 
                 current_user_entry = {
-                    "username": user.username,
-                    "user_id": user_id,
-                    "score": user_stats.cumulative_score,
-                    "games_played": user_stats.total_games_played,
-                    "avg_score": round(user_stats.cumulative_score / user_stats.total_games_played, 1) if user_stats.total_games_played > 0 else 0,
-                    "is_current_user": True,
-                    "rank": user_rank  # Add the calculated rank
+                    "username":
+                    user.username,
+                    "user_id":
+                    user_id,
+                    "score":
+                    user_stats.cumulative_score,
+                    "games_played":
+                    user_stats.total_games_played,
+                    "avg_score":
+                    round(
+                        user_stats.cumulative_score /
+                        user_stats.total_games_played, 1)
+                    if user_stats.total_games_played > 0 else 0,
+                    "is_current_user":
+                    True,
+                    "rank":
+                    user_rank  # Add the calculated rank
                 }
 
         # Get total number of entries for pagination
@@ -235,8 +246,8 @@ def get_streak_leaderboard():
 
                 # Calculate user's actual rank in streaks
                 rank_query = UserStats.query.filter(
-                    getattr(UserStats, streak_field_name) > user_streak
-                ).count()
+                    getattr(UserStats, streak_field_name) >
+                    user_streak).count()
 
                 # User's rank is the count of users with higher streaks + 1
                 user_rank = rank_query + 1
@@ -249,7 +260,8 @@ def get_streak_leaderboard():
                     "rank": user_rank  # Add the calculated rank
                 }
                 if period == 'current':
-                    current_user_entry["last_active"] = user_stats.last_played_date
+                    current_user_entry[
+                        "last_active"] = user_stats.last_played_date
 
         # Get total users with streaks
         total_users = UserStats.query.filter(streak_field > 0).count()
