@@ -1615,7 +1615,10 @@ def register_admin_process_routes(app):
     app.register_blueprint(admin_process_bp)
 
     # Modify the existing admin.settings view to load settings
+
+
 from app.routes.admin import admin_bp
+
 
 @admin_bp.route('/settings', methods=['GET'])
 @admin_required
@@ -1639,6 +1642,7 @@ def settings(current_admin):
     # Also modify the admin routes in app/routes/admin.py to forward to our process functions
     # These won't override existing routes but add new ones for functions we've implemented
 
+
 @admin_bp.route('/users/suspend/<user_id>', methods=['GET', 'POST'])
 @admin_required
 def suspend_user(current_admin, user_id):
@@ -1659,8 +1663,8 @@ def suspend_user(current_admin, user_id):
                                    user_id=user_id))
     else:
         # Forward to process function
-        return redirect(
-            url_for('admin_process.suspend_user', user_id=user_id))
+        return redirect(url_for('admin_process.suspend_user', user_id=user_id))
+
 
 @admin_bp.route('/users/activate/<user_id>', methods=['GET', 'POST'])
 @admin_required
@@ -1682,8 +1686,9 @@ def activate_user(current_admin, user_id):
                                    user_id=user_id))
     else:
         # Forward to process function
-        return redirect(
-            url_for('admin_process.activate_user', user_id=user_id))
+        return redirect(url_for('admin_process.activate_user',
+                                user_id=user_id))
+
 
 # Add URL route rules for the update settings functions
 admin_bp.add_url_rule('/update-game-settings',
@@ -1720,7 +1725,7 @@ logger.info("Admin process routes registered successfully")
 
 
 #cleanup endpoint for mass cleanup of existing bad data
-@admin_process_bp.route('/cleanup-duplicates', methods=['POST'])
+@admin_process_bp.route('/cleanup-duplicates', methods=['POST', 'GET'])
 @admin_required
 def cleanup_duplicate_games():
     """
@@ -1780,6 +1785,7 @@ def cleanup_duplicate_games():
         logging.error(f"Error during cleanup: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
 # helper function for game score clean
 def extract_uuid_from_constructed_id(game_id):
     """
@@ -1797,10 +1803,13 @@ def extract_uuid_from_constructed_id(game_id):
     match = re.search(uuid_pattern, game_id, re.IGNORECASE)
 
     if match:
-        return match.group(1).upper()  # Return uppercase for consistency with existing bad data
+        return match.group(1).upper(
+        )  # Return uppercase for consistency with existing bad data
 
     # If the entire string is just a UUID, return it
-    if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', game_id, re.IGNORECASE):
+    if re.match(
+            r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+            game_id, re.IGNORECASE):
         return game_id.upper()
 
     return None
