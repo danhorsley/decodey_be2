@@ -1620,15 +1620,13 @@ def register_admin_process_routes(app):
 #cleanup endpoint for mass cleanup of existing bad data
 @admin_process_bp.route('/cleanup-duplicates', methods=['POST', 'GET'])
 @admin_required
-def cleanup_duplicate_games():
+def cleanup_duplicate_games(current_admin):
     """
     Mass cleanup endpoint to fix existing duplicate games
     Should be called sparingly and preferably by admin users
     """
     try:
-        # user_id = get_jwt_identity()
-
-        # Get all games for this user
+        # Get all games for all users
         all_games = GameScore.query.all()
         #GameScore.query.filter_by(user_id=user_id).all()
 
@@ -1660,18 +1658,21 @@ def cleanup_duplicate_games():
                     # Clean up active game state
                     ActiveGameState.query.filter_by(
                         game_id=game_to_delete.game_id,
-                        user_id=user_id).delete()
+                        user_id=game_to_delete.user_id).delete()
 
                     db.session.delete(game_to_delete)
                     cleaned_count += 1
 
         db.session.commit()
 
-        return jsonify({
-            'success': True,
-            'duplicatesRemoved': cleaned_count,
-            'message': f'Cleaned up {cleaned_count} duplicate games'
-        })
+        logger.info(
+            f"Admin {current_admin.username} cleaned up {cleaned_count} duplicate games"
+        )
+        
+        return redirect(
+            url_for('admin.quotes',
+                    success=f'Successfully cleaned up {cleaned_count} duplicate games')
+        )
 
     except Exception as e:
         db.session.rollback()
