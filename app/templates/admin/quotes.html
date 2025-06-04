@@ -46,31 +46,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-async function cleanupDuplicates() {
-    if (!confirm('This will cleanup duplicate games for all users. This operation cannot be undone. Continue?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/games/cleanup-duplicates', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + localStorage.getItem('token') // Assuming JWT token is stored
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert(`Success: ${result.message}`);
-        } else {
-            alert(`Error: ${result.error}`);
-        }
-    } catch (error) {
-        alert(`Error: ${error.message}`);
-    }
-}
 </script>
 
 <!-- Quotes Management Section -->
@@ -101,9 +76,9 @@ async function cleanupDuplicates() {
             <a href="{{ url_for('admin_process.populate_daily_dates') }}" class="btn btn-warning" onclick="return confirm('This will reassign all daily dates for appropriate quotes. Continue?')">
                 <i class="fas fa-calendar"></i> Populate Daily Dates
             </a>
-            <button class="btn btn-info" onclick="cleanupDuplicates()">
+            <a href="{{ url_for('admin_process.cleanup_duplicates') }}" class="btn btn-info" onclick="return confirm('This will cleanup duplicate games for all users. This operation cannot be undone. Continue?')">
                 <i class="fas fa-broom"></i> Cleanup Duplicate Games
-            </button>
+            </a>
         </div>
     </div>
 
