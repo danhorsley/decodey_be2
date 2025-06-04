@@ -1615,105 +1615,192 @@ def register_admin_process_routes(app):
     app.register_blueprint(admin_process_bp)
 
     # Modify the existing admin.settings view to load settings
-    from app.routes.admin import admin_bp
+from app.routes.admin import admin_bp
 
-    @admin_bp.route('/settings', methods=['GET'])
-    @admin_required
-    def settings(current_admin):
-        """System settings page with actual settings data loaded"""
-        # Load settings from various sources
-        game_settings = load_game_settings()
-        system_status = load_system_status()
-        security_settings = load_security_settings()
-        email_settings = load_email_settings()
+@admin_bp.route('/settings', methods=['GET'])
+@admin_required
+def settings(current_admin):
+    """System settings page with actual settings data loaded"""
+    # Load settings from various sources
+    game_settings = load_game_settings()
+    system_status = load_system_status()
+    security_settings = load_security_settings()
+    email_settings = load_email_settings()
 
-        return render_template('admin/settings.html',
-                               active_tab='settings',
-                               game_settings=game_settings,
-                               system_status=system_status,
-                               security_settings=security_settings,
-                               email_settings=email_settings)
+    return render_template('admin/settings.html',
+                           active_tab='settings',
+                           game_settings=game_settings,
+                           system_status=system_status,
+                           security_settings=security_settings,
+                           email_settings=email_settings)
 
     # This overrides the existing settings route
 
     # Also modify the admin routes in app/routes/admin.py to forward to our process functions
     # These won't override existing routes but add new ones for functions we've implemented
 
-    @admin_bp.route('/users/suspend/<user_id>', methods=['GET', 'POST'])
-    @admin_required
-    def suspend_user(current_admin, user_id):
-        """Forward to the suspend_user process function"""
-        if request.method == 'GET':
-            # Show confirmation page
-            user = User.query.get(user_id)
-            if not user:
-                return redirect(url_for('admin.users', error="User not found"))
+@admin_bp.route('/users/suspend/<user_id>', methods=['GET', 'POST'])
+@admin_required
+def suspend_user(current_admin, user_id):
+    """Forward to the suspend_user process function"""
+    if request.method == 'GET':
+        # Show confirmation page
+        user = User.query.get(user_id)
+        if not user:
+            return redirect(url_for('admin.users', error="User not found"))
 
-            return render_template('admin/confirm_action.html',
-                                   active_tab='users',
-                                   action="suspend",
-                                   item_type="user",
-                                   item=user,
-                                   form_action=url_for(
-                                       'admin_process.suspend_user',
-                                       user_id=user_id))
-        else:
-            # Forward to process function
-            return redirect(
-                url_for('admin_process.suspend_user', user_id=user_id))
+        return render_template('admin/confirm_action.html',
+                               active_tab='users',
+                               action="suspend",
+                               item_type="user",
+                               item=user,
+                               form_action=url_for(
+                                   'admin_process.suspend_user',
+                                   user_id=user_id))
+    else:
+        # Forward to process function
+        return redirect(
+            url_for('admin_process.suspend_user', user_id=user_id))
 
-    @admin_bp.route('/users/activate/<user_id>', methods=['GET', 'POST'])
-    @admin_required
-    def activate_user(current_admin, user_id):
-        """Forward to the activate_user process function"""
-        if request.method == 'GET':
-            # Show confirmation page
-            user = User.query.get(user_id)
-            if not user:
-                return redirect(url_for('admin.users', error="User not found"))
+@admin_bp.route('/users/activate/<user_id>', methods=['GET', 'POST'])
+@admin_required
+def activate_user(current_admin, user_id):
+    """Forward to the activate_user process function"""
+    if request.method == 'GET':
+        # Show confirmation page
+        user = User.query.get(user_id)
+        if not user:
+            return redirect(url_for('admin.users', error="User not found"))
 
-            return render_template('admin/confirm_action.html',
-                                   active_tab='users',
-                                   action="activate",
-                                   item_type="user",
-                                   item=user,
-                                   form_action=url_for(
-                                       'admin_process.activate_user',
-                                       user_id=user_id))
-        else:
-            # Forward to process function
-            return redirect(
-                url_for('admin_process.activate_user', user_id=user_id))
+        return render_template('admin/confirm_action.html',
+                               active_tab='users',
+                               action="activate",
+                               item_type="user",
+                               item=user,
+                               form_action=url_for(
+                                   'admin_process.activate_user',
+                                   user_id=user_id))
+    else:
+        # Forward to process function
+        return redirect(
+            url_for('admin_process.activate_user', user_id=user_id))
 
-    # Add URL route rules for the update settings functions
-    admin_bp.add_url_rule('/update-game-settings',
-                          endpoint='update_game_settings',
-                          view_func=update_game_settings,
-                          methods=['POST'])
+# Add URL route rules for the update settings functions
+admin_bp.add_url_rule('/update-game-settings',
+                      endpoint='update_game_settings',
+                      view_func=update_game_settings,
+                      methods=['POST'])
 
-    admin_bp.add_url_rule('/update-system-status',
-                          endpoint='update_system_status',
-                          view_func=update_system_status,
-                          methods=['POST'])
+admin_bp.add_url_rule('/update-system-status',
+                      endpoint='update_system_status',
+                      view_func=update_system_status,
+                      methods=['POST'])
 
-    admin_bp.add_url_rule('/update-security-settings',
-                          endpoint='update_security_settings',
-                          view_func=update_security_settings,
-                          methods=['POST'])
+admin_bp.add_url_rule('/update-security-settings',
+                      endpoint='update_security_settings',
+                      view_func=update_security_settings,
+                      methods=['POST'])
 
-    admin_bp.add_url_rule('/rotate-jwt-key',
-                          endpoint='rotate_jwt_key',
-                          view_func=rotate_jwt_key,
-                          methods=['POST'])
+admin_bp.add_url_rule('/rotate-jwt-key',
+                      endpoint='rotate_jwt_key',
+                      view_func=rotate_jwt_key,
+                      methods=['POST'])
 
-    admin_bp.add_url_rule('/update-email-settings',
-                          endpoint='update_email_settings',
-                          view_func=update_email_settings,
-                          methods=['POST'])
+admin_bp.add_url_rule('/update-email-settings',
+                      endpoint='update_email_settings',
+                      view_func=update_email_settings,
+                      methods=['POST'])
 
-    admin_bp.add_url_rule('/test-email',
-                          endpoint='test_email',
-                          view_func=test_email,
-                          methods=['POST'])
+admin_bp.add_url_rule('/test-email',
+                      endpoint='test_email',
+                      view_func=test_email,
+                      methods=['POST'])
 
-    logger.info("Admin process routes registered successfully")
+logger.info("Admin process routes registered successfully")
+
+
+#cleanup endpoint for mass cleanup of existing bad data
+@admin_process_bp.route('/cleanup-duplicates', methods=['POST'])
+@admin_required
+def cleanup_duplicate_games():
+    """
+    Mass cleanup endpoint to fix existing duplicate games
+    Should be called sparingly and preferably by admin users
+    """
+    try:
+        # user_id = get_jwt_identity()
+
+        # Get all games for this user
+        all_games = GameScore.query.all()
+        #GameScore.query.filter_by(user_id=user_id).all()
+
+        # Group by UUID
+        uuid_groups = {}
+        for game in all_games:
+            uuid_part = extract_uuid_from_constructed_id(game.game_id)
+            if uuid_part:
+                if uuid_part not in uuid_groups:
+                    uuid_groups[uuid_part] = []
+                uuid_groups[uuid_part].append(game)
+
+        cleaned_count = 0
+
+        for uuid_part, games in uuid_groups.items():
+            if len(games) > 1:
+                # Sort by creation date (oldest first)
+                games.sort(key=lambda g: g.created_at)
+
+                # Keep the oldest, delete the rest
+                games_to_keep = games[0]
+                games_to_delete = games[1:]
+
+                logging.info(
+                    f"UUID {uuid_part}: keeping {games_to_keep.game_id}, deleting {len(games_to_delete)} duplicates"
+                )
+
+                for game_to_delete in games_to_delete:
+                    # Clean up active game state
+                    ActiveGameState.query.filter_by(
+                        game_id=game_to_delete.game_id,
+                        user_id=user_id).delete()
+
+                    db.session.delete(game_to_delete)
+                    cleaned_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'duplicatesRemoved': cleaned_count,
+            'message': f'Cleaned up {cleaned_count} duplicate games'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error during cleanup: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# helper function for game score clean
+def extract_uuid_from_constructed_id(game_id):
+    """
+    Extract the UUID part from a properly constructed game ID
+    Handles formats like:
+    - easy-daily-2025-04-19-[UUID]
+    - medium-hardcore-[UUID] 
+    - hard-[UUID]
+    - [UUID] (fallback)
+    """
+    import re
+
+    # Pattern to match UUID at the end of the string
+    uuid_pattern = r'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$'
+    match = re.search(uuid_pattern, game_id, re.IGNORECASE)
+
+    if match:
+        return match.group(1).upper()  # Return uppercase for consistency with existing bad data
+
+    # If the entire string is just a UUID, return it
+    if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', game_id, re.IGNORECASE):
+        return game_id.upper()
+
+    return None

@@ -1655,64 +1655,7 @@ def is_properly_constructed_game_id(game_id):
     return False
 
 
-# Optional: Add a cleanup endpoint for mass cleanup of existing bad data
-@bp.route('/games/cleanup-duplicates', methods=['POST'])
-@jwt_required()
-def cleanup_duplicate_games():
-    """
-    Mass cleanup endpoint to fix existing duplicate games
-    Should be called sparingly and preferably by admin users
-    """
-    try:
-        user_id = get_jwt_identity()
 
-        # Get all games for this user
-        all_games = GameScore.query.filter_by(user_id=user_id).all()
-
-        # Group by UUID
-        uuid_groups = {}
-        for game in all_games:
-            uuid_part = extract_uuid_from_constructed_id(game.game_id)
-            if uuid_part:
-                if uuid_part not in uuid_groups:
-                    uuid_groups[uuid_part] = []
-                uuid_groups[uuid_part].append(game)
-
-        cleaned_count = 0
-
-        for uuid_part, games in uuid_groups.items():
-            if len(games) > 1:
-                # Sort by creation date (oldest first)
-                games.sort(key=lambda g: g.created_at)
-
-                # Keep the oldest, delete the rest
-                games_to_keep = games[0]
-                games_to_delete = games[1:]
-
-                logging.info(f"UUID {uuid_part}: keeping {games_to_keep.game_id}, deleting {len(games_to_delete)} duplicates")
-
-                for game_to_delete in games_to_delete:
-                    # Clean up active game state
-                    ActiveGameState.query.filter_by(
-                        game_id=game_to_delete.game_id,
-                        user_id=user_id
-                    ).delete()
-
-                    db.session.delete(game_to_delete)
-                    cleaned_count += 1
-
-        db.session.commit()
-
-        return jsonify({
-            'success': True,
-            'duplicatesRemoved': cleaned_count,
-            'message': f'Cleaned up {cleaned_count} duplicate games'
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        logging.error(f"Error during cleanup: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
     
 def generate_current_display(active_game):
     """
