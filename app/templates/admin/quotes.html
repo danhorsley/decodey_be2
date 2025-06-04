@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <a href="{{ url_for('admin_process.populate_daily_dates') }}" class="btn btn-warning" onclick="return confirm('This will reassign all daily dates for appropriate quotes. Continue?')">
                 <i class="fas fa-calendar"></i> Populate Daily Dates
             </a>
-            <a href="{{ url_for('admin_process.cleanup_duplicates') }}" class="btn btn-info" onclick="return confirm('This will cleanup duplicate games for all users. This operation cannot be undone. Continue?')">
+            <a href="{{ url_for('admin_process.cleanup_duplicate_games') }}" class="btn btn-info" onclick="return confirm('This will cleanup duplicate games for all users. This operation cannot be undone. Continue?')">
                 <i class="fas fa-broom"></i> Cleanup Duplicate Games
             </a>
         </div>
