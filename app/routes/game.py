@@ -13,6 +13,7 @@ import logging
 import uuid
 import json
 import time
+from sqlalchemy import and_
 from app.utils.stats import initialize_or_update_user_stats
 from app.celery_worker import process_game_completion, verify_daily_streak
 
@@ -1138,3 +1139,720 @@ def get_daily_quote():
     except Exception as e:
         logging.error(f"Error getting daily quote: {e}")
         return jsonify({"error": "Failed to retrieve daily quote"}), 500
+
+
+@bp.route('/get_all_quotes', methods=['GET'])
+@jwt_required()
+def get_all_quotes():
+    # Optional: Check if user has permission to access all quotes
+    # current_user = get_jwt_identity()
+
+    try:
+        # Get all active quotes from the database
+        quotes = Quote.query.filter_by(active=True).all()
+
+        # Convert to JSON serializable format
+        quotes_list = []
+        for quote in quotes:
+            quotes_list.append({
+                'id':
+                quote.id,
+                'text':
+                quote.text,
+                'author':
+                quote.author,
+                'minor_attribution':
+                quote.minor_attribution,
+                'difficulty':
+                float(quote.difficulty),  # Ensure it's a float for JSON
+                'daily_date':
+                quote.daily_date.isoformat() if quote.daily_date else None,
+                'times_used':
+                quote.times_used,
+                'unique_letters':
+                quote.unique_letters,
+                'created_at':
+                quote.created_at.isoformat() if quote.created_at else None,
+                'updated_at':
+                quote.updated_at.isoformat() if quote.updated_at else None
+            })
+
+        # Return success response with quotes
+        return jsonify({
+            'success': True,
+            'quotes_count': len(quotes_list),
+            'quotes': quotes_list
+        }), 200
+
+    except Exception as e:
+        # Log the error
+        app.logger.error(f"Error fetching quotes: {str(e)}")
+
+        # Return error response
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve quotes',
+            'message': str(e)
+        }), 500
+
+
+@bp.route('/games/reconcile', methods=['POST'])
+@jwt_required()
+def reconcile_games():
+    """
+    Smart game reconciliation endpoint that handles both full and incremental sync
+    """
+    try:
+        data = request.get_json()
+
+        user_id = get_jwt_identity()
+        sync_type = data.get('type', 'incremental')
+        since_timestamp = data.get('sinceTimestamp')
+        local_summary = data.get('localSummary')
+        local_changes = data.get('localChanges')
+
+        if sync_type == 'full':
+            return handle_full_reconciliation(user_id, local_summary)
+        else:
+            return handle_incremental_reconciliation(user_id, since_timestamp,
+                                                     local_changes)
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Reconciliation failed: {str(e)}'
+        }), 500
+
+
+def handle_full_reconciliation(user_id, local_summary):
+    """
+    Handle full reconciliation - compare all games
+    """
+    # Get all server games for this user
+    server_games = GameScore.query.filter_by(user_id=user_id).all()
+
+    # Convert to lookup dictionaries
+    server_game_dict = {game.game_id: game for game in server_games}
+    local_game_dict = {
+        game['gameId']: game
+        for game in local_summary.get('games', [])
+    }
+
+    plan = {
+        'summary':
+        f'Full sync: {len(server_games)} server games, {len(local_game_dict)} local games',
+        'downloadFromServer': [],
+        'uploadToServer': [],
+        'conflicts': [],
+        'deleteFromLocal': []
+    }
+
+    # Find games that exist on server but not locally
+    for game_id, server_game in server_game_dict.items():
+        if game_id not in local_game_dict:
+            plan['downloadFromServer'].append(game_id)
+
+    # Find games that exist locally but not on server
+    for game_id, local_game in local_game_dict.items():
+        if game_id not in server_game_dict:
+            if local_game.get('isCompleted', False):
+                plan['uploadToServer'].append(game_id)
+
+    # Find conflicts (games exist in both but with different timestamps)
+    for game_id in set(server_game_dict.keys()) & set(local_game_dict.keys()):
+        server_game = server_game_dict[game_id]
+        local_game = local_game_dict[game_id]
+
+        server_timestamp = server_game.created_at
+        local_timestamp = datetime.fromtimestamp(local_game['lastModified'])
+
+        # Check if they're significantly different (more than 1 minute)
+        if abs((server_timestamp - local_timestamp).total_seconds()) > 60:
+            plan['conflicts'].append({
+                'gameId':
+                game_id,
+                'reason':
+                'Timestamp mismatch',
+                'localTimestamp':
+                local_timestamp.isoformat(),
+                'serverTimestamp':
+                server_timestamp.isoformat()
+            })
+
+    return jsonify(plan)
+
+
+def handle_incremental_reconciliation(user_id, since_timestamp, local_changes):
+    """
+    Handle incremental reconciliation - only process changes since last sync
+    """
+    if not since_timestamp:
+        return jsonify({
+            'success': False,
+            'error': 'Since timestamp required for incremental sync'
+        }), 400
+
+    since_date = datetime.fromtimestamp(since_timestamp)
+
+    # Get server games modified since the timestamp
+    server_games = GameScore.query.filter(
+        and_(GameScore.user_id == user_id, GameScore.created_at
+             > since_date)).all()
+
+    plan = {
+        'summary':
+        f'Incremental sync since {since_date}: {len(server_games)} server changes, {len(local_changes or [])} local changes',
+        'downloadFromServer': [],
+        'uploadToServer': [],
+        'conflicts': [],
+        'deleteFromLocal': []
+    }
+
+    # Process server changes
+    server_game_ids = set()
+    for game in server_games:
+        plan['downloadFromServer'].append(game.game_id)
+        server_game_ids.add(game.game_id)
+
+    # Process local changes
+    for change in (local_changes or []):
+        game_id = change['gameId']
+        change_type = change['changeType']
+
+        if game_id in server_game_ids:
+            # Conflict - both server and local have changes
+            plan['conflicts'].append({
+                'gameId':
+                game_id,
+                'reason':
+                'Both server and local modified',
+                'localTimestamp':
+                change['lastModified'],
+                'serverTimestamp':
+                next(g.created_at.isoformat() for g in server_games
+                     if g.game_id == game_id)
+            })
+        else:
+            # Only local change
+            if change_type in ['created', 'updated'] and change.get('data'):
+                # Only upload completed games
+                if change['data'].get('hasWon') or change['data'].get(
+                        'hasLost'):
+                    plan['uploadToServer'].append(game_id)
+
+    return jsonify(plan)
+
+
+@bp.route('/games/<game_id>', methods=['GET'])
+@jwt_required()
+def get_game(game_id):
+    """
+    Get a specific game by ID - returns format compatible with Swift ServerGameData
+    """
+    try:
+        user_id = get_jwt_identity()
+
+        # First check GameScore table
+        game_score = GameScore.query.filter_by(
+            game_id=game_id, user_id=user_id).first()
+
+        if not game_score:
+            return jsonify({'success': False, 'error': 'Game not found'}), 404
+
+        # Also check if there's an active game state
+        active_game = ActiveGameState.query.filter_by(
+            game_id=game_id, user_id=user_id).first()
+
+        # Create the exact format expected by Swift ServerGameData
+        game_data = {
+            'gameId': game_score.game_id,
+            'userId': game_score.user_id,
+            'encrypted': '',  # Will be filled from active_game if available
+            'solution': '',   # Will be filled from active_game if available
+            'currentDisplay': '',  # Will be filled from active_game if available
+            'mistakes': game_score.mistakes,
+            'maxMistakes': 5,  # Default value
+            'hasWon': game_score.completed and game_score.score > 0,
+            'hasLost': game_score.completed and game_score.score == 0,
+            'difficulty': 'medium',  # Default, could be derived from game_type
+            'isDaily': game_score.game_type == 'daily',
+            'score': game_score.score,
+            'timeTaken': game_score.time_taken,
+            'startTime': game_score.created_at.isoformat() + 'Z',  # Add Z for ISO format
+            'lastUpdateTime': game_score.created_at.isoformat() + 'Z',  # Add Z for ISO format
+            'mapping': {},
+            'correctMappings': {},
+            'guessedMappings': {}
+        }
+
+        # Add active game data if available
+        if active_game:
+            game_data.update({
+                'encrypted': active_game.encrypted_paragraph or '',
+                'solution': active_game.original_paragraph or '',
+                'currentDisplay': generate_current_display(active_game),
+                'mapping': active_game.mapping or {},
+                'correctMappings': active_game.reverse_mapping or {},
+                'guessedMappings': get_guessed_mappings(active_game),
+                'lastUpdateTime': active_game.last_updated.isoformat() + 'Z' if active_game.last_updated else game_data['lastUpdateTime']
+            })
+
+        # Ensure all required fields are present and correct type
+        # Swift expects these exact field names and types
+        required_fields = {
+            'gameId': str,
+            'userId': str, 
+            'encrypted': str,
+            'solution': str,
+            'currentDisplay': str,
+            'mistakes': int,
+            'maxMistakes': int,
+            'hasWon': bool,
+            'hasLost': bool,
+            'difficulty': str,
+            'isDaily': bool,
+            'score': int,
+            'timeTaken': int,
+            'startTime': str,
+            'lastUpdateTime': str,
+            'mapping': dict,
+            'correctMappings': dict,
+            'guessedMappings': dict
+        }
+
+        # Validate and convert types
+        for field, expected_type in required_fields.items():
+            if field not in game_data:
+                if expected_type == str:
+                    game_data[field] = ''
+                elif expected_type == int:
+                    game_data[field] = 0
+                elif expected_type == bool:
+                    game_data[field] = False
+                elif expected_type == dict:
+                    game_data[field] = {}
+            else:
+                # Ensure correct type
+                if expected_type == int:
+                    game_data[field] = int(game_data[field] or 0)
+                elif expected_type == bool:
+                    game_data[field] = bool(game_data[field])
+                elif expected_type == str:
+                    game_data[field] = str(game_data[field] or '')
+                elif expected_type == dict:
+                    game_data[field] = dict(game_data[field] or {})
+
+        return jsonify(game_data)
+
+    except Exception as e:
+        logging.error(f"Error getting game {game_id}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/games', methods=['POST'])
+@jwt_required()
+def save_game():
+    """
+    Save/update a game from the client - expects ServerGameData format with proper constructed game IDs
+    Now includes cleanup of improperly constructed duplicates
+    """
+    try:
+        game_data = request.get_json()
+
+        # Validate required fields
+        if not game_data or 'gameId' not in game_data:
+            return jsonify({'success': False, 'error': 'Game ID required'}), 400
+
+        game_id = game_data['gameId']  # Should now be properly constructed by frontend
+        user_id = get_jwt_identity()
+
+        # Extract UUID from the properly constructed game ID for duplicate detection
+        uuid_part = extract_uuid_from_constructed_id(game_id)
+
+        if not uuid_part:
+            return jsonify({'success': False, 'error': 'Invalid game ID format'}), 400
+
+        # Check for existing game with proper constructed ID
+        existing_game = GameScore.query.filter_by(game_id=game_id, user_id=user_id).first()
+
+        # Check for duplicates with just the raw UUID (improper format)
+        duplicate_games = GameScore.query.filter_by(game_id=uuid_part, user_id=user_id).all()
+
+        # Also check for other potential duplicates with different constructed formats
+        other_duplicates = GameScore.query.filter(
+            GameScore.user_id == user_id,
+            GameScore.game_id.like(f'%{uuid_part}')
+        ).filter(GameScore.game_id != game_id).all()
+
+        all_duplicates = duplicate_games + other_duplicates
+
+        if all_duplicates:
+            logging.info(f"Found {len(all_duplicates)} duplicate games for UUID {uuid_part}")
+
+            # If we don't have the proper game yet, migrate the oldest duplicate
+            if not existing_game and all_duplicates:
+                # Sort by creation date (oldest first) - we favor older entries
+                oldest_duplicate = min(all_duplicates, key=lambda g: g.created_at)
+
+                logging.info(f"Migrating oldest duplicate {oldest_duplicate.game_id} -> {game_id}")
+
+                # Update the oldest duplicate to use the proper game ID
+                oldest_duplicate.game_id = game_id
+                existing_game = oldest_duplicate
+
+                # Remove it from the duplicates list so we don't delete it
+                all_duplicates.remove(oldest_duplicate)
+
+            # Delete all remaining duplicates (they're either newer or we already have the proper game)
+            for duplicate in all_duplicates:
+                logging.info(f"Deleting duplicate game: {duplicate.game_id} (created: {duplicate.created_at})")
+
+                # Also clean up any related active game state
+                ActiveGameState.query.filter_by(
+                    game_id=duplicate.game_id, 
+                    user_id=user_id
+                ).delete()
+
+                db.session.delete(duplicate)
+
+        # Parse timestamps - handle both formats (with and without Z)
+        start_time = game_data.get('startTime', datetime.utcnow().isoformat())
+        last_update_time = game_data.get('lastUpdateTime', datetime.utcnow().isoformat())
+
+        # Remove Z suffix if present for parsing
+        if start_time.endswith('Z'):
+            start_time = start_time[:-1]
+        if last_update_time.endswith('Z'):
+            last_update_time = last_update_time[:-1]
+
+        try:
+            start_datetime = datetime.fromisoformat(start_time)
+            update_datetime = datetime.fromisoformat(last_update_time)
+        except ValueError as e:
+            logging.warning(f"Failed to parse timestamps for game {game_id}: {e}")
+            # Fallback to current time if parsing fails
+            start_datetime = datetime.utcnow()
+            update_datetime = datetime.utcnow()
+
+        if existing_game:
+            # Update existing game - only if the new data is newer
+            if update_datetime > existing_game.created_at:
+                logging.info(f"Updating existing game {game_id} with newer data")
+                existing_game.score = int(game_data.get('score', 0))
+                existing_game.mistakes = int(game_data.get('mistakes', 0))
+                existing_game.time_taken = int(game_data.get('timeTaken', 0))
+                existing_game.completed = bool(game_data.get('hasWon', False) or game_data.get('hasLost', False))
+                existing_game.game_type = 'daily' if game_data.get('isDaily', False) else 'regular'
+                # Update the timestamp to reflect the newer data
+                existing_game.created_at = max(existing_game.created_at, start_datetime)
+            else:
+                logging.info(f"Keeping existing game {game_id} - incoming data is older")
+        else:
+            # Create new game
+            logging.info(f"Creating new game with ID: {game_id}")
+            new_game = GameScore(
+                user_id=user_id,
+                game_id=game_id,
+                score=int(game_data.get('score', 0)),
+                mistakes=int(game_data.get('mistakes', 0)),
+                time_taken=int(game_data.get('timeTaken', 0)),
+                game_type='daily' if game_data.get('isDaily', False) else 'regular',
+                completed=bool(game_data.get('hasWon', False) or game_data.get('hasLost', False)),
+                created_at=start_datetime
+            )
+            db.session.add(new_game)
+
+        # Handle active game state for incomplete games
+        is_completed = game_data.get('hasWon', False) or game_data.get('hasLost', False)
+
+        if not is_completed:
+            # Save/update active game state
+            active_game = ActiveGameState.query.filter_by(game_id=game_id, user_id=user_id).first()
+
+            if not active_game:
+                active_game = ActiveGameState(user_id=user_id, game_id=game_id)
+                db.session.add(active_game)
+
+            # Update active game state with data from ServerGameData
+            active_game.original_paragraph = game_data.get('solution', '')
+            active_game.encrypted_paragraph = game_data.get('encrypted', '')
+            active_game.mapping = game_data.get('mapping', {})
+            active_game.reverse_mapping = game_data.get('correctMappings', {})
+            active_game.correctly_guessed = list(game_data.get('guessedMappings', {}).keys())
+            active_game.mistakes = int(game_data.get('mistakes', 0))
+            active_game.last_updated = update_datetime
+        else:
+            # Game is completed, remove from active games (clean up any duplicates too)
+            ActiveGameState.query.filter(
+                ActiveGameState.user_id == user_id,
+                or_(
+                    ActiveGameState.game_id == game_id,
+                    ActiveGameState.game_id == uuid_part,
+                    ActiveGameState.game_id.like(f'%{uuid_part}')
+                )
+            ).delete(synchronize_session=False)
+
+        db.session.commit()
+
+        cleanup_count = len(all_duplicates)
+        response_data = {'success': True, 'gameId': game_id}
+        if cleanup_count > 0:
+            response_data['duplicatesRemoved'] = cleanup_count
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error saving game: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def extract_uuid_from_constructed_id(game_id):
+    """
+    Extract the UUID part from a properly constructed game ID
+    Handles formats like:
+    - easy-daily-2025-04-19-[UUID]
+    - medium-hardcore-[UUID] 
+    - hard-[UUID]
+    - [UUID] (fallback)
+    """
+    import re
+
+    # Pattern to match UUID at the end of the string
+    uuid_pattern = r'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$'
+    match = re.search(uuid_pattern, game_id, re.IGNORECASE)
+
+    if match:
+        return match.group(1).upper()  # Return uppercase for consistency with existing bad data
+
+    # If the entire string is just a UUID, return it
+    if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', game_id, re.IGNORECASE):
+        return game_id.upper()
+
+    return None
+
+
+def is_properly_constructed_game_id(game_id):
+    """
+    Check if a game ID follows the proper construction format
+    """
+    # Valid formats:
+    # - difficulty-UUID (easy-[UUID], medium-[UUID], hard-[UUID])
+    # - difficulty-hardcore-UUID
+    # - easy-daily-YYYY-MM-DD-UUID
+
+    valid_patterns = [
+        r'^(easy|medium|hard)-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+        r'^(easy|medium|hard)-hardcore-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+        r'^easy-daily-\d{4}-\d{2}-\d{2}-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    ]
+
+    import re
+    for pattern in valid_patterns:
+        if re.match(pattern, game_id, re.IGNORECASE):
+            return True
+
+    return False
+
+
+# Optional: Add a cleanup endpoint for mass cleanup of existing bad data
+@bp.route('/games/cleanup-duplicates', methods=['POST'])
+@jwt_required()
+def cleanup_duplicate_games():
+    """
+    Mass cleanup endpoint to fix existing duplicate games
+    Should be called sparingly and preferably by admin users
+    """
+    try:
+        user_id = get_jwt_identity()
+
+        # Get all games for this user
+        all_games = GameScore.query.filter_by(user_id=user_id).all()
+
+        # Group by UUID
+        uuid_groups = {}
+        for game in all_games:
+            uuid_part = extract_uuid_from_constructed_id(game.game_id)
+            if uuid_part:
+                if uuid_part not in uuid_groups:
+                    uuid_groups[uuid_part] = []
+                uuid_groups[uuid_part].append(game)
+
+        cleaned_count = 0
+
+        for uuid_part, games in uuid_groups.items():
+            if len(games) > 1:
+                # Sort by creation date (oldest first)
+                games.sort(key=lambda g: g.created_at)
+
+                # Keep the oldest, delete the rest
+                games_to_keep = games[0]
+                games_to_delete = games[1:]
+
+                logging.info(f"UUID {uuid_part}: keeping {games_to_keep.game_id}, deleting {len(games_to_delete)} duplicates")
+
+                for game_to_delete in games_to_delete:
+                    # Clean up active game state
+                    ActiveGameState.query.filter_by(
+                        game_id=game_to_delete.game_id,
+                        user_id=user_id
+                    ).delete()
+
+                    db.session.delete(game_to_delete)
+                    cleaned_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'duplicatesRemoved': cleaned_count,
+            'message': f'Cleaned up {cleaned_count} duplicate games'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error during cleanup: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    
+def generate_current_display(active_game):
+    """
+    Generate the current display text based on correctly guessed letters
+    """
+    if not active_game.original_paragraph or not active_game.correctly_guessed:
+        return active_game.original_paragraph or ''
+
+    # Create display with blocks for unguessed letters
+    display = list(active_game.original_paragraph)
+
+    # Replace unguessed letters with blocks
+    for i, char in enumerate(display):
+        if char.isalpha():
+            # Check if this letter has been guessed
+            encrypted_char = get_encrypted_char_for_position(active_game, i)
+            if encrypted_char not in active_game.correctly_guessed:
+                display[i] = '█'
+
+    return ''.join(display)
+
+
+def get_encrypted_char_for_position(active_game, position):
+    """
+    Get the encrypted character for a given position in the original text
+    """
+    if not active_game.encrypted_paragraph or position >= len(active_game.encrypted_paragraph):
+        return ''
+    return active_game.encrypted_paragraph[position]
+
+
+def get_guessed_mappings(active_game):
+    """
+    Convert the correctly_guessed list to a mapping dictionary
+    """
+    if not active_game.correctly_guessed or not active_game.reverse_mapping:
+        return {}
+
+    guessed_mappings = {}
+    for encrypted_char in active_game.correctly_guessed:
+        if encrypted_char in active_game.reverse_mapping:
+            guessed_mappings[encrypted_char] = active_game.reverse_mapping[encrypted_char]
+
+    return guessed_mappings
+
+
+# Batch operations for efficiency
+
+
+@bp.route('/games/batch', methods=['POST'])
+@jwt_required()
+def batch_upload_games():
+    """
+    Upload multiple games in a single request for efficiency
+    """
+    try:
+        games_data = request.get_json()
+        user_id = get_jwt_identity()
+
+        success_count = 0
+        error_count = 0
+        errors = []
+
+        for game_data in games_data.get('games', []):
+            try:
+                game_id = game_data['gameId']
+
+                # Check if game already exists
+                existing_game = GameScore.query.filter_by(
+                    game_id=game_id, user_id=user_id).first()
+
+                if not existing_game:
+                    new_game = GameScore(
+                        user_id=user_id,
+                        game_id=game_id,
+                        score=game_data.get('score', 0),
+                        mistakes=game_data.get('mistakes', 0),
+                        time_taken=game_data.get('timeTaken', 0),
+                        game_type='daily'
+                        if game_data.get('isDaily', False) else 'regular',
+                        completed=game_data.get('hasWon', False)
+                        or game_data.get('hasLost', False),
+                        created_at=datetime.fromisoformat(
+                            game_data.get('lastUpdateTime',
+                                          datetime.utcnow().isoformat())))
+                    db.session.add(new_game)
+                    success_count += 1
+
+            except Exception as e:
+                error_count += 1
+                errors.append(
+                    f"Game {game_data.get('gameId', 'unknown')}: {str(e)}")
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'uploaded': success_count,
+            'errors': error_count,
+            'errorDetails': errors
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/games/sync-status', methods=['GET'])
+@jwt_required()
+def get_sync_status():
+    """
+    Get information about the user's sync status
+    """
+    try:
+        user_id = get_jwt_identity()
+
+        # Count games
+        total_games = GameScore.query.filter_by(user_id=user_id).count()
+        completed_games = GameScore.query.filter_by(user_id=user_id,
+                                                    completed=True).count()
+        active_games = ActiveGameState.query.filter_by(user_id=user_id).count()
+
+        # Get last activity
+        last_game = GameScore.query.filter_by(user_id=user_id).order_by(
+            GameScore.created_at.desc()).first()
+        last_activity = last_game.created_at if last_game else None
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'totalGames':
+                total_games,
+                'completedGames':
+                completed_games,
+                'activeGames':
+                active_games,
+                'lastActivity':
+                last_activity.isoformat() if last_activity else None
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
