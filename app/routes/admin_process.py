@@ -20,6 +20,7 @@ import random
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from sqlalchemy import func, text
+import re
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -1628,33 +1629,73 @@ def cleanup_duplicate_games(current_admin):
     try:
         # Get all games for all users
         all_games = GameScore.query.all()
-        #GameScore.query.filter_by(user_id=user_id).all()
-
-        # Group by UUID
+        
+        # More comprehensive grouping approach
         uuid_groups = {}
+        unmatched_games = []
+        
         for game in all_games:
             uuid_part = extract_uuid_from_constructed_id(game.game_id)
             if uuid_part:
+                # Normalize to uppercase for consistent grouping
+                uuid_part = uuid_part.upper()
                 if uuid_part not in uuid_groups:
                     uuid_groups[uuid_part] = []
                 uuid_groups[uuid_part].append(game)
+            else:
+                # Track games that don't match UUID pattern for manual review
+                unmatched_games.append(game)
+
+        # Also try alternative matching for games that didn't match
+        # Check if any unmatched games are actually just raw UUIDs
+        for game in unmatched_games[:]:  # Use slice to modify list while iterating
+            game_id_upper = game.game_id.upper()
+            # Check if it's a raw UUID format
+            if re.match(r'^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$', game_id_upper):
+                if game_id_upper not in uuid_groups:
+                    uuid_groups[game_id_upper] = []
+                uuid_groups[game_id_upper].append(game)
+                unmatched_games.remove(game)
+            # Check if any existing UUID groups contain this as a substring
+            else:
+                for existing_uuid in uuid_groups:
+                    if existing_uuid in game_id_upper or game_id_upper in existing_uuid:
+                        logger.info(f"Found potential match: {game.game_id} with existing UUID {existing_uuid}")
+                        uuid_groups[existing_uuid].append(game)
+                        unmatched_games.remove(game)
+                        break
 
         cleaned_count = 0
+        reviewed_count = 0
 
+        # Process groups with duplicates
         for uuid_part, games in uuid_groups.items():
             if len(games) > 1:
+                reviewed_count += len(games)
+                
                 # Sort by creation date (oldest first)
                 games.sort(key=lambda g: g.created_at)
 
-                # Keep the oldest, delete the rest
-                games_to_keep = games[0]
-                games_to_delete = games[1:]
+                # Prefer properly constructed game IDs over raw UUIDs
+                properly_constructed = [g for g in games if g.game_id != uuid_part]
+                raw_uuids = [g for g in games if g.game_id == uuid_part]
+                
+                if properly_constructed:
+                    # Keep the oldest properly constructed game
+                    games_to_keep = properly_constructed[0]
+                    games_to_delete = properly_constructed[1:] + raw_uuids
+                else:
+                    # If no properly constructed games, keep the oldest raw UUID
+                    games_to_keep = games[0]
+                    games_to_delete = games[1:]
 
-                logging.info(
-                    f"UUID {uuid_part}: keeping {games_to_keep.game_id}, deleting {len(games_to_delete)} duplicates"
+                logger.info(
+                    f"UUID {uuid_part}: keeping {games_to_keep.game_id} (created: {games_to_keep.created_at}), deleting {len(games_to_delete)} duplicates"
                 )
 
                 for game_to_delete in games_to_delete:
+                    logger.info(f"  Deleting: {game_to_delete.game_id} (created: {game_to_delete.created_at})")
+                    
                     # Clean up active game state
                     ActiveGameState.query.filter_by(
                         game_id=game_to_delete.game_id,
@@ -1665,45 +1706,77 @@ def cleanup_duplicate_games(current_admin):
 
         db.session.commit()
 
+        # Log summary
+        message_parts = [f'Successfully cleaned up {cleaned_count} duplicate games']
+        if reviewed_count > cleaned_count:
+            message_parts.append(f'Reviewed {reviewed_count} total duplicate candidates')
+        if unmatched_games:
+            message_parts.append(f'{len(unmatched_games)} games did not match UUID patterns')
+            logger.info(f"Unmatched games: {[g.game_id for g in unmatched_games[:10]]}...")  # Log first 10
+
+        success_message = '. '.join(message_parts)
+
         logger.info(
-            f"Admin {current_admin.username} cleaned up {cleaned_count} duplicate games"
+            f"Admin {current_admin.username} cleaned up {cleaned_count} duplicate games, reviewed {reviewed_count} total"
         )
         
         return redirect(
-            url_for('admin.quotes',
-                    success=f'Successfully cleaned up {cleaned_count} duplicate games')
+            url_for('admin.quotes', success=success_message)
         )
 
     except Exception as e:
         db.session.rollback()
-        logging.error(f"Error during cleanup: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error during cleanup: {str(e)}", exc_info=True)
+        return redirect(
+            url_for('admin.quotes', error=f'Error during cleanup: {str(e)}')
+        )
 
 
 # helper function for game score clean
 def extract_uuid_from_constructed_id(game_id):
     """
-    Extract the UUID part from a properly constructed game ID
+    Extract the UUID part from a game ID - handles various formats
     Handles formats like:
     - easy-daily-2025-04-19-[UUID]
     - medium-hardcore-[UUID] 
     - hard-[UUID]
-    - [UUID] (fallback)
+    - [UUID] (raw UUID)
+    - Partial or malformed UUIDs
     """
     import re
 
-    # Pattern to match UUID at the end of the string
-    uuid_pattern = r'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$'
+    if not game_id:
+        return None
+
+    # Pattern to match UUID anywhere in the string (not just at the end)
+    uuid_pattern = r'([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'
     match = re.search(uuid_pattern, game_id, re.IGNORECASE)
 
     if match:
-        return match.group(1).upper(
-        )  # Return uppercase for consistency with existing bad data
+        return match.group(1).upper()
 
-    # If the entire string is just a UUID, return it
-    if re.match(
-            r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-            game_id, re.IGNORECASE):
+    # Check if the entire string is just a UUID (in case of different casing)
+    if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', game_id, re.IGNORECASE):
         return game_id.upper()
+
+    # Check for UUID without dashes (sometimes they get stripped)
+    no_dash_pattern = r'([0-9a-fA-F]{32})'
+    no_dash_match = re.search(no_dash_pattern, game_id, re.IGNORECASE)
+    if no_dash_match:
+        # Convert back to standard UUID format
+        uuid_str = no_dash_match.group(1).upper()
+        formatted_uuid = f"{uuid_str[:8]}-{uuid_str[8:12]}-{uuid_str[12:16]}-{uuid_str[16:20]}-{uuid_str[20:]}"
+        return formatted_uuid
+
+    # Check for partial UUIDs (at least 8 characters of hex)
+    partial_pattern = r'([0-9a-fA-F]{8,})'
+    partial_match = re.search(partial_pattern, game_id, re.IGNORECASE)
+    if partial_match and len(partial_match.group(1)) >= 8:
+        # For partial matches, we might want to be more careful
+        # Only return if it looks like it could be a UUID fragment
+        partial_uuid = partial_match.group(1).upper()
+        if len(partial_uuid) >= 32:  # Looks like a complete UUID without dashes
+            formatted_uuid = f"{partial_uuid[:8]}-{partial_uuid[8:12]}-{partial_uuid[12:16]}-{partial_uuid[16:20]}-{partial_uuid[20:32]}"
+            return formatted_uuid
 
     return None
