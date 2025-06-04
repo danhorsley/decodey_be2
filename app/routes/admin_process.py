@@ -1673,28 +1673,30 @@ def cleanup_duplicate_games(current_admin):
             if len(games) > 1:
                 reviewed_count += len(games)
                 
-                # Sort by creation date (oldest first)
-                games.sort(key=lambda g: g.created_at)
+                # Sort by database ID (first inserted record first)
+                games.sort(key=lambda g: g.id)
 
-                # Prefer properly constructed game IDs over raw UUIDs
+                # Prefer properly constructed game IDs over raw UUIDs, but prioritize by ID
                 properly_constructed = [g for g in games if g.game_id != uuid_part]
                 raw_uuids = [g for g in games if g.game_id == uuid_part]
                 
                 if properly_constructed:
-                    # Keep the oldest properly constructed game
+                    # Sort both groups by ID and keep the earliest properly constructed game
+                    properly_constructed.sort(key=lambda g: g.id)
+                    raw_uuids.sort(key=lambda g: g.id)
                     games_to_keep = properly_constructed[0]
                     games_to_delete = properly_constructed[1:] + raw_uuids
                 else:
-                    # If no properly constructed games, keep the oldest raw UUID
-                    games_to_keep = games[0]
+                    # If no properly constructed games, keep the earliest raw UUID by ID
+                    games_to_keep = games[0]  # Already sorted by ID above
                     games_to_delete = games[1:]
 
                 logger.info(
-                    f"UUID {uuid_part}: keeping {games_to_keep.game_id} (created: {games_to_keep.created_at}), deleting {len(games_to_delete)} duplicates"
+                    f"UUID {uuid_part}: keeping {games_to_keep.game_id} (ID: {games_to_keep.id}, created: {games_to_keep.created_at}), deleting {len(games_to_delete)} duplicates"
                 )
 
                 for game_to_delete in games_to_delete:
-                    logger.info(f"  Deleting: {game_to_delete.game_id} (created: {game_to_delete.created_at})")
+                    logger.info(f"  Deleting: {game_to_delete.game_id} (ID: {game_to_delete.id}, created: {game_to_delete.created_at})")
                     
                     # Clean up active game state
                     ActiveGameState.query.filter_by(
