@@ -1614,34 +1614,6 @@ def register_admin_process_routes(app):
     # Register blueprint
     app.register_blueprint(admin_process_bp)
 
-    # Modify the existing admin.settings view to load settings
-
-
-from app.routes.admin import admin_bp
-
-
-@admin_bp.route('/settings', methods=['GET'])
-@admin_required
-def settings(current_admin):
-    """System settings page with actual settings data loaded"""
-    # Load settings from various sources
-    game_settings = load_game_settings()
-    system_status = load_system_status()
-    security_settings = load_security_settings()
-    email_settings = load_email_settings()
-
-    return render_template('admin/settings.html',
-                           active_tab='settings',
-                           game_settings=game_settings,
-                           system_status=system_status,
-                           security_settings=security_settings,
-                           email_settings=email_settings)
-
-    # This overrides the existing settings route
-
-    # Also modify the admin routes in app/routes/admin.py to forward to our process functions
-    # These won't override existing routes but add new ones for functions we've implemented
-
 
 @admin_bp.route('/users/suspend/<user_id>', methods=['GET', 'POST'])
 @admin_required
