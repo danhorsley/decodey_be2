@@ -23,12 +23,10 @@ def get_stats():
 def get_leaderboard():
     # Extract parameters with defaults
     period = request.args.get('period', 'all-time')
-
     try:
         page = int(request.args.get('page', 1))
     except (ValueError, TypeError):
         page = 1
-
     try:
         per_page = min(int(request.args.get('per_page', 10)),
                        50)  # Limit to 50 max
@@ -42,14 +40,23 @@ def get_leaderboard():
         # Get requesting user's ID
         user_id = get_jwt_identity()
 
-        # Query for top entries
+        # Calculate total users BEFORE the main query
         if period == 'weekly':
-            # Get start of current week
             today = datetime.utcnow()
-            today_start = datetime(today.year, today.month,
-                                   today.day)  # Set to start of day in UTC
+            today_start = datetime(today.year, today.month, today.day)
             start_of_week = today_start - timedelta(days=today.weekday())
 
+            # Get total unique users who have played this week
+            total_users = db.session.query(
+                db.func.count(db.distinct(GameScore.user_id))).filter(
+                    GameScore.completed == True, GameScore.created_at
+                    >= start_of_week).scalar() or 0
+        else:
+            # All-time total users
+            total_users = UserStats.query.count()
+
+        # Query for top entries
+        if period == 'weekly':
             # Weekly scores from game_scores
             top_entries = db.session.query(
                 User.username,
@@ -99,56 +106,100 @@ def get_leaderboard():
         # Get current user entry if not in top entries
         current_user_entry = None
         if not any(entry["is_current_user"] for entry in formatted_entries):
-            user_stats = UserStats.query.filter_by(user_id=user_id).first()
-            if user_stats:
-                user = User.query.get(user_id)
-
-                # Calculate user's actual rank
+            user = User.query.get(user_id)
+            if user:
                 if period == 'weekly':
-                    # Calculate user's rank in weekly scores
-                    rank_query = db.session.query(
-                        db.func.count(db.distinct(GameScore.user_id))).filter(
-                            GameScore.completed == True, GameScore.created_at
-                            >= start_of_week,
-                            db.func.sum(GameScore.score).over(
-                                partition_by=GameScore.user_id)
-                            > user_stats.weekly_score).scalar()
+                    # For weekly, check if user has any games this week
+                    user_weekly_stats = db.session.query(
+                        db.func.sum(GameScore.score).label('total_score'),
+                        db.func.count(GameScore.id).label('games_played'),
+                        db.func.avg(
+                            GameScore.score).label('avg_score')).filter(
+                                GameScore.user_id == user_id,
+                                GameScore.completed == True,
+                                GameScore.created_at >= start_of_week).first()
+
+                    if user_weekly_stats and user_weekly_stats.games_played and user_weekly_stats.games_played > 0:
+                        # User has played this week, calculate their rank
+                        user_score = user_weekly_stats.total_score or 0
+
+                        # Count how many users have higher scores
+                        rank_subquery = db.session.query(
+                            GameScore.user_id,
+                            db.func.sum(
+                                GameScore.score).label('user_total')).filter(
+                                    GameScore.completed == True,
+                                    GameScore.created_at
+                                    >= start_of_week).group_by(
+                                        GameScore.user_id).subquery()
+
+                        rank_query = db.session.query(
+                            db.func.count()).select_from(rank_subquery).filter(
+                                rank_subquery.c.user_total >
+                                user_score).scalar()
+
+                        user_rank = (rank_query or 0) + 1
+
+                        current_user_entry = {
+                            "username":
+                            user.username,
+                            "user_id":
+                            user_id,
+                            "score":
+                            int(user_score),
+                            "games_played":
+                            user_weekly_stats.games_played,
+                            "avg_score":
+                            round(float(user_weekly_stats.avg_score), 1)
+                            if user_weekly_stats.avg_score else 0,
+                            "is_current_user":
+                            True,
+                            "rank":
+                            user_rank
+                        }
+                    else:
+                        # User hasn't played this week - they're unranked
+                        current_user_entry = {
+                            "username": user.username,
+                            "user_id": user_id,
+                            "score": 0,
+                            "games_played": 0,
+                            "avg_score": 0,
+                            "is_current_user": True,
+                            "rank": total_users + 1 if total_users > 0 else 1
+                        }
                 else:
-                    # Calculate user's rank in all-time scores
-                    rank_query = db.session.query(
-                        db.func.count(UserStats.user_id)).filter(
-                            UserStats.cumulative_score >
-                            user_stats.cumulative_score).scalar()
+                    # All-time logic
+                    user_stats = UserStats.query.filter_by(
+                        user_id=user_id).first()
+                    if user_stats:
+                        # Calculate user's actual rank
+                        rank_query = db.session.query(
+                            db.func.count(UserStats.user_id)).filter(
+                                UserStats.cumulative_score >
+                                user_stats.cumulative_score).scalar()
 
-                # User's rank is the count of users with higher scores + 1
-                user_rank = (rank_query or 0) + 1
+                        user_rank = (rank_query or 0) + 1
 
-                current_user_entry = {
-                    "username":
-                    user.username,
-                    "user_id":
-                    user_id,
-                    "score":
-                    user_stats.cumulative_score,
-                    "games_played":
-                    user_stats.total_games_played,
-                    "avg_score":
-                    round(
-                        user_stats.cumulative_score /
-                        user_stats.total_games_played, 1)
-                    if user_stats.total_games_played > 0 else 0,
-                    "is_current_user":
-                    True,
-                    "rank":
-                    user_rank  # Add the calculated rank
-                }
-
-        # Get total number of entries for pagination
-        if period == 'weekly':
-            total_users = db.session.query(db.func.count(db.distinct(GameScore.user_id)))\
-                .filter(GameScore.created_at >= start_of_week).scalar() or 0
-        else:
-            total_users = UserStats.query.count()
+                        current_user_entry = {
+                            "username":
+                            user.username,
+                            "user_id":
+                            user_id,
+                            "score":
+                            user_stats.cumulative_score,
+                            "games_played":
+                            user_stats.total_games_played,
+                            "avg_score":
+                            round(
+                                user_stats.cumulative_score /
+                                user_stats.total_games_played, 1)
+                            if user_stats.total_games_played > 0 else 0,
+                            "is_current_user":
+                            True,
+                            "rank":
+                            user_rank
+                        }
 
         return jsonify({
             "entries": formatted_entries,
@@ -169,10 +220,9 @@ def get_leaderboard():
     except Exception as e:
         logging.error(f"Error fetching leaderboard: {str(e)}")
         import traceback
-        logging.error(traceback.format_exc()
-                      )  # Add this line to get the full stack trace
+        logging.error(traceback.format_exc())
         return jsonify(
-            {"error": f"Failed to retrieve leaderboard data: {str(e)}"}), 500
+            {"error": f"Failed to retrieve leaderboard data: {str(e)}"}), 500                                                                              
 
 
 @bp.route('/streak_leaderboard', methods=['GET'])
@@ -377,3 +427,82 @@ def get_user_stats():
     except Exception as e:
         logging.error(f"Error getting user stats: {e}")
         return jsonify({"error": "Failed to retrieve user statistics"}), 500
+
+
+@bp.route('/api/games/record', methods=['POST'])
+@jwt_required()
+def record_games():
+    """Record completed games from mobile app"""
+    try:
+        user_id = get_jwt_identity()
+        data = request.get_json()
+        games = data.get('games', [])
+
+        # Process each game
+        processed = 0
+        for game_data in games[:20]:  # Cap at 20 per request
+            # Check for duplicate
+            existing = GameScore.query.filter_by(
+                user_id=user_id,
+                game_id=game_data['gameId']
+            ).first()
+
+            if not existing:
+                game = GameScore(
+                    user_id=user_id,
+                    game_id=game_data['gameId'],
+                    score=game_data['score'],
+                    mistakes=game_data['mistakes'],
+                    time_taken=game_data['timeSeconds'],
+                    game_type='daily' if game_data['isDaily'] else 'regular',
+                    completed=True,
+                    created_at=datetime.fromisoformat(game_data['completedAt'].replace('Z', '+00:00'))
+                )
+                db.session.add(game)
+                processed += 1
+
+                # Update user stats
+                update_user_stats_for_game(user_id, game_data)
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "processed": processed,
+            "message": f"Recorded {processed} new games"
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def update_user_stats_for_game(user_id, game_data):
+    """Update aggregated stats after game recording"""
+    stats = UserStats.query.filter_by(user_id=user_id).first()
+    if not stats:
+        stats = UserStats(user_id=user_id)
+        db.session.add(stats)
+
+    # Update totals
+    stats.total_games_played += 1
+    stats.total_score += game_data['score']
+
+    if game_data['won']:
+        stats.games_won += 1
+
+    # Handle daily streak
+    if game_data['isDaily']:
+        game_date = datetime.fromisoformat(game_data['completedAt'].replace('Z', '+00:00')).date()
+
+        if stats.last_daily_completed:
+            days_diff = (game_date - stats.last_daily_completed).days
+
+            if days_diff == 1:  # Consecutive day
+                stats.current_daily_streak += 1
+            elif days_diff > 1:  # Streak broken
+                stats.current_daily_streak = 1
+            # days_diff == 0 means same day, don't update
+        else:
+            stats.current_daily_streak = 1
+
+        stats.last_daily_completed = game_date
+        stats.best_daily_streak = max(stats.best_daily_streak, stats.current_daily_streak)

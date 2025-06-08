@@ -14,6 +14,8 @@ class User(UserMixin, db.Model):
                         primary_key=True,
                         default=lambda: str(uuid.uuid4()))
     email = db.Column(db.String, unique=True, nullable=False)
+    apple_user_id = db.Column(db.String, unique=True,
+                              nullable=True)  #added for apple auth
     username = db.Column(db.String, unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     auth_type = db.Column(db.String, default='local')
@@ -97,8 +99,12 @@ class GameScore(db.Model):
 
 
 class ActiveGameState(db.Model):
-    id = db.Column(db.Integer, db.Sequence('active_game_state_id_seq'), primary_key=True)
-    user_id = db.Column(db.String, db.ForeignKey('user.user_id'), nullable=False)
+    id = db.Column(db.Integer,
+                   db.Sequence('active_game_state_id_seq'),
+                   primary_key=True)
+    user_id = db.Column(db.String,
+                        db.ForeignKey('user.user_id'),
+                        nullable=False)
     game_id = db.Column(db.String, unique=True)
     original_paragraph = db.Column(db.Text)
     encrypted_paragraph = db.Column(db.Text)
@@ -113,9 +119,7 @@ class ActiveGameState(db.Model):
     last_updated = db.Column(db.DateTime,
                              default=datetime.utcnow,
                              onupdate=datetime.utcnow)
-    __table_args__ = (
-        db.Index('idx_active_game_userid', 'user_id'),
-    )
+    __table_args__ = (db.Index('idx_active_game_userid', 'user_id'), )
 
 
 class AnonymousGameState(db.Model):
@@ -252,12 +256,17 @@ class Backdoor(db.Model):
     author = db.Column(db.String(255), nullable=False)
     minor_attribution = db.Column(db.String(255))
     difficulty = db.Column(db.Float, default=0.0)
-    daily_date = db.Column(db.Date().with_variant(postgresql.DATE(), 'postgresql'), unique=True, nullable=True)
+    daily_date = db.Column(db.Date().with_variant(postgresql.DATE(),
+                                                  'postgresql'),
+                           unique=True,
+                           nullable=True)
     times_used = db.Column(db.Integer, default=0)
     unique_letters = db.Column(db.Integer)
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime,
+                           default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
 
     @staticmethod
     def _count_unique_letters(text):
@@ -317,6 +326,7 @@ class LeaderboardEntry(db.Model):
                                           'period_type',
                                           'period_start',
                                           name='unique_user_period'), )
+
 
 class AnonymousGameScore(db.Model):
     id = db.Column(db.Integer, primary_key=True)

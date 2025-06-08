@@ -94,7 +94,7 @@ def login():
             "username": user.username,
             "has_active_game": has_active_game,
             "user_id": user.user_id,
-            "subadmin": user.subadmin# Add this line to include the user ID
+            "subadmin": user.subadmin  # Add this line to include the user ID
         }), 200
 
     except Exception as e:
@@ -142,7 +142,7 @@ def verify_token():
         "valid": True,
         "user_id": current_user,
         "username": claims.get("username"),
-        "subadmin":my_user.subadmin
+        "subadmin": my_user.subadmin
     }), 200
 
 
@@ -462,23 +462,24 @@ def unsubscribe(token):
     """Unsubscribe a user from emails using their unique token"""
     try:
         user = User.query.filter_by(unsubscribe_token=token).first()
-        
+
         if not user:
             return jsonify({"error": "Invalid unsubscribe token"}), 400
-            
+
         user.email_consent = False
         user.consent_date = None
         db.session.commit()
-        
+
         return jsonify({
             "message": "Successfully unsubscribed from emails",
             "email": user.email
         }), 200
-            
+
     except Exception as e:
         logging.error(f"Error in unsubscribe: {str(e)}")
         db.session.rollback()
         return jsonify({"error": "Failed to process unsubscribe request"}), 500
+
 
 @bp.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
@@ -511,3 +512,52 @@ def reset_password():
 
     return jsonify({"message":
                     "Token verified, ready for password reset"}), 200
+
+
+@bp.route('/auth/apple', methods=['POST'])
+def apple_signin():
+    try:
+        data = request.get_json()
+        apple_user_id = data.get('appleUserId')
+        email = data.get('email')
+        full_name = data.get('fullName')
+
+        if not apple_user_id:
+            return jsonify({'error': 'Apple user ID required'}), 400
+
+        # Check if user exists with this Apple ID
+        user = User.query.filter_by(apple_user_id=apple_user_id).first()
+
+        if not user:
+            # Create new user
+            username = email or f"apple_user_{apple_user_id[:8]}"
+            display_email = email or f"{apple_user_id}@apple.signin"
+
+            user = User(
+                email=display_email,
+                username=username,
+                password='APPLE_SIGNIN'  # Placeholder
+            )
+            user.apple_user_id = apple_user_id
+
+            if full_name:
+                user.display_name = full_name
+
+            db.session.add(user)
+            db.session.commit()
+
+        # Generate tokens (same as regular login)
+        access_token = create_access_token(identity=user.user_id)
+        refresh_token = create_refresh_token(identity=user.user_id)
+
+        return jsonify({
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'username': user.username,
+            'user_id': user.user_id,
+            'has_active_game': False,  # Check your game logic
+            'subadmin': user.subadmin
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
