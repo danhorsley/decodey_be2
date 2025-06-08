@@ -1,0 +1,148 @@
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 919, in full_dispatch_request
+2025-06-08 11:43:20.78
+6e047f14
+User
+rv = self.handle_user_exception(e)
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask_cors/extension.py", line 176, in wrapped_function
+2025-06-08 11:43:20.78
+6e047f14
+User
+return cors_after_request(app.make_response(f(*args, **kwargs)))
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 917, in full_dispatch_request
+2025-06-08 11:43:20.78
+6e047f14
+User
+rv = self.dispatch_request()
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/app.py", line 902, in dispatch_request
+2025-06-08 11:43:20.78
+6e047f14
+User
+return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args) # type: ignore[no-any-return]
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/app/routes/auth.py", line 496, in reset_password
+2025-06-08 11:43:20.78
+6e047f14
+User
+return render_template('reset_password.html')
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/templating.py", line 149, in render_template
+2025-06-08 11:43:20.78
+6e047f14
+User
+template = app.jinja_env.get_or_select_template(template_name_or_list)
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+2025-06-08 11:43:20.78
+6e047f14
+User
+return self.get_template(template_name_or_list, parent, globals)
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/jinja2/environment.py", line 1016, in get_template
+2025-06-08 11:43:20.78
+6e047f14
+User
+return self._load_template(name, globals)
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/jinja2/environment.py", line 975, in _load_template
+2025-06-08 11:43:20.78
+6e047f14
+User
+template = self.loader.load(self, name, self.make_globals(globals))
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/jinja2/loaders.py", line 126, in load
+2025-06-08 11:43:20.78
+6e047f14
+User
+source, filename, uptodate = self.get_source(environment, name)
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/templating.py", line 65, in get_source
+2025-06-08 11:43:20.78
+6e047f14
+User
+return self._get_source_fast(environment, template)
+2025-06-08 11:43:20.78
+6e047f14
+User
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2025-06-08 11:43:20.78
+6e047f14
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/flask/templating.py", line 99, in _get_source_fast
+2025-06-08 11:43:20.78
+6e047f14
+User
+raise TemplateNotFound(template)
+2025-06-08 11:43:20.78
+6e047f14
+User
+jinja2.exceptions.TemplateNotFound: reset_password.html
