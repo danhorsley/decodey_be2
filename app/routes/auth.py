@@ -494,7 +494,7 @@ def reset_password():
         return jsonify({"error": "Invalid or expired reset token"}), 400
 
     if request.method == 'GET':
-        return render_template('reset_password.html')
+        return render_template('admin/reset_password.html')
 
     if request.method == 'POST':
         data = request.get_json()
