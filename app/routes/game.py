@@ -1838,3 +1838,341 @@ def get_sync_status():
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/promo', methods=['POST'])
+@jwt_required()
+def redeem_promo():
+    """
+    Unified promo redemption endpoint.
+    Checks both unsubscribe tokens (for legacy import) and promo table.
+    """
+
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
+
+    if not current_user:
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+
+    data = request.get_json()
+    code = data.get('code', '').upper().strip()
+
+    if not code or len(code) < 6:
+        return jsonify({'success': False, 'error': 'Invalid code format'}), 400
+
+    try:
+        # First, check if it's a legacy import (unsubscribe token)
+        legacy_result = check_legacy_import(code, current_user)
+        if legacy_result:
+            return legacy_result
+
+        # If not legacy, check promo table
+        promo_result = check_promo_code(code, current_user)
+        if promo_result:
+            return promo_result
+
+        # Code not found anywhere
+        return jsonify({'success': False, 'error': 'Invalid promo code'}), 404
+
+    except Exception as e:
+        logging.error(f"Promo redemption error: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': 'Redemption failed. Please try again.'
+        }), 500
+
+
+def check_legacy_import(code, current_user):
+    """Check if code matches any unsubscribe token for legacy import"""
+
+    # Only check first 6 chars of unsubscribe tokens
+    all_users = User.query.filter(User.unsubscribe_token.isnot(None),
+                                  User.unsubscribe_token != '').all()
+
+    legacy_user = None
+    for user in all_users:
+        if user.unsubscribe_token and user.unsubscribe_token[:6].upper(
+        ) == code:
+            legacy_user = user
+            break
+
+    if not legacy_user:
+        return None  # Not a legacy code
+
+    # Check if already redeemed
+    existing_redemption = PromoRedemption.query.filter_by(
+        user_id=current_user.user_id, code=code, type='legacy_import').first()
+
+    if existing_redemption:
+        return jsonify({
+            'success': False,
+            'error': 'You have already imported these stats',
+            'type': 'legacy_import'
+        }), 409
+
+    # Check if someone else imported this account
+    other_redemption = PromoRedemption.query.filter(
+        PromoRedemption.code == code, PromoRedemption.type == 'legacy_import',
+        PromoRedemption.user_id != current_user.user_id).first()
+
+    if other_redemption:
+        return jsonify({
+            'success': False,
+            'error': 'These stats have already been imported'
+        }), 409
+
+    # Get legacy stats
+    legacy_stats = UserStats.query.filter_by(
+        user_id=legacy_user.user_id).first()
+    if not legacy_stats or legacy_stats.total_games_played == 0:
+        return jsonify({
+            'success': False,
+            'error': 'No stats found for this account'
+        }), 404
+
+    # Perform the import
+    current_stats = UserStats.query.filter_by(
+        user_id=current_user.user_id).first()
+    if not current_stats:
+        current_stats = UserStats(user_id=current_user.user_id)
+        db.session.add(current_stats)
+
+    # Import data
+    import_data = {
+        'legacy_username':
+        legacy_user.username,
+        'games_played':
+        legacy_stats.total_games_played,
+        'games_won':
+        legacy_stats.games_won,
+        'daily_streak':
+        legacy_stats.current_daily_streak,
+        'cumulative_score':
+        legacy_stats.cumulative_score,
+        'last_played':
+        legacy_stats.last_played_date.isoformat()
+        if legacy_stats.last_played_date else None
+    }
+
+    # Merge stats
+    current_stats.total_games_played += legacy_stats.total_games_played
+    current_stats.games_won += legacy_stats.games_won
+    current_stats.cumulative_score += legacy_stats.cumulative_score
+
+    # Preserve streak if valid
+    streak_preserved = False
+    if legacy_stats.current_daily_streak > 0 and legacy_stats.last_played_date:
+        days_since = (datetime.utcnow().date() -
+                      legacy_stats.last_played_date.date()).days
+        if days_since <= 1:
+            current_stats.current_daily_streak = max(
+                current_stats.current_daily_streak,
+                legacy_stats.current_daily_streak)
+            streak_preserved = True
+
+    # Record redemption
+    redemption = PromoRedemption(
+        user_id=current_user.user_id,
+        code=code,
+        type='legacy_import',
+        value=legacy_stats.total_games_played  # Store games count as value
+    )
+    db.session.add(redemption)
+
+    db.session.commit()
+
+    logging.info(
+        f"User {current_user.username} imported stats from {legacy_user.username}"
+    )
+
+    return jsonify({
+        'success': True,
+        'type': 'legacy_import',
+        'message':
+        f'Successfully imported {legacy_stats.total_games_played} games!',
+        'data': {
+            'imported': import_data,
+            'streak_preserved': streak_preserved
+        }
+    }), 200
+
+
+def check_promo_code(code, current_user):
+    """Check general promo codes table"""
+
+    promo = Promo.query.filter_by(code=code, active=True).first()
+
+    if not promo:
+        return None
+
+    # Check expiry
+    if promo.expires_at and promo.expires_at < datetime.utcnow():
+        return jsonify({
+            'success': False,
+            'error': 'This promo code has expired'
+        }), 410
+
+    # Check usage limit
+    if promo.max_uses and promo.current_uses >= promo.max_uses:
+        return jsonify({
+            'success': False,
+            'error': 'This promo code has reached its usage limit'
+        }), 410
+
+    # Check if user already redeemed
+    existing = PromoRedemption.query.filter_by(user_id=current_user.user_id,
+                                               code=code).first()
+
+    if existing:
+        return jsonify({
+            'success': False,
+            'error': 'You have already redeemed this code'
+        }), 409
+
+    # Apply the promo based on type
+    result = apply_promo(promo, current_user)
+
+    if result['success']:
+        # Record redemption
+        redemption = PromoRedemption(user_id=current_user.user_id,
+                                     code=code,
+                                     type=promo.type,
+                                     value=promo.value,
+                                     expires_at=result.get('expires_at'))
+        db.session.add(redemption)
+
+        # Increment usage
+        promo.current_uses += 1
+
+        db.session.commit()
+
+        logging.info(
+            f"User {current_user.username} redeemed promo {code} ({promo.type})"
+        )
+
+    return jsonify(result), 200 if result['success'] else 400
+
+
+def apply_promo(promo, user):
+    """Apply promo effects based on type"""
+
+    if promo.type == 'xp_boost':
+        # Calculate new boost
+        new_boost = max(user.xp_boost_multiplier or 1.0, promo.value)
+        expires_at = datetime.utcnow() + timedelta(hours=promo.duration_hours)
+
+        # Update user
+        user.xp_boost_multiplier = new_boost
+        user.xp_boost_expires = expires_at
+
+        return {
+            'success': True,
+            'type': 'xp_boost',
+            'message':
+            f'{promo.value}x XP boost activated for {promo.duration_hours} hours!',
+            'data': {
+                'multiplier': new_boost,
+                'expires_at': expires_at.isoformat(),
+                'duration_hours': promo.duration_hours
+            },
+            'expires_at': expires_at
+        }
+
+    # Add more promo types here as needed
+    # elif promo.type == 'coins':
+    #     user.coins += int(promo.value)
+    #     return {...}
+
+    return {'success': False, 'error': f'Unknown promo type: {promo.type}'}
+
+
+# Utility endpoint to check active boosts
+@bp.route('/active_boosts', methods=['GET'])
+@jwt_required()
+def get_active_boosts():
+    """Get user's active boosts and their expiry"""
+
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    boosts = []
+
+    # Check XP boost
+    if user.xp_boost_multiplier and user.xp_boost_multiplier > 1.0:
+        if user.xp_boost_expires and user.xp_boost_expires > datetime.utcnow():
+            boosts.append({
+                'type':
+                'xp_boost',
+                'multiplier':
+                user.xp_boost_multiplier,
+                'expires_at':
+                user.xp_boost_expires.isoformat(),
+                'remaining_seconds':
+                int((user.xp_boost_expires -
+                     datetime.utcnow()).total_seconds())
+            })
+        else:
+            # Expired, clean up
+            user.xp_boost_multiplier = 1.0
+            user.xp_boost_expires = None
+            db.session.commit()
+
+    return jsonify({'boosts': boosts, 'has_active_boosts': len(boosts) > 0})
+
+
+# Admin endpoint to create promos
+@bp.route('/admin/create_promo', methods=['POST'])
+@jwt_required()
+def create_promo():
+    """Create a new promo code"""
+
+    current_user = User.query.get(get_jwt_identity())
+    if not current_user or not current_user.subadmin:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+
+    # Validate required fields
+    required = ['code', 'type', 'value']
+    for field in required:
+        if field not in data:
+            return jsonify({'error': f'Missing field: {field}'}), 400
+
+    # Check if code already exists
+    if Promo.query.filter_by(code=data['code'].upper()).first():
+        return jsonify({'error': 'Code already exists'}), 409
+
+    # Create promo
+    promo = Promo(code=data['code'].upper(),
+                  type=data['type'],
+                  value=float(data['value']),
+                  duration_hours=data.get('duration_hours', 24),
+                  max_uses=data.get('max_uses'),
+                  expires_at=datetime.fromisoformat(data['expires_at'])
+                  if data.get('expires_at') else None,
+                  description=data.get('description', ''))
+
+    db.session.add(promo)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'promo': {
+            'code':
+            promo.code,
+            'type':
+            promo.type,
+            'value':
+            promo.value,
+            'duration_hours':
+            promo.duration_hours,
+            'max_uses':
+            promo.max_uses,
+            'expires_at':
+            promo.expires_at.isoformat() if promo.expires_at else None
+        }
+    }), 201

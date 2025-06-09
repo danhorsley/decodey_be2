@@ -25,6 +25,8 @@ class User(UserMixin, db.Model):
     email_consent = db.Column(db.Boolean,
                               default=False)  # GDPR email marketing consent
     consent_date = db.Column(db.DateTime)  # When consent was given
+    xp_boost_multiplier = db.Column(db.Float, default=1.0)
+    xp_boost_expires = db.Column(db.DateTime, nullable=True)
     is_admin = db.Column(db.Boolean, default=False)
     subadmin = db.Column(db.Boolean, default=False)
     admin_password_hash = db.Column(db.String(256), nullable=True)
@@ -340,3 +342,39 @@ class AnonymousGameScore(db.Model):
     completed = db.Column(db.Boolean, default=True)
     won = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Promo(db.Model):
+    """General promo codes table"""
+    __tablename__ = 'promos'
+
+    code = db.Column(db.String(20), primary_key=True)
+    type = db.Column(db.String(50), nullable=False)  # 'xp_boost', 'coins', etc
+    value = db.Column(db.Float,
+                      nullable=False)  # 2.0 for 2x boost, 500 for coins
+    duration_hours = db.Column(db.Integer,
+                               default=24)  # For time-based rewards
+    max_uses = db.Column(db.Integer, default=None)  # None = unlimited
+    current_uses = db.Column(db.Integer, default=0)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    active = db.Column(db.Boolean, default=True)
+    description = db.Column(db.String(200))
+
+
+class PromoRedemption(db.Model):
+    """Track who redeemed what"""
+    __tablename__ = 'promo_redemptions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String,
+                        db.ForeignKey('user.user_id'),
+                        nullable=False)
+    code = db.Column(db.String(20),
+                     nullable=False)  # Not FK since could be unsubscribe token
+    type = db.Column(db.String(50), nullable=False)
+    redeemed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=True)  # For XP boosts
+    value = db.Column(db.Float)
+
+    user = db.relationship('User', backref='promo_redemptions')
