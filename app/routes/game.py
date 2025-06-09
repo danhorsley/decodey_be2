@@ -6,7 +6,7 @@ from app.services.game_state import (get_unified_game_state,
                                      check_game_status, get_display,
                                      process_guess, process_hint, abandon_game,
                                      get_attribution_from_quotes)
-from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats, DailyCompletion, AnonymousGameScore, User, Quote
+from app.models import db, ActiveGameState, AnonymousGameState, GameScore, UserStats, DailyCompletion, AnonymousGameScore, User, Quote, Promo, PromoRedemption
 from app.services.game_state import get_max_mistakes_from_game_id
 from datetime import datetime, date, timedelta
 import logging
@@ -1892,15 +1892,14 @@ def check_legacy_import(code, current_user):
 
     legacy_user = None
     for user in all_users:
-        if user.unsubscribe_token and user.unsubscribe_token[:6].upper(
-        ) == code:
+        if user.unsubscribe_token and user.unsubscribe_token[:6].upper() == code:
             legacy_user = user
             break
 
     if not legacy_user:
         return None  # Not a legacy code
 
-    # Check if already redeemed
+    # Check if already redeemed by this user
     existing_redemption = PromoRedemption.query.filter_by(
         user_id=current_user.user_id, code=code, type='legacy_import').first()
 
@@ -1923,74 +1922,47 @@ def check_legacy_import(code, current_user):
         }), 409
 
     # Get legacy stats
-    legacy_stats = UserStats.query.filter_by(
-        user_id=legacy_user.user_id).first()
+    legacy_stats = UserStats.query.filter_by(user_id=legacy_user.user_id).first()
     if not legacy_stats or legacy_stats.total_games_played == 0:
         return jsonify({
             'success': False,
             'error': 'No stats found for this account'
         }), 404
 
-    # Perform the import
-    current_stats = UserStats.query.filter_by(
-        user_id=current_user.user_id).first()
-    if not current_stats:
-        current_stats = UserStats(user_id=current_user.user_id)
-        db.session.add(current_stats)
-
-    # Import data
+    # Prepare import data - just send what the legacy user had
     import_data = {
-        'legacy_username':
-        legacy_user.username,
-        'games_played':
-        legacy_stats.total_games_played,
-        'games_won':
-        legacy_stats.games_won,
-        'daily_streak':
-        legacy_stats.current_daily_streak,
-        'cumulative_score':
-        legacy_stats.cumulative_score,
-        'last_played':
-        legacy_stats.last_played_date.isoformat()
-        if legacy_stats.last_played_date else None
+        'legacy_username': legacy_user.username,
+        'games_played': legacy_stats.total_games_played,
+        'games_won': legacy_stats.games_won,
+        'daily_streak': legacy_stats.current_daily_streak,
+        'cumulative_score': legacy_stats.cumulative_score,
+        'last_played': legacy_stats.last_played_date.isoformat() if legacy_stats.last_played_date else None
     }
 
-    # Merge stats
-    current_stats.total_games_played += legacy_stats.total_games_played
-    current_stats.games_won += legacy_stats.games_won
-    current_stats.cumulative_score += legacy_stats.cumulative_score
-
-    # Preserve streak if valid
+    # Check if streak should be preserved (for the app to handle)
     streak_preserved = False
     if legacy_stats.current_daily_streak > 0 and legacy_stats.last_played_date:
-        days_since = (datetime.utcnow().date() -
-                      legacy_stats.last_played_date.date()).days
+        days_since = (datetime.utcnow().date() - legacy_stats.last_played_date.date()).days
         if days_since <= 1:
-            current_stats.current_daily_streak = max(
-                current_stats.current_daily_streak,
-                legacy_stats.current_daily_streak)
             streak_preserved = True
 
-    # Record redemption
+    # Record redemption - just track that it happened
     redemption = PromoRedemption(
         user_id=current_user.user_id,
         code=code,
         type='legacy_import',
-        value=legacy_stats.total_games_played  # Store games count as value
+        value=legacy_stats.total_games_played  # Store games count as value for record keeping
     )
     db.session.add(redemption)
-
     db.session.commit()
 
-    logging.info(
-        f"User {current_user.username} imported stats from {legacy_user.username}"
-    )
+    logging.info(f"User {current_user.username} redeemed import code from {legacy_user.username}")
 
+    # Return the legacy stats for the app to handle
     return jsonify({
         'success': True,
         'type': 'legacy_import',
-        'message':
-        f'Successfully imported {legacy_stats.total_games_played} games!',
+        'message': f'Successfully imported {legacy_stats.total_games_played} games!',
         'data': {
             'imported': import_data,
             'streak_preserved': streak_preserved
